@@ -1674,6 +1674,8 @@ function goalSuggest(geo){
 }
 const LV={bad:["#dc2626","LỖI"],warn:["#d97706","CẢNH BÁO"],ok:["#16a34a","OK"],info:["#2563eb","THÔNG TIN"]};
 function fmtTime(s){s=+s;if(!s)return"—";const h=(s/3600|0),m=((s%3600)/60|0);return(h?h+"h ":"")+m+"m";}
+/* "10h 44m 12s" -> giây */
+const hmsToSec=s=>{const h=/(\d+)\s*h/.exec(s),m=/(\d+)\s*m/.exec(s),x=/(\d+)\s*s/.exec(s);return(h?+h[1]*3600:0)+(m?+m[1]*60:0)+(x?+x[1]:0);};
 
 let lastAnalysis=null;
 /* so 1 giá trị file với khuyến nghị (range/enum) */
@@ -1745,6 +1747,20 @@ async function analyze(file){
        const fil=[...pl.querySelectorAll("filament")].map(f=>({type:f.getAttribute("type"),color:f.getAttribute("color"),m:f.getAttribute("used_m"),g:f.getAttribute("used_g")}));
        slice={time:md.prediction,weight:md.weight,fil};}
      break;}}
+   /* Dự phòng: .gcode.3mf — slice_info có thể thiếu <plate>, nhưng gcode LUÔN mang
+      "; model printing time:" và "; total filament weight [g] :" ở cuối file.
+      Chỉ giải mã 64KB đầu + 256KB cuối để không nổ RAM với gcode vài trăm MB. */
+   if(!slice||!slice.time){
+     for(const k in files){
+       if(!/\.gcode$/i.test(k))continue;
+       const b=files[k], N=b.byteLength||b.length;
+       const txt=td(b.slice(0,65536))+"\n"+td(b.slice(Math.max(0,N-262144)));
+       const mt=/;\s*model printing time:\s*([^;\n\r]+)/i.exec(txt);
+       const mw=/;\s*total filament weight \[g\]\s*:\s*([\d.]+)/i.exec(txt);
+       if(mt||mw)slice={time:mt?hmsToSec(mt[1]):(slice&&slice.time),weight:mw?mw[1]:(slice&&slice.weight),fil:(slice&&slice.fil)||[],src:"gcode"};
+       break;
+     }
+   }
    const geo=meshStats(files);
    if(!ps&&!geo){R.innerHTML="<div class='callout c-warn'><svg class='icn'><use href='#i-alert'/></svg><div>File không có thông số Process cũng không có mesh. Hãy export .3mf (Project) hoặc .gcode.3mf từ Bambu Studio.</div></div>";return;}
    const findings=ps?auditFile(ps,geo,slice):[];
@@ -1777,7 +1793,11 @@ function render(ps,geo,slice,findings,name){
  h+=stat("Kích thước vật lớn nhất",geo?geo.maxObj.toFixed(0)+" mm":"—");
  h+=stat("Số lớp (@layer height)",layers);
  h+="</div>";
- if(!hasWeight)h+="<div class='callout c-amber'><svg class='icn'><use href='#i-info'/></svg><div><b>File CHƯA Slice</b> (slice_info không có &lt;plate&gt;) → không có <b>Thời gian in</b> &amp; <b>Khối lượng THẬT</b>. Mở trong Bambu Studio → <b>Slice</b> → <b>File ▸ Save Project</b> (.3mf) để nhúng số chính xác. Số <b>≈ khối lượng</b> ở trên là ƯỚC TÍNH từ thể tích × mật độ × tỉ lệ đặc (wall "+(+g("wall_loops")||2)+" + infill "+(g("sparse_infill_density")||"15%")+") — sai số lớn với vật rỗng/nhiều support.</div></div>";
+ if(!hasWeight)h+="<div class='callout c-amber'><svg class='icn'><use href='#i-info'/></svg><div><b>File không mang kết quả slice</b> — <code>slice_info.config</code> chỉ có &lt;header&gt;, không có &lt;plate&gt; ⇒ không có <b>Thời gian in</b> &amp; <b>Khối lượng THẬT</b>."+
+   "<br><b>Cách chắc chắn lấy được số:</b> Bambu Studio → bấm <b>Slice plate</b> → <b>File ▸ Export ▸ Export plate sliced file</b> → ra <b>.gcode.3mf</b> → thả file ĐÓ vào đây."+
+   "<br><span class='muted'>Vì sao <i>Save Project</i> của bạn không có số: chỉ cần đổi BẤT KỲ thiết lập nào sau khi slice là Bambu huỷ kết quả slice, và bản lưu sau đó không nhúng &lt;plate&gt;. Muốn dùng Save Project thì phải lưu NGAY sau khi slice xong, không đụng gì thêm.</span>"+
+   "<br>Số <b>≈ khối lượng</b> ở trên là ƯỚC TÍNH từ thể tích × mật độ × tỉ lệ đặc (wall "+(+g("wall_loops")||2)+" + infill "+(g("sparse_infill_density")||"15%")+") — sai số lớn với vật rỗng/nhiều support.</div></div>";
+ else if(slice&&slice.src==="gcode")h+="<div class='callout c-ok'><svg class='icn'><use href='#i-check'/></svg><div>Số đọc từ <b>gcode nhúng</b> trong .gcode.3mf (<code>; model printing time</code> / <code>; total filament weight</code>) — đây là số THẬT do slicer tính.</div></div>";
  // So với KHUYẾN NGHỊ (Nhựa + Mục tiêu đang chọn trên cùng)
  const cmp=compareToTarget(ps);
  if(cmp.length){
