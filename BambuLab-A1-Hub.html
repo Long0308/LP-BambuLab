@@ -1740,9 +1740,11 @@ async function analyze(file){
    let ps=null;
    for(const k in files){if(k.toLowerCase().endsWith("project_settings.config")){ps=JSON.parse(td(files[k]));break;}}
    // slice_info
-   let slice=null;
+   let slice=null,bsVer="";
    for(const k in files){if(k.toLowerCase().endsWith("slice_info.config")){
      const doc=new DOMParser().parseFromString(td(files[k]),"application/xml");
+     const hv=[...doc.querySelectorAll("header_item")].find(x=>x.getAttribute("key")==="X-BBL-Client-Version");
+     if(hv)bsVer=hv.getAttribute("value")||"";
      const pl=doc.querySelector("plate"); if(pl){const md={};pl.querySelectorAll("metadata").forEach(m=>md[m.getAttribute("key")]=m.getAttribute("value"));
        const fil=[...pl.querySelectorAll("filament")].map(f=>({type:f.getAttribute("type"),color:f.getAttribute("color"),m:f.getAttribute("used_m"),g:f.getAttribute("used_g")}));
        slice={time:md.prediction,weight:md.weight,fil};}
@@ -1761,6 +1763,8 @@ async function analyze(file){
        break;
      }
    }
+   if(!slice)slice={time:null,weight:null,fil:[]};
+   slice.ver=bsVer;
    const geo=meshStats(files);
    if(!ps&&!geo){R.innerHTML="<div class='callout c-warn'><svg class='icn'><use href='#i-alert'/></svg><div>File không có thông số Process cũng không có mesh. Hãy export .3mf (Project) hoặc .gcode.3mf từ Bambu Studio.</div></div>";return;}
    const findings=ps?auditFile(ps,geo,slice):[];
@@ -1793,10 +1797,16 @@ function render(ps,geo,slice,findings,name){
  h+=stat("Kích thước vật lớn nhất",geo?geo.maxObj.toFixed(0)+" mm":"—");
  h+=stat("Số lớp (@layer height)",layers);
  h+="</div>";
- if(!hasWeight)h+="<div class='callout c-amber'><svg class='icn'><use href='#i-info'/></svg><div><b>File không mang kết quả slice</b> — <code>slice_info.config</code> chỉ có &lt;header&gt;, không có &lt;plate&gt; ⇒ không có <b>Thời gian in</b> &amp; <b>Khối lượng THẬT</b>."+
-   "<br><b>Cách chắc chắn lấy được số:</b> Bambu Studio → bấm <b>Slice plate</b> → <b>File ▸ Export ▸ Export plate sliced file</b> → ra <b>.gcode.3mf</b> → thả file ĐÓ vào đây."+
-   "<br><span class='muted'>Vì sao <i>Save Project</i> của bạn không có số: chỉ cần đổi BẤT KỲ thiết lập nào sau khi slice là Bambu huỷ kết quả slice, và bản lưu sau đó không nhúng &lt;plate&gt;. Muốn dùng Save Project thì phải lưu NGAY sau khi slice xong, không đụng gì thêm.</span>"+
-   "<br>Số <b>≈ khối lượng</b> ở trên là ƯỚC TÍNH từ thể tích × mật độ × tỉ lệ đặc (wall "+(+g("wall_loops")||2)+" + infill "+(g("sparse_infill_density")||"15%")+") — sai số lớn với vật rỗng/nhiều support.</div></div>";
+ if(!hasWeight){
+   const ver=(slice&&slice.ver)||"", maj=parseInt(ver.split(".")[0],10);
+   const is2x=maj>=2;
+   h+="<div class='callout c-amber'><svg class='icn'><use href='#i-info'/></svg><div><b>File không mang kết quả slice</b> — <code>slice_info.config</code> chỉ có &lt;header&gt;, không có &lt;plate&gt; ⇒ không có <b>Thời gian in</b> &amp; <b>Khối lượng THẬT</b>."+
+     (is2x
+       ? "<br><b>Đây KHÔNG phải lỗi thao tác của bạn.</b> File do <b>Bambu Studio "+esc(ver)+"</b> ghi. Từ bản <b>2.x</b>, lệnh <b>Save Project</b> (Ctrl+S) <b>không còn nhúng</b> kết quả slice vào <code>.3mf</code> nữa — dù bạn có Slice xong rồi lưu ngay. Bản <b>1.10.x</b> thì có."
+       : (ver?"<br>File do <b>Bambu Studio "+esc(ver)+"</b> ghi.":"")+" Bản này có thể nhúng kết quả slice nếu bạn <b>Slice</b> rồi <b>Save Project</b> ngay.")+
+     "<br><b>Cách lấy được số:</b> bấm <b>Slice plate</b> → <b>File ▸ Export ▸ Export plate sliced file</b> → ra <b>.gcode.3mf</b> → thả file ĐÓ vào đây."+(is2x?" Trên 2.x đây là <b>cách duy nhất</b>.":"")+
+     "<br>Số <b>≈ khối lượng</b> ở trên là ƯỚC TÍNH từ thể tích × mật độ × tỉ lệ đặc (wall "+(+g("wall_loops")||2)+" + infill "+(g("sparse_infill_density")||"15%")+") — sai số lớn với vật rỗng/nhiều support.</div></div>";
+ }
  else if(slice&&slice.src==="gcode")h+="<div class='callout c-ok'><svg class='icn'><use href='#i-check'/></svg><div>Số đọc từ <b>gcode nhúng</b> trong .gcode.3mf (<code>; model printing time</code> / <code>; total filament weight</code>) — đây là số THẬT do slicer tính.</div></div>";
  // So với KHUYẾN NGHỊ (Nhựa + Mục tiêu đang chọn trên cùng)
  const cmp=compareToTarget(ps);
