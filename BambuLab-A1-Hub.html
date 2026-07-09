@@ -1,0 +1,1849 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bambu Lab A1 Hub — Thông số · Phân tích · Tư vấn</title>
+<style>
+  :root{
+    --bg:#eef1f5; --surface:#fff; --surface2:#f8fafc; --surface3:#f1f5f9;
+    --ink:#0f172a; --muted:#475569; --faint:#64748b; --line:#e2e8f0; --line2:#cbd5e1;
+    --brand:#00ae42; --brand-d:#00913a; --blue:#2563eb; --amber:#d97706; --red:#dc2626;
+    --violet:#7c3aed; --pink:#db2777; --cyan:#0891b2; --teal:#0d9488;
+    --q:#16a34a; --s:#2563eb; --sp:#d97706; --su:#7c3aed; --ot:#db2777;
+    --shadow:0 1px 2px rgba(15,23,42,.05),0 8px 24px rgba(15,23,42,.06);
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--ink);font-size:15px;line-height:1.55;
+    font-family:Inter,"Segoe UI",system-ui,-apple-system,Arial,"Noto Sans",sans-serif;-webkit-font-smoothing:antialiased}
+  h1,h2,h3,h4{margin:0;line-height:1.2}
+  a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
+  .icn{width:1em;height:1em;display:inline-block;vertical-align:-.125em;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .wrap{max-width:1200px;margin:0 auto;padding:0 18px}
+  .mono{font-variant-numeric:tabular-nums}
+  /* top bar */
+  .top{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.9);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+  .top .wrap{display:flex;align-items:center;gap:14px;height:60px;flex-wrap:wrap}
+  .logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:16px}
+  .logo .m{width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,var(--brand),#06b6d4);display:grid;place-items:center;color:#fff;box-shadow:var(--shadow)}
+  .sp{flex:1}
+  .matbox{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--muted)}
+  select{font:inherit;font-size:13.5px;font-weight:700;color:var(--ink);background:var(--surface);border:1px solid var(--line2);border-radius:9px;padding:8px 10px;cursor:pointer}
+  select:focus{outline:2px solid var(--blue);outline-offset:1px}
+  .btn{display:inline-flex;align-items:center;gap:6px;font-weight:700;font-size:13px;border:1px solid var(--line2);background:var(--surface);color:var(--ink);border-radius:9px;padding:8px 12px;cursor:pointer;transition:.15s}
+  .btn:hover{background:var(--surface3)}
+  /* tabs */
+  .tabs{display:flex;gap:4px;overflow-x:auto;border-bottom:1px solid var(--line);background:var(--surface)}
+  .tabs .wrap{display:flex;gap:2px}
+  .tab{padding:12px 14px;font-weight:700;font-size:13.5px;color:var(--faint);border-bottom:3px solid transparent;white-space:nowrap;cursor:pointer;display:flex;align-items:center;gap:7px;background:none;border-top:none;border-left:none;border-right:none}
+  .tab:hover{color:var(--ink)}
+  .tab.on{color:var(--brand-d);border-bottom-color:var(--brand)}
+  .panel{display:none;padding:24px 0 70px}
+  .panel.on{display:block}
+  h2.sec{font-size:22px;font-weight:850;margin:4px 0 4px}
+  .lead{color:var(--muted);margin-bottom:18px}
+  .grid{display:grid;gap:16px}
+  .g2{grid-template-columns:1fr 1fr}.g3{grid-template-columns:repeat(3,1fr)}
+  @media(max-width:900px){.g2,.g3{grid-template-columns:1fr}}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 18px;box-shadow:var(--shadow)}
+  .card h3{font-size:15px;font-weight:800;display:flex;align-items:center;gap:8px;margin-bottom:10px}
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--faint);font-size:11px;text-transform:uppercase;letter-spacing:.4px;background:var(--surface2)}
+  td.val{font-weight:800;white-space:nowrap}
+  td.gd{color:var(--muted);font-size:12px;line-height:1.4}
+  tr.sub td{background:var(--surface3);font-weight:800;color:#334155;font-size:11px;text-transform:uppercase;letter-spacing:.5px}
+  .bar-q{border-top:3px solid var(--q)}.bar-s{border-top:3px solid var(--s)}.bar-sp{border-top:3px solid var(--sp)}
+  .bar-su{border-top:3px solid var(--su)}.bar-ot{border-top:3px solid var(--ot)}.bar-fl{border-top:3px solid var(--pink)}
+  .pill{display:inline-block;font-size:11px;font-weight:800;padding:2px 8px;border-radius:6px;color:#fff}
+  .callout{display:flex;gap:11px;border-radius:12px;padding:12px 14px;font-size:13.5px;border:1px solid;margin:12px 0}
+  .callout .icn{width:18px;height:18px;flex:none;margin-top:1px}
+  .c-info{background:#eff6ff;border-color:#bfdbfe;color:#1e3a8a}
+  .c-warn{background:#fef2f2;border-color:#fecaca;color:#991b1b}
+  .c-ok{background:#ecfdf5;border-color:#a7f3d0;color:#065f46}
+  .c-amber{background:#fffbeb;border-color:#fde68a;color:#92400e}
+  ul.t{margin:8px 0 0;padding-left:18px}ul.t li{margin:5px 0}
+  .muted{color:var(--muted);font-size:13px}
+  .kbd{font:600 12px ui-monospace,Consolas,monospace;background:var(--surface3);border:1px solid var(--line2);border-radius:5px;padding:1px 6px}
+  /* stats */
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:16px 0}
+  @media(max-width:700px){.stats{grid-template-columns:1fr 1fr}}
+  .stat{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:13px;box-shadow:var(--shadow)}
+  .stat .l{color:var(--faint);font-size:12px;font-weight:600}
+  .stat .v{font-size:19px;font-weight:800;margin-top:4px}
+  /* dropzone */
+  .drop{border:2px dashed var(--line2);border-radius:16px;padding:34px;text-align:center;background:var(--surface);cursor:pointer;transition:.15s}
+  .drop:hover,.drop.hot{border-color:var(--brand);background:#f0fdf4}
+  .drop svg{width:40px;height:40px;color:var(--faint);stroke-width:1.6}
+  .find{display:flex;gap:11px;align-items:flex-start;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 13px;margin-bottom:8px}
+  .badge{color:#fff;font-size:10px;font-weight:800;border-radius:6px;padding:3px 9px;flex:none;margin-top:2px;min-width:78px;text-align:center}
+  .sectitle{font-size:17px;font-weight:800;margin:22px 0 10px}
+  .goal{display:inline-block;color:#fff;border-radius:6px;padding:1px 8px;font-size:10px;font-weight:800;margin-left:6px}
+  /* clone (compact) */
+  .bs{background:#fff;border:1px solid var(--line2);border-radius:12px;overflow:hidden;font-size:12px;box-shadow:var(--shadow);max-width:300px}
+  .bs .h{background:#f8fafc;border-bottom:1px solid var(--line);padding:8px 10px;font-weight:800;display:flex;align-items:center;gap:6px}
+  .bs .row{padding:8px 10px;border-bottom:1px solid #eef1f4;position:relative}
+  .bs .tag{position:absolute;right:8px;top:8px;font-size:8px;font-weight:800;color:#fff;border-radius:5px;padding:2px 6px}
+  .bs .inp{border:1px solid #d9dee4;border-radius:6px;padding:2px 8px;font-weight:800;display:inline-block;background:#fff}
+  /* Process clone panel (Bambu/Orca look) */
+  .proctabs{display:flex;gap:18px;border-bottom:1px solid var(--line);margin:0 0 14px;flex-wrap:wrap}
+  .proctabs button{background:none;border:none;cursor:pointer;padding:9px 2px;font-weight:800;font-size:14.5px;color:#8a9099;border-bottom:2px solid transparent}
+  .proctabs button:hover{color:var(--ink)}
+  .proctabs button.on{color:#23272b;border-bottom-color:var(--q)}
+  .bsp{background:#fff;border:1px solid var(--line);border-radius:12px;padding:0 0 8px;box-shadow:var(--shadow);max-width:660px;overflow:hidden}
+  .bsp .sec{display:flex;align-items:center;gap:8px;font-weight:800;color:#0f172a;font-size:13.5px;padding:11px 16px;margin-top:2px;
+    background:linear-gradient(90deg,#eef2f7,#f6f8fb);border-top:1px solid #dfe4ea;border-bottom:1px solid #e6e9ee;
+    text-transform:uppercase;letter-spacing:.4px}
+  .bsp .sec:first-child{margin-top:0;border-top:none}
+  .bsp .sec .ico{width:15px;height:15px;color:var(--brand-d);stroke-width:2.4}
+  .bsp .r{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:6px 16px}
+  .bsp .r:hover{background:#f8fbff}
+  .bsp .lb{font-size:13px;color:#23272b;padding-top:5px}
+  .bsp .lb .g{display:block;color:#8a9099;font-size:11px;font-weight:500;margin-top:2px;max-width:340px;line-height:1.35}
+  .bsp .in{min-width:120px;display:flex;justify-content:flex-end}
+  .bsp .box{border:1px solid #d9dee4;border-radius:6px;padding:4px 9px;font-size:12.5px;font-weight:800;color:#23272b;background:#fff;min-width:110px;display:flex;align-items:center;gap:6px;justify-content:space-between}
+  .bsp .box.ov{border-color:var(--brand);box-shadow:0 0 0 1.5px rgba(0,174,66,.22);color:var(--brand-d)}
+  .bsp .unit{color:#9aa0a8;font-weight:600;font-size:11px}
+  .bsp .chev{color:#9aa0a8;font-weight:900}
+  /* Brand → Filament Settings clone (faithful) */
+  .bsp{max-width:720px}
+  .bsp .r{flex-wrap:wrap}
+  .bsp .r.hl{background:#f0fdf4}
+  .bsp .need{display:inline-block;margin-left:8px;font-size:9.5px;font-weight:900;color:#fff;background:var(--brand);border-radius:5px;padding:1px 7px;vertical-align:1.5px;letter-spacing:.3px}
+  .bsp .def{display:inline-block;margin-left:8px;font-size:9.5px;font-weight:800;color:#64748b;background:#eef1f5;border:1px solid var(--line);border-radius:5px;padding:1px 7px;vertical-align:1.5px}
+  .bsp .twin{display:flex;gap:16px;flex-wrap:wrap;justify-content:flex-end;margin-left:auto}
+  .bsp .cell{display:flex;align-items:center;gap:7px}
+  .bsp .cap{color:#8a9099;font-size:11px;font-weight:600;white-space:nowrap}
+  .bsp-tab{display:flex;align-items:center;gap:9px;background:#0f172a;color:#fff;font-weight:800;font-size:13px;padding:9px 16px}
+  .bsp-tab .tb{background:var(--brand);color:#fff;font-size:9px;font-weight:900;border-radius:4px;padding:2px 6px;letter-spacing:.5px}
+  .bsp-tab .pth{color:#94a3b8;font-weight:600;font-size:11px;margin-left:auto}
+  .need,.def,.tune{display:inline-block;margin-left:6px;font-size:9.5px;font-weight:800;border-radius:5px;padding:1px 7px;vertical-align:1px}
+  .need{color:#fff;background:var(--brand)}
+  .def{color:#64748b;background:#eef1f5;border:1px solid var(--line)}
+  .tune{color:#92400e;background:#fef3c7;border:1px solid #fde68a}
+  .bsp .r.tune-row{background:#fffdf7}
+  .matb{display:inline-block;margin-left:6px;font-size:9.5px;font-weight:800;border-radius:5px;padding:1px 7px;vertical-align:1px;color:#fff;background:var(--pink)}
+  .bsp .r.mat-row{background:#fdf5fa}
+  .bsp .box.ovm{border-color:var(--pink);box-shadow:0 0 0 1.5px rgba(219,39,119,.18);color:var(--pink)}
+  .bsp .opts{margin:5px 0 0;padding:0;list-style:none;font-size:11.5px;color:#475569;max-width:520px}
+  .bsp .opts li{padding:2px 0 2px 15px;position:relative;line-height:1.4}
+  .bsp .opts li:before{content:"▸";position:absolute;left:0;color:#94a3b8}
+  .bsp .opts li b{color:#23272b}
+  .bsp .opts li.rec{color:#065f46}
+  .bsp .opts li.rec b{color:var(--brand-d)}
+  details.optbox{margin-top:5px}
+  details.optbox>summary{cursor:pointer;font-size:11px;font-weight:700;color:var(--blue);list-style:none;display:inline-block}
+  details.optbox>summary::-webkit-details-marker{display:none}
+  details.optbox>summary:hover{text-decoration:underline}
+  .cfgflow{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:6px}
+  @media(max-width:820px){.cfgflow{grid-template-columns:1fr 1fr}}
+  .cfgn{background:var(--surface2);border:1px solid var(--line);border-left-width:3px;border-radius:8px;padding:8px 10px}
+  .cfgn .ct{font-weight:800;font-size:12px;color:var(--ink)}
+  .cfgn .cd{font-size:11.5px;color:var(--muted);margin-top:3px;line-height:1.35}
+  footer{border-top:1px solid var(--line);padding:20px 0 60px;color:var(--faint);font-size:12.5px;margin-top:30px}
+  @media print{.top,.tabs,.btn,.drop{display:none}.panel{display:block!important}.card,.stat{box-shadow:none}}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-printer" viewBox="0 0 24 24"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18M9 21V9"/></symbol>
+  <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></symbol>
+  <symbol id="i-upload" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></symbol>
+  <symbol id="i-bulb" viewBox="0 0 24 24"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6M10 22h4"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7L12 19"/></symbol>
+  <symbol id="i-cube" viewBox="0 0 24 24"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M21.8 10A10 10 0 1 1 17 3.34"/><path d="m9 11 3 3L22 4"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></symbol>
+  <symbol id="i-thermo" viewBox="0 0 24 24"><path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z"/></symbol>
+  <symbol id="i-drop" viewBox="0 0 24 24"><path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></symbol>
+</svg>
+
+<!-- TOP BAR -->
+<header class="top">
+  <div class="wrap">
+    <div class="logo"><span class="m"><svg class="icn" style="width:20px;height:20px;stroke:#fff"><use href="#i-printer"/></svg></span> A1 Hub</div>
+    <span class="sp"></span>
+    <label class="matbox" for="mat"><svg class="icn"><use href="#i-drop"/></svg> Nhựa:
+      <select id="mat" aria-label="Chọn loại nhựa">
+        <option>PLA Basic</option><option>PLA Matte</option><option>PLA Lite</option><option>PETG</option><option>TPU (dẻo)</option>
+      </select>
+    </label>
+    <label class="matbox" for="uc"><svg class="icn"><use href="#i-bulb"/></svg> Mục tiêu:
+      <select id="uc" aria-label="Mục tiêu in">
+        <option>Thông thường</option><option>Chi tiết trang trí</option><option>Công năng cơ khí</option><option>Lớp 1 bám bàn (25mm/s)</option>
+      </select>
+    </label>
+    <button class="btn" onclick="window.print()"><svg class="icn"><use href="#i-grid"/></svg> In PDF</button>
+  </div>
+</header>
+
+<!-- TABS -->
+<nav class="tabs"><div class="wrap" role="tablist">
+  <button role="tab" aria-selected="true" class="tab on" data-tab="tong-quan"><svg class="icn"><use href="#i-printer"/></svg> Tổng quan</button>
+  <button role="tab" aria-selected="false" class="tab" data-tab="thong-so"><svg class="icn"><use href="#i-sliders"/></svg> Thông số (theo nhựa)</button>
+  <button role="tab" aria-selected="false" class="tab" data-tab="phan-tich"><svg class="icn"><use href="#i-upload"/></svg> Phân tích file .3mf</button>
+  <button role="tab" aria-selected="false" class="tab" data-tab="quy-trinh"><svg class="icn"><use href="#i-check"/></svg> Quy trình in</button>
+  <button role="tab" aria-selected="false" class="tab" data-tab="tu-van"><svg class="icn"><use href="#i-bulb"/></svg> Tư vấn</button>
+  <button role="tab" aria-selected="false" class="tab" data-tab="cai-thien"><svg class="icn"><use href="#i-sliders"/></svg> Cải thiện (Orca)</button>
+  <button role="tab" aria-selected="false" class="tab" data-tab="tai-nguyen"><svg class="icn"><use href="#i-link"/></svg> Tài nguyên</button>
+</div></nav>
+
+<main class="wrap">
+
+  <!-- ===== TỔNG QUAN ===== -->
+  <section role="tabpanel" tabindex="0" class="panel on" id="tong-quan">
+    <h2 class="sec">Bambu Lab A1 Combo + AMS Lite — in màu 4 màu, 1 đầu phun</h2>
+    <div class="lead">Trung tâm hợp nhất: thông số theo nhựa (đổi bằng combobox trên cùng), phân tích file .3mf, quy trình in, và tư vấn theo mục tiêu/triệu chứng.</div>
+    <div class="stats">
+      <div class="stat"><div class="l">Khổ in</div><div class="v">256³ mm</div></div>
+      <div class="stat"><div class="l">Nozzle</div><div class="v">0.4 <span class="muted" style="font-size:13px">/ 0.2·0.6·0.8</span></div></div>
+      <div class="stat"><div class="l">Nhiệt tối đa</div><div class="v">300° / bed 100°</div></div>
+      <div class="stat"><div class="l">AMS Lite</div><div class="v">4 màu · 1 nozzle</div></div>
+    </div>
+    <div class="grid g2">
+      <div class="card">
+        <h3><svg class="icn" style="color:var(--brand-d)"><use href="#i-info"/></svg> Nguyên lý cốt lõi</h3>
+        <ul class="t">
+          <li>A1 chỉ có <b>1 đầu phun</b> — 4 cuộn AMS chạy chung 1 nozzle; đổi màu = rút → nạp → <b>xả (flush)</b> ra prime tower.</li>
+          <li>“Chọn đầu in” = <b>chọn đường kính nozzle</b> (0.2 nét · 0.4 mặc định · 0.6/0.8 nhanh/bền).</li>
+          <li>3 header cấu hình: <b class="pill" style="background:var(--s)">Printer</b> (máy) · <b class="pill" style="background:var(--pink)">Filament</b> (nhựa) · <b class="pill" style="background:var(--q)">Process</b> (cách in).</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3><svg class="icn" style="color:var(--brand-d)"><use href="#i-grid"/></svg> Cột trái Bambu Studio</h3>
+        <div class="bs" style="max-width:none">
+          <div class="row"><span class="tag" style="background:var(--s)">PRINTER</span><b>Bambu Lab A1</b> · Nozzle <span class="inp">0.4</span> · Flow <span class="inp">Standard</span></div>
+          <div class="row"><span class="tag" style="background:var(--pink)">FILAMENT</span>Project Filaments · <span class="inp" id="ov-mat">PLA Basic</span></div>
+          <div class="row"><span class="tag" style="background:var(--q)">PROCESS</span>0.20mm Standard · tab Quality / Strength / Speed / Support / Others</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== BẢN VẼ CHI TIẾT: PROJECT FILAMENTS (đánh số như detail xây dựng) ===== -->
+    <div class="sectitle" style="margin-top:22px">Bản vẽ chi tiết — Khu cấu hình nhựa "Project Filaments" (đánh số chú thích)</div>
+    <div class="grid g2">
+      <figure class="card" style="margin:0">
+        <svg viewBox="0 0 560 330" style="width:100%;height:auto;font-family:inherit" role="img" aria-label="Chi tiết panel Project Filaments có đánh số">
+          <defs>
+            <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0 0 L10 5 L0 10 z" fill="#dc2626"/>
+            </marker>
+          </defs>
+          <!-- ===== UI clone ===== -->
+          <!-- Nozzle row -->
+          <text x="20" y="28" font-size="12" fill="#8a9099" font-weight="700">Nozzle</text>
+          <text x="20" y="52" font-size="13" fill="#23272b">Diameter</text>
+          <rect x="88" y="36" width="130" height="24" rx="6" fill="#fff" stroke="#d9dee4"/>
+          <text x="100" y="53" font-size="13" fill="#23272b" font-weight="800">⌄  0.4</text>
+          <text x="238" y="52" font-size="13" fill="#23272b">Flow</text>
+          <rect x="276" y="36" width="150" height="24" rx="6" fill="#fff" stroke="#d9dee4"/>
+          <text x="288" y="53" font-size="13" fill="#23272b" font-weight="800">⌄  Standard</text>
+          <!-- divider -->
+          <line x1="12" y1="74" x2="548" y2="74" stroke="#e6e9ee" stroke-width="2"/>
+          <!-- Project Filaments header -->
+          <text x="20" y="98" font-size="14" fill="#23272b" font-weight="800">((())) Project Filaments</text>
+          <rect x="380" y="82" width="118" height="24" rx="12" fill="#fff" stroke="#f59e0b"/>
+          <text x="392" y="99" font-size="11.5" fill="#d97706" font-weight="700">Purging volumes</text>
+          <!-- Filament toolbar -->
+          <text x="20" y="130" font-size="12.5" fill="#8a9099">Filament</text>
+          <line x1="80" y1="126" x2="380" y2="126" stroke="#e6e9ee"/>
+          <text x="398" y="132" font-size="16" fill="#5b6470" font-weight="800">＋</text>
+          <text x="426" y="132" font-size="16" fill="#5b6470" font-weight="800">－</text>
+          <rect x="450" y="116" width="22" height="20" rx="4" fill="#fff" stroke="#d9dee4"/>
+          <text x="455" y="131" font-size="12" fill="#0891b2" font-weight="900">⇆</text>
+          <rect x="480" y="116" width="22" height="20" rx="4" fill="#fff" stroke="#d9dee4"/>
+          <text x="485" y="131" font-size="12" fill="#5b6470" font-weight="900">⚙</text>
+          <!-- slot 1 -->
+          <rect x="20" y="148" width="26" height="26" rx="5" fill="#00ae42"/>
+          <text x="29" y="166" font-size="13" fill="#fff" font-weight="900">1</text>
+          <rect x="52" y="148" width="200" height="26" rx="6" fill="#fff" stroke="#d9dee4"/>
+          <rect x="60" y="155" width="12" height="12" rx="3" fill="#2ecc71" stroke="#0b0e14" stroke-opacity=".2"/>
+          <text x="78" y="166" font-size="12" fill="#23272b" font-weight="700">* Bambu PLA Basic</text>
+          <circle cx="268" cy="161" r="9" fill="#fff" stroke="#d9dee4"/><text x="262" y="165" font-size="10" fill="#5b6470">⋯</text>
+          <!-- slot 2 -->
+          <rect x="292" y="148" width="26" height="26" rx="5" fill="#64748b"/>
+          <text x="301" y="166" font-size="13" fill="#fff" font-weight="900">2</text>
+          <rect x="324" y="148" width="180" height="26" rx="6" fill="#fff" stroke="#d9dee4"/>
+          <rect x="332" y="155" width="12" height="12" rx="3" fill="#C12E1F"/>
+          <text x="350" y="166" font-size="12" fill="#23272b" font-weight="700">* Bambu PLA Basic</text>
+          <circle cx="520" cy="161" r="9" fill="#fff" stroke="#d9dee4"/><text x="514" y="165" font-size="10" fill="#5b6470">⋯</text>
+          <!-- slot 3 -->
+          <rect x="20" y="184" width="26" height="26" rx="5" fill="#64748b"/>
+          <text x="29" y="202" font-size="13" fill="#fff" font-weight="900">3</text>
+          <rect x="52" y="184" width="200" height="26" rx="6" fill="#fff" stroke="#d9dee4"/>
+          <rect x="60" y="191" width="12" height="12" rx="3" fill="#0086D6"/>
+          <text x="78" y="202" font-size="12" fill="#23272b" font-weight="700">* Bambu PLA Basic</text>
+          <circle cx="268" cy="197" r="9" fill="#fff" stroke="#d9dee4"/><text x="262" y="201" font-size="10" fill="#5b6470">⋯</text>
+          <!-- add mixed -->
+          <rect x="20" y="222" width="484" height="26" rx="6" fill="#f8fafc" stroke="#e6e9ee"/>
+          <text x="200" y="240" font-size="12.5" fill="#475569" font-weight="700">＋ Add Mixed Filament</text>
+
+          <!-- ===== CALLOUTS (số đỏ + leader) ===== -->
+          <g font-size="12" font-weight="900">
+            <!-- 1 nozzle -->
+            <line x1="150" y1="36" x2="120" y2="12" stroke="#dc2626" marker-start="url(#ah)"/>
+            <circle cx="110" cy="10" r="10" fill="#dc2626"/><text x="106.5" y="14" fill="#fff">1</text>
+            <!-- 2 purging -->
+            <line x1="498" y1="94" x2="536" y2="70" stroke="#dc2626" marker-start="url(#ah)"/>
+            <circle cx="544" cy="64" r="10" fill="#dc2626"/><text x="540.5" y="68" fill="#fff">2</text>
+            <!-- 3 plus -->
+            <line x1="404" y1="118" x2="390" y2="266" stroke="#dc2626" marker-start="url(#ah)"/>
+            <circle cx="390" cy="276" r="10" fill="#dc2626"/><text x="386.5" y="280" fill="#fff">3</text>
+            <!-- 4 minus -->
+            <line x1="432" y1="118" x2="440" y2="266" stroke="#dc2626" marker-start="url(#ah)"/>
+            <circle cx="442" cy="276" r="10" fill="#dc2626"/><text x="438.5" y="280" fill="#fff">4</text>
+            <!-- 5 sync -->
+            <line x1="461" y1="114" x2="492" y2="266" stroke="#dc2626" marker-start="url(#ah)"/>
+            <circle cx="494" cy="276" r="10" fill="#dc2626"/><text x="490.5" y="280" fill="#fff">5</text>
+            <!-- 6 gear -->
+            <line x1="491" y1="114" x2="536" y2="240" stroke="#dc2626" marker-start="url(#ah)"/>
+            <circle cx="540" cy="250" r="10" fill="#dc2626"/><text x="536.5" y="254" fill="#fff">6</text>
+            <!-- 7 slot -->
+            <line x1="33" y1="148" x2="14" y2="128" stroke="#dc2626" marker-start="url(#ah)"/>
+            <circle cx="10" cy="120" r="10" fill="#dc2626"/><text x="6.5" y="124" fill="#fff">7</text>
+            <!-- 8 edit ⋯ -->
+            <line x1="268" y1="170" x2="240" y2="290" stroke="#dc2626" marker-start="url(#ah)"/>
+            <circle cx="236" cy="300" r="10" fill="#dc2626"/><text x="232.5" y="304" fill="#fff">8</text>
+            <!-- 9 add mixed -->
+            <line x1="120" y1="248" x2="90" y2="290" stroke="#dc2626" marker-start="url(#ah)"/>
+            <circle cx="84" cy="300" r="10" fill="#dc2626"/><text x="80.5" y="304" fill="#fff">9</text>
+          </g>
+          <text x="20" y="326" font-size="10.5" fill="#8a9099">DETAIL — PROJECT FILAMENTS · tỉ lệ ~1:1 giao diện Bambu Studio</text>
+        </svg>
+        <figcaption class="muted" style="text-align:center;margin-top:6px">Bản vẽ chi tiết có leader số — đối chiếu bảng bên phải</figcaption>
+      </figure>
+      <div class="card">
+        <h3><svg class="icn" style="color:var(--pink)"><use href="#i-info"/></svg> Chú thích chi tiết (theo số)</h3>
+        <table>
+          <tr><th style="width:34px">Số</th><th>Thành phần</th><th>Giải thích / thao tác</th></tr>
+          <tr><td><b style="color:var(--red)">①</b></td><td><b>Nozzle Diameter / Flow</b></td><td class="gd">Khai ⌀ nozzle ĐANG lắp (0.4) + loại Standard/High-Flow. Sai số này → thừa/thiếu nhựa toàn bộ.</td></tr>
+          <tr><td><b style="color:var(--red)">②</b></td><td><b>Purging volumes</b></td><td class="gd">Ma trận nhựa XẢ theo CẶP MÀU khi đổi màu (tối→sáng xả nhiều). Chỉnh tay nếu còn lem màu.</td></tr>
+          <tr><td><b style="color:var(--red)">③</b></td><td><b>＋ Thêm filament</b></td><td class="gd">Thêm 1 khe màu vào dự án (tối đa 4 với AMS Lite).</td></tr>
+          <tr><td><b style="color:var(--red)">④</b></td><td><b>－ Xoá filament</b></td><td class="gd">Xoá khe cuối danh sách.</td></tr>
+          <tr><td><b style="color:var(--red)">⑤</b></td><td><b>⇆ Sync info (từ AMS)</b></td><td class="gd">"Synchronize filament list from AMS" — kéo ĐÚNG loại nhựa + màu thật đang nạp trên máy về Studio → mapping không sai. Bấm TRƯỚC khi tô màu/Slice.</td></tr>
+          <tr><td><b style="color:var(--red)">⑥</b></td><td><b>⚙ Lọc loại nhựa</b></td><td class="gd">Ẩn/hiện loại nhựa trong dropdown chọn.</td></tr>
+          <tr><td><b style="color:var(--red)">⑦</b></td><td><b>Ô số khe [1][2][3]</b></td><td class="gd">Số khe AMS + màu nhựa. Mỗi khe = 1 filament profile RIÊNG (đổi nhiệt/flow từng cuộn được). Phím 1–9 gán màu cho vật đang chọn.</td></tr>
+          <tr><td><b style="color:var(--red)">⑧</b></td><td><b>⋯ / ✎ Sửa profile khe</b></td><td class="gd">Mở Filament Settings CỦA KHE ĐÓ: nhiệt nozzle/bed, flow ratio, max volumetric… (dấu * = đã chỉnh khác preset).</td></tr>
+          <tr><td><b style="color:var(--red)">⑨</b></td><td><b>Add Mixed Filament</b></td><td class="gd">Tạo filament trộn (gradient 2 màu) cho hiệu ứng chuyển màu.</td></tr>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== THÔNG SỐ ===== -->
+  <section role="tabpanel" tabindex="0" class="panel" id="thong-so">
+    <h2 class="sec">Thông số khuyến nghị — <span id="mat-title" style="color:var(--pink)">PLA Basic</span></h2>
+    <div class="lead">Tên setting giữ <b>tiếng Anh</b> (như phần mềm) · cột phải là <b>ý nghĩa &amp; điều chỉnh ↑ tăng / ↓ giảm</b>. Đổi nhựa ở combobox trên cùng.</div>
+
+    <div id="config-summary"></div>
+
+    <!-- STEPPER: thứ tự cấu hình (BẤM để lọc bảng) -->
+    <div class="card" style="margin-bottom:14px">
+      <div style="display:flex;align-items:center;gap:0;flex-wrap:wrap" role="tablist" aria-label="Thứ tự cấu hình">
+        <button class="stepb" data-step="1" role="tab" style="flex:1;min-width:120px;text-align:center;background:none;border:none;cursor:pointer;padding:6px;border-radius:12px">
+          <span class="dot" style="width:36px;height:36px;border-radius:50%;background:#e7f7ed;border:2px solid var(--brand);color:var(--brand-d);display:inline-grid;place-items:center;font-weight:900;transition:.15s">1</span>
+          <div style="font-weight:800;margin-top:5px;color:var(--ink)">Printer</div><div class="muted" style="font-size:11.5px">Máy · Nozzle ⌀ · khổ in</div>
+        </button>
+        <div style="flex:1;height:2px;background:linear-gradient(90deg,var(--brand),var(--pink));min-width:20px"></div>
+        <button class="stepb" data-step="2" role="tab" style="flex:1;min-width:120px;text-align:center;background:none;border:none;cursor:pointer;padding:6px;border-radius:12px">
+          <span class="dot" style="width:36px;height:36px;border-radius:50%;background:#fdf2f8;border:2px solid var(--pink);color:var(--pink);display:inline-grid;place-items:center;font-weight:900;transition:.15s">2</span>
+          <div style="font-weight:800;margin-top:5px;color:var(--ink)">Filament</div><div class="muted" style="font-size:11.5px">Nhiệt · Flow · Fan (theo nhựa)</div>
+        </button>
+        <div style="flex:1;height:2px;background:linear-gradient(90deg,var(--pink),var(--q));min-width:20px"></div>
+        <button class="stepb" data-step="3" role="tab" style="flex:1;min-width:150px;text-align:center;background:none;border:none;cursor:pointer;padding:6px;border-radius:12px">
+          <span class="dot" style="width:36px;height:36px;border-radius:50%;background:#e7f7ed;border:2px solid var(--q);color:var(--q);display:inline-grid;place-items:center;font-weight:900;transition:.15s">3</span>
+          <div style="font-weight:800;margin-top:5px;color:var(--ink)">Process — Global</div><div class="muted" style="font-size:11.5px">Quality → Strength → Speed → Support → Others</div>
+        </button>
+        <div style="flex:1;height:2px;background:linear-gradient(90deg,var(--q),var(--su));min-width:20px"></div>
+        <button class="stepb" data-step="4" role="tab" style="flex:1;min-width:150px;text-align:center;background:none;border:none;cursor:pointer;padding:6px;border-radius:12px">
+          <span class="dot" style="width:36px;height:36px;border-radius:50%;background:#f5f3ff;border:2px solid var(--su);color:var(--su);display:inline-grid;place-items:center;font-weight:900;transition:.15s">4</span>
+          <div style="font-weight:800;margin-top:5px;color:var(--ink)">Objects (tuỳ chọn)</div><div class="muted" style="font-size:11.5px">Đè riêng từng đối tượng</div>
+        </button>
+      </div>
+      <div class="muted" style="text-align:center;margin-top:8px;font-size:12px" id="step-hint">
+        <svg class="icn"><use href="#i-info"/></svg> Bấm vào từng bước để xem bảng cấu hình tương ứng · bấm lại bước đang chọn để hiện <b>tất cả</b>.
+      </div>
+    </div>
+
+    <!-- GLOBAL vs OBJECTS -->
+    <div class="grid g2" style="margin-bottom:14px" id="gobj-block">
+      <div class="card" style="border-top:3px solid var(--q)">
+        <h3 style="color:var(--q)"><svg class="icn"><use href="#i-grid"/></svg> Global — áp cho CẢ KHAY</h3>
+        <ul class="t">
+          <li>Mọi thông số Process (Quality/Strength/Speed/Support/Others) áp <b>chung cho tất cả vật</b> trên khay.</li>
+          <li>Đây là chế độ mặc định — cấu hình 1 lần, in cả khay giống nhau.</li>
+          <li>Toggle <b>Advanced</b> chỉ là ẨN/HIỆN thêm thông số nâng cao (giá trị vẫn hoạt động như nhau).</li>
+        </ul>
+      </div>
+      <div class="card" style="border-top:3px solid var(--su)">
+        <h3 style="color:var(--su)"><svg class="icn"><use href="#i-cube"/></svg> Objects — SETTING RIÊNG từng đối tượng</h3>
+        <ul class="t">
+          <li>Chuyển <b>Global → Objects</b> (cạnh chữ Process) → hiện danh sách vật trên khay.</li>
+          <li>Chọn 1 vật → <b>chuột phải → Add settings / Modify</b> → tick thông số muốn đè (layer height, wall, infill, support…). Thông số KHÔNG đè sẽ <b>kế thừa Global</b>.</li>
+          <li>Ví dụ: khay 6 hộp — 5 hộp in nhanh 0.28, riêng 1 hộp logo để 0.12 + Ironing.</li>
+          <li>Cũng đè được <b>theo part</b> (vật ghép nhiều part) và theo <b>Height range</b> (đoạn chiều cao) — chuột phải vật → Add settings for height range.</li>
+          <li>Vật có setting riêng hiển thị icon ⚙ trong danh sách; xoá đè = về theo Global.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="callout c-info" id="mat-note"><svg class="icn"><use href="#i-drop"/></svg><div></div></div>
+    <div class="grid g2" id="settings-grid"></div>
+    <div id="brand-block" style="margin-top:18px"></div>
+  </section>
+
+  <!-- ===== PHÂN TÍCH ===== -->
+  <section role="tabpanel" tabindex="0" class="panel" id="phan-tich">
+    <h2 class="sec">Phân tích file .3mf ngay trong trình duyệt</h2>
+    <div class="lead">Kéo-thả hoặc chọn 1 file <b>.3mf</b> (Project hoặc .gcode.3mf). Trang tự giải nén, đọc <b>thông số + hình học mesh THẬT</b> và tư vấn — không gửi lên mạng.</div>
+    <div class="drop" id="drop" tabindex="0" role="button" aria-label="Chọn file 3mf">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><use href="#i-upload"/></svg>
+      <div style="font-weight:800;margin-top:8px">Kéo-thả .3mf vào đây, hoặc bấm để chọn</div>
+      <div class="muted">Xử lý cục bộ bằng DecompressionStream — cần Chrome/Edge mới.</div>
+      <input type="file" id="file" accept=".3mf,.gcode,.gcode.3mf" hidden>
+    </div>
+    <div id="result"></div>
+  </section>
+
+  <!-- ===== QUY TRÌNH ===== -->
+  <section role="tabpanel" tabindex="0" class="panel" id="quy-trinh">
+    <h2 class="sec">Quy trình chuẩn khi bắt đầu in (9 bước)</h2>
+    <div class="lead">Vai người vận hành — làm tuần tự.</div>
+    <div class="grid g2" id="flow-grid"></div>
+  </section>
+
+  <!-- ===== TƯ VẤN ===== -->
+  <section role="tabpanel" tabindex="0" class="panel" id="tu-van">
+    <h2 class="sec">Tư vấn theo MỤC TIÊU &amp; TRIỆU CHỨNG (như chuyên gia)</h2>
+    <div class="lead">Nguồn: wiki Bambu + forum + Orca. Chọn mục tiêu phù hợp mẫu; tra bảng triệu chứng để biết chỉnh gì.</div>
+    <div class="sectitle">Preset theo mục tiêu</div>
+    <div class="grid g2" id="goal-grid"></div>
+    <div class="sectitle">Chống CONG VÊNH (warping) — chi tiết <a href="#" onclick="document.querySelector('[data-tab=cai-thien]').click();return false;" style="font-size:12.5px;font-weight:600">↗ bảng slicer đầy đủ (tab Cải thiện)</a></div>
+    <div class="grid g2">
+      <div class="card bar-s">
+        <h3><svg class="icn" style="color:var(--red)"><use href="#i-alert"/></svg> Nguyên nhân</h3>
+        <ul class="t">
+          <li>Co rút do nguội không đều (góc/mép nguội nhanh → vênh lên).</li>
+          <li>Bám bàn kém (bẩn/dầu tay, sai loại tấm, Z cao).</li>
+          <li>Bed nhiệt thấp; gió lùa / phòng lạnh.</li>
+          <li>Đế lớn &amp; phẳng, nhiều góc nhọn; infill/wall quá dày (ứng suất cao).</li>
+          <li>Vật liệu: PLA ít vênh · PETG vừa · <b>ABS/ASA vênh mạnh</b> (A1 hở khung → tránh).</li>
+        </ul>
+      </div>
+      <div class="card bar-q">
+        <h3><svg class="icn" style="color:var(--brand-d)"><use href="#i-check"/></svg> Cách chống</h3>
+        <ul class="t">
+          <li><b>Đúng bed temp</b>: PLA 55–60 · PETG 70–80 · (ABS 90–100, cần buồng kín).</li>
+          <li><b>Rửa tấm PEI</b> nước nóng + xà phòng; dùng <b>keo</b> (glue stick) tăng bám.</li>
+          <li><b>BẬT Brim</b> (outer, rộng 5–8mm) hoặc <b>Raft</b> nếu vênh nặng; “mouse ears” ở góc.</li>
+          <li><b>Giảm làm mát lớp đầu</b>: fan OFF 1–3 lớp; lớp 1 chậm 25–30, line width 0.5.</li>
+          <li>Tránh gió lùa / ổn định nhiệt phòng; hạ infill &amp; wall nếu quá dày.</li>
+          <li>Thiết kế: bo góc; <b>Elephant foot compensation</b> 0.075 cho phồng chân.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="sectitle">Bảng: Triệu chứng → chỉnh gì</div>
+    <div class="card"><table id="symp-table"></table></div>
+  </section>
+
+  <!-- ===== CẢI THIỆN (ORCA) ===== -->
+  <section role="tabpanel" tabindex="0" class="panel" id="cai-thien">
+    <h2 class="sec">Tính năng OrcaSlicer / Bambu Studio giúp CẢI THIỆN in</h2>
+    <div class="lead">Bật/dùng đúng lúc — nguồn: OrcaSlicer wiki + wiki Bambu + cộng đồng (Firecrawl). Bambu Studio là bản phái sinh nên phần lớn đều có.</div>
+
+    <div class="sectitle">⭐ Variable layer height — đòn chính cứu MẶT CONG (không đội thời gian)</div>
+    <div class="grid g2">
+      <div class="card bar-q">
+        <h3><svg class="icn" style="color:var(--q)"><use href="#i-cube"/></svg> Vì sao &amp; cách bật</h3>
+        <div class="gd" style="margin-bottom:10px">
+          <b>Vật lý:</b> thời gian in <b>TƯỜNG</b> tỉ lệ với <b>SỐ LỚP</b> (∝ 1/layer height), còn thời gian <b>INFILL/SOLID</b> tỉ lệ với <b>THỂ TÍCH</b> (đã bị chặn bởi lưu lượng, A1 ≈ 22 mm³/s).
+          ⇒ Hạ layer height <i>toàn cục</i> để cứu mặt cong sẽ <b>đội thời gian</b> ở cả phần thành đứng vốn <i>không cần</i> lớp mỏng.
+          Variable layer height chỉ hạ lớp <b>đúng vùng cong</b> → mịn chỗ cần, giữ nguyên tốc độ chỗ còn lại.
+        </div>
+        <table>
+          <tr><th>Bước</th><th>Thao tác trong Bambu Studio</th></tr>
+          <tr><td class="val">1</td><td class="gd">Vào <b>Prepare</b>, chọn vật.</td></tr>
+          <tr><td class="val">2</td><td class="gd">Thanh công cụ trái → công cụ <b>Variable layer height</b>.</td></tr>
+          <tr><td class="val">3</td><td class="gd">Bấm <b>Adaptive</b> (kéo thanh Quality) để máy tự rải lớp theo độ dốc bề mặt; hoặc <b>Smooth</b> để làm mượt chuyển tiếp; hoặc tô tay để ép mỏng/dày từng vùng.</td></tr>
+          <tr><td class="val">4</td><td class="gd">Cách khác, chính xác theo cao độ: chuột phải vật → <b>Height range Modifier</b> → <b>Add height range</b> → đặt layer height riêng cho từng khoảng Z.</td></tr>
+          <tr><td class="val">5</td><td class="gd">Lớp bị kẹp trong khoảng <b>min/max printable layer height</b> của đầu phun (A1 nozzle 0.4 ⇒ ~0.08–0.28mm).</td></tr>
+        </table>
+      </div>
+      <div class="card bar-su">
+        <h3><svg class="icn" style="color:var(--su)"><use href="#i-check"/></svg> 3 điều kiện CHẶN (Bambu tự từ chối)</h3>
+        <table>
+          <tr><th>Xung đột</th><th>Hệ quả &amp; cách xử lý</th></tr>
+          <tr>
+            <td><b>Organic support</b></td>
+            <td class="gd">Bambu báo <i>“Variable layer height is not supported with Organic supports.”</i> Mà <b>Support style = Default</b> lại tự chọn <b>organic</b> cho tree support ⇒ dễ dính bẫy. <b>Xử lý:</b> để Style = <b>Default</b> (Bambu tự đổi sang <b>Tree Hybrid</b> khi bật Variable layer height), hoặc chọn tay <b>Tree Hybrid / Tree Slim / Tree Strong</b>. <b>Đừng</b> chọn cứng <i>Tree Organic</i>.</td>
+          </tr>
+          <tr>
+            <td><b>Prime tower</b></td>
+            <td class="gd"><i>“Prime tower does not work when Adaptive Layer Height is on.”</i> Prime tower đòi <b>mọi vật cùng layer height</b>. <b>Xử lý:</b> in 1 màu → <b>TẮT</b> prime tower (vốn nên tắt). In nhiều màu mà cần prime tower → <b>không</b> dùng Variable layer height.</td>
+          </tr>
+          <tr>
+            <td><b>Independent support layer height</b></td>
+            <td class="gd">Cũng làm prime tower ngừng hoạt động khi bật cùng. <b>Xử lý:</b> chỉ bật 1 trong 2.</td>
+          </tr>
+        </table>
+        <div class="gd" style="margin-top:10px">
+          ⚠ <b>Không phải preset key.</b> <code>adaptive_layer_height</code> nằm trong danh sách <code>ignore</code> của <code>PrintConfig.cpp</code> ⇒ <b>không</b> set được bằng file preset JSON. Phải bật bằng <b>tay trên object</b>, và nó được lưu trong <code>.3mf</code> (<code>layer_config_ranges</code>), không lưu trong Process preset.
+        </div>
+      </div>
+    </div>
+
+    <div class="sectitle">Công thức SMOOTH theo từng vùng bề mặt</div>
+    <div class="grid g2">
+      <div class="card bar-q">
+        <h3><svg class="icn" style="color:var(--q)"><use href="#i-cube"/></svg> Smooth CHI TIẾT &amp; LỚP NGOÀI (outer wall)</h3>
+        <table>
+          <tr><th>Setting</th><th>Giá trị</th><th>Vì sao</th></tr>
+          <tr><td><b>Outer wall speed</b></td><td class="val">50–100</td><td class="gd">↓ chậm = mặt ngoài mịn nhất; TRÁNH ~120 (vân belt A1)</td></tr>
+          <tr><td><b>Outer wall acceleration</b></td><td class="val">2000–3000</td><td class="gd">↓ = bớt rung/ringing ở góc (mặc định 5000)</td></tr>
+          <tr><td><b>Order of walls</b></td><td class="val">Inner/Outer/Inner</td><td class="gd">Mặt ngoài đẹp + dung sai (cần ≥3 wall); hoặc Outer/Inner</td></tr>
+          <tr><td><b>Smart scarf seam</b></td><td class="val">ON</td><td class="gd">Giấu đường nối trên mặt cong → gần như tàng hình</td></tr>
+          <tr><td><b>Wall generator</b></td><td class="val">Arachne</td><td class="gd">Chi tiết mỏng/chữ nhỏ mượt</td></tr>
+          <tr><td><b>Resolution</b></td><td class="val">0.008–0.012</td><td class="gd">↓ giữ chi tiết nhỏ sắc (file lớn hơn)</td></tr>
+          <tr><td><b>Layer height</b></td><td class="val">0.08–0.12</td><td class="gd">Mặt cong hết bậc thang. Vật nhiều thành ĐỨNG: đừng hạ toàn cục — dùng <b>Variable layer height</b> (xem mục ⭐ ở trên)</td></tr>
+          <tr><td><b>Flow Dynamics (K)</b></td><td class="val">Chạy calibration</td><td class="gd">Góc sắc, hết phồng đầu/cuối đường in</td></tr>
+        </table>
+      </div>
+      <div class="card bar-sp">
+        <h3><svg class="icn" style="color:var(--sp)"><use href="#i-check"/></svg> Smooth LỚP TRÊN (top surface)</h3>
+        <table>
+          <tr><th>Setting</th><th>Giá trị</th><th>Vì sao</th></tr>
+          <tr><td><b>Top shell layers</b></td><td class="val">5 (≥1mm)</td><td class="gd">Chống "pillowing" (gò/hõm do infill lộ)</td></tr>
+          <tr><td><b>Top surface pattern</b></td><td class="val">Monotonic</td><td class="gd">Nét kéo 1 hướng → phản xạ đều, đẹp</td></tr>
+          <tr><td><b>Top surface speed</b></td><td class="val">100–150</td><td class="gd">↓ = lớp cuối đều hơn</td></tr>
+          <tr><td><b>Ironing</b></td><td class="val">Top surfaces · flow 10–20% · speed 15–30 · spacing 0.1–0.15</td><td class="gd">Là phẳng bóng mặt trên (PLA Matte không cần)</td></tr>
+          <tr><td><b>Sparse infill</b></td><td class="val">≥15%</td><td class="gd">Infill quá thưa → mặt trên võng</td></tr>
+          <tr><td><b>Only one wall on top</b></td><td class="val">Top surfaces</td><td class="gd">Nhiều mặt trên nhỏ → thử TẮT nếu loang (forum Bambu)</td></tr>
+          <tr><td><b>Fan (lớp trên)</b></td><td class="val">100% PLA</td><td class="gd">Mát tốt → nét không rủ</td></tr>
+        </table>
+      </div>
+      <div class="card bar-s">
+        <h3><svg class="icn" style="color:var(--s)"><use href="#i-grid"/></svg> Smooth LỚP DƯỚI (bottom / lớp 1)</h3>
+        <table>
+          <tr><th>Setting</th><th>Giá trị</th><th>Vì sao</th></tr>
+          <tr><td><b>Initial layer speed</b></td><td class="val">25–30</td><td class="gd">Chậm → nhựa ép đều, mặt đáy mịn như tấm in</td></tr>
+          <tr><td><b>Initial layer line width</b></td><td class="val">0.50</td><td class="gd">Squish nhiều → kín khít, không hở kẽ</td></tr>
+          <tr><td><b>Bottom shell layers</b></td><td class="val">3–4</td><td class="gd">Đáy kín, không lộ infill</td></tr>
+          <tr><td><b>Bottom surface pattern</b></td><td class="val">Monotonic</td><td class="gd">Nét đáy đều 1 hướng</td></tr>
+          <tr><td><b>Elephant foot compensation</b></td><td class="val">0.075–0.15</td><td class="gd">Hết phồng chân → cạnh đáy vuông</td></tr>
+          <tr><td><b>Tấm in</b></td><td class="val">Textured PEI / Smooth PEI</td><td class="gd">Textured = vân nhám đẹp · Smooth = bóng gương</td></tr>
+          <tr><td><b>Z-offset (nếu hở)</b></td><td class="val">G29.1 Z−0.02…−0.04</td><td class="gd">Hạ nozzle sát → đáy khít (MakerWorld guide)</td></tr>
+        </table>
+      </div>
+      <div class="card" style="border-top:3px solid var(--red)">
+        <h3><svg class="icn" style="color:var(--red)"><use href="#i-alert"/></svg> Chống WARPING (cong vênh) — bản đầy đủ</h3>
+        <div class="muted" style="font-size:12px;margin-bottom:6px">Nguyên nhân &amp; mục tiêu chi tiết: <a href="#" onclick="document.querySelector('[data-tab=tu-van]').click();return false;">↗ tab Tư vấn</a></div>
+        <table>
+          <tr><th>Nhóm</th><th>Làm gì</th></tr>
+          <tr><td><b>Bám bàn</b></td><td class="gd">Rửa PEI nước nóng+xà phòng; keo glue stick; đúng Bed type; Bed Leveling ON</td></tr>
+          <tr><td><b>Nhiệt</b></td><td class="gd">Bed đúng nhựa: PLA 55–60 · PETG 70–80; phòng kín gió; KHÔNG quạt trần thổi thẳng</td></tr>
+          <tr><td><b>Làm mát</b></td><td class="gd">Fan OFF 1–3 lớp đầu; PETG fan 30–50% (mát mạnh = co rút = vênh)</td></tr>
+          <tr><td><b>Slicer</b></td><td class="gd">Brim outer 5–8mm (vênh nặng → Raft); lớp 1 chậm 25 + line width 0.5; ↓ infill ≤25% &amp; ↓ wall nếu khối đặc; "mouse ears" ở góc nhọn</td></tr>
+          <tr><td><b>Thiết kế</b></td><td class="gd">Bo tròn góc đế; tránh mặt phẳng lớn liền khối (chia nhỏ/đục lỗ); hướng vật để đế nhỏ nhất</td></tr>
+          <tr><td><b>Vật liệu</b></td><td class="gd">PLA ít vênh nhất · PETG vừa (sấy + brim) · ABS/ASA vênh mạnh — A1 hở khung nên TRÁNH</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="sectitle">Lỗi LỘ VÂN LỚP NGOÀI (nhìn xuyên thấy infill / lằn tốc độ / sóng)</div>
+    <div class="grid g2">
+      <div class="card" style="border-top:3px solid var(--amber)">
+        <h3 style="color:var(--amber)"><svg class="icn"><use href="#i-alert"/></svg> 3 dạng lộ vân &amp; nguyên nhân</h3>
+        <table>
+          <tr><th>Dạng vân</th><th>Nguyên nhân</th></tr>
+          <tr><td><b>Hằn hình infill</b> (thấy ô grid xuyên tường)</td><td class="gd">Tường quá mỏng; infill đè dính vào tường khi in (overlap cao, in infill trước)</td></tr>
+          <tr><td><b>Lằn ngang theo đoạn</b></td><td class="gd">ĐỔI TỐC ĐỘ đột ngột trên outer wall (soi Preview → color scheme Speed) — forum Bambu</td></tr>
+          <tr><td><b>Sóng dọc / ringing / VFA</b></td><td class="gd">Rung cơ khí, acceleration cao, tốc độ cộng hưởng (~120mm/s trên A1)</td></tr>
+        </table>
+      </div>
+      <div class="card" style="border-top:3px solid var(--q)">
+        <h3 style="color:var(--q)"><svg class="icn"><use href="#i-check"/></svg> Cách khắc phục (theo thứ tự thử)</h3>
+        <ul class="t">
+          <li><b>↑ Wall loops 2→3</b> (hoặc outer wall line width ↑) → infill không còn xuyên bóng.</li>
+          <li><b>↓ Infill/wall overlap 15%→10%</b> + tắt <b>Print infill first</b> (in tường trước).</li>
+          <li>Đổi infill <b>Grid → Gyroid/Line</b> (Grid có giao điểm gây gõ vào tường).</li>
+          <li><b>Đều tốc outer wall</b>: bật Smooth speed discontinuity; tránh dải ~120mm/s.</li>
+          <li><b>↓ Outer wall acceleration 2000–3000</b> → hết ringing; siết dây đai nếu sóng đậm.</li>
+          <li>Nếu vẫn hằn: bật <b>Alternate extra wall</b> hoặc Embedding wall into infill = OFF.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="sectitle">Setting THEO MÀU — có hay không?</div>
+    <div class="grid g2">
+      <div class="card" style="border-top:3px solid var(--pink)">
+        <h3 style="color:var(--pink)"><svg class="icn"><use href="#i-drop"/></svg> CÓ: theo TỪNG KHE filament (per-slot)</h3>
+        <ul class="t">
+          <li>Mỗi khe AMS 1–4 gắn <b>1 filament profile RIÊNG</b> → chỉnh nhiệt/flow/max-vol <b>khác nhau cho từng cuộn</b> (kể cả cùng PLA khác màu).</li>
+          <li>Bằng chứng từ file của bạn: <span class="kbd">filament_max_volumetric_speed = [21, 12, 12, 12]</span> — khe 1 (Bambu PLA) 21, khe 2–4 (Generic) 12.</li>
+          <li><b>Flushing volumes</b> = ma trận THEO CẶP MÀU (tối→sáng xả nhiều) — nút "Purging volumes" cạnh Project Filaments.</li>
+          <li>Tinh chỉnh theo sắc tố: đen/đậm −5°C · trắng/sáng +5°C nếu cần bám.</li>
+        </ul>
+      </div>
+      <div class="card" style="border-top:3px solid var(--faint)">
+        <h3 style="color:var(--muted)"><svg class="icn"><use href="#i-info"/></svg> KHÔNG: Process không theo màu</h3>
+        <ul class="t">
+          <li><b>Process (Quality/Speed/Support…) KHÔNG có "per màu"</b> — nó theo khay (Global) hoặc theo vật (Objects).</li>
+          <li>Cùng 1 loại nhựa, các màu thường dùng <b>chung 1 profile</b> (Bambu chỉ phân theo VẬT LIỆU: Basic/Matte/Silk/…).</li>
+          <li>Muốn "màu này in chậm hơn" → không set theo màu được; hãy đè theo <b>Objects</b> cho vật dùng màu đó.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="sectitle">Danh mục tính năng cải thiện (18 mục)</div>
+    <div class="card"><table id="orca-table"></table></div>
+  </section>
+
+  <!-- ===== TÀI NGUYÊN ===== -->
+  <section role="tabpanel" tabindex="0" class="panel" id="tai-nguyen">
+    <h2 class="sec">Tài nguyên (wiki · forum · MakerWorld · engine)</h2>
+    <div class="grid g3" id="res-grid"></div>
+  </section>
+
+</main>
+<footer><div class="wrap">Nguồn đối chiếu qua Firecrawl: wiki Bambu Lab · forum (Reddit/Bambu/FB) · MakerWorld · Orca Slicer · engine <a href="https://github.com/FULU-Foundation/OrcaSlicer-bambulab">OrcaSlicer-bambulab</a> (density/preset gốc). Giá trị là điểm khởi đầu — chạy Flow Dynamics &amp; tinh chỉnh theo nhựa thực tế.</div></footer>
+
+<script>
+"use strict";
+const $=(s,r=document)=>r.querySelector(s), ce=(t,c)=>{const e=document.createElement(t);if(c)e.className=c;return e;};
+const esc=s=>String(s).replace(/[&<>]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[m]));
+
+/* ---------- MATERIAL DATA ---------- */
+const MATERIALS={
+ "PLA Basic":{nozzle:"220",init:"220",bed:"55–65 (Tex) · Cool 35",bedTex:"55–65",soft:"55",nzrange:"190–240",maxvol:"~21",flow:"0.98",fan:"80–100%",density:1.26,note:"Dễ nhất, bền tốt, mặt bóng nhẹ. Hầu như không cần sấy."},
+ "PLA Matte":{nozzle:"220 (215–230)",init:"220",bed:"60–65 (Tex)",bedTex:"60–65",soft:"55",nzrange:"215–230",maxvol:"~22",flow:"0.98",fan:"80–100%",density:1.32,note:"Mặt nhám mờ đẹp; GIÒN hơn → giữ wall ≥3; KHÔNG cần ironing (bị là sẽ bóng loang). Preset Bambu chính thức: bed 65 · fan 80 · max vol 22 · density 1.32 — hạ bed 55–60 nếu phồng chân/trời nóng; ↑fan 100 cho overhang/nét."},
+ "PLA Lite":{nozzle:"220",init:"220",bed:"65 (Tex)",bedTex:"65",soft:"55",nzrange:"190–240",maxvol:"~16",flow:"0.98",fan:"80–100%",density:1.40,note:"Kinh tế / in nháp nhanh; độ bền & bề mặt thấp hơn Basic một chút."},
+ "PETG":{nozzle:"240",init:"230",bed:"70 (Tex)",bedTex:"70",soft:"75",nzrange:"230–270",maxvol:"~18",flow:"0.94",fan:"30–50%",density:1.28,note:"BẮT BUỘC sấy 60–65°C/8h; bật Brim chống cong; flow ratio 0.93–0.96."},
+ "TPU (dẻo)":{nozzle:"220–240",init:"230",bed:"35–45",bedTex:"40",soft:"60",nzrange:"220–240",maxvol:"thấp ~3–8",flow:"~1.0",fan:"0–30%",density:1.21,note:"In chậm, lưu lượng thấp; gioăng/ốp dẻo; nên sấy. Không dùng AMS với TPU mềm."},
+};
+
+/* ---------- SETTINGS FORM: [labelEN, key, unit, recommended, guideVN] — CLONE đầy đủ ---------- */
+const PRINTER=["① Printer (cấu hình máy)","var(--s)","bar-s",[
+ ["Printable space",[
+   ["Printable height","printable_height","mm","256","Cố định theo A1"],
+   ["Best object position","best_object_position","","x0.5 y0.5","Căn vật vào giữa khay"],
+ ]],
+ ["Advanced",[
+   ["G-code flavor","gcode_flavor","","Marlin (legacy)","Cố định theo máy"],
+   ["Use relative E distances","use_relative_e_distances","","ON","Bambu dùng relative E — đừng đổi"],
+   ["Filament load time","machine_load_filament_time","s","25","Thời gian nạp nhựa (ảnh hưởng đổi màu)"],
+   ["Filament unload time","machine_unload_filament_time","s","29","Thời gian rút nhựa"],
+ ]],
+]];
+/* GROUPS: [tab, color, bar, [[Mục con (đúng thứ tự Bambu Studio), [rows]], ...]] */
+const GROUPS=[
+ ["Quality","var(--q)","bar-q",[
+  ["Layer height",[
+   ["Layer height","layer_height","mm","0.20","↓0.08–0.12 = nét/mịn hơn nhưng chậm · ↑0.28 = nhanh, thô"],
+   ["Initial layer height","initial_layer_print_height","mm","0.20–0.24","↑ dày = bám bàn tốt hơn · đừng < layer height"],
+   ["Mixed color sublayer","mixed_color_sublayer","","OFF","Trộn màu theo lớp con (hiệu ứng đa màu)"],
+  ]],
+  ["Line width",[
+   ["Default","line_width","mm","0.42","↑ bám/bền hơn, mất nét · ↓ nét hơn"],
+   ["Initial layer","initial_layer_line_width","mm","0.50","↑ 'squish' → bám lớp 1 tốt"],
+   ["Outer wall","outer_wall_line_width","mm","0.42","↓ mặt ngoài nét hơn"],
+   ["Inner wall","inner_wall_line_width","mm","0.45","↑ liên kết bền hơn"],
+   ["Top surface","top_surface_line_width","mm","0.42","Mặt trên"],
+   ["Sparse infill","sparse_infill_line_width","mm","0.45","Ruột"],
+   ["Internal solid infill","internal_solid_infill_line_width","mm","0.42","Lớp đặc trong"],
+   ["Support","support_line_width","mm","0.42","Giá đỡ"],
+  ]],
+  ["Seam",[
+   ["Seam position","seam_position","","Aligned","Aligned = giấu 1 cột · Nearest ngắn nhất · TRÁNH đặt ở overhang"],
+   ["Seam placement away from overhangs","seam_placement_away_from_overhangs","","OFF","Đẩy seam ra khỏi mặt đua (thử nghiệm)"],
+   ["Smart scarf seam application","seam_slope_type","","ON","Tự dùng mối vát (scarf) giấu seam trên mặt cong"],
+   ["Scarf application angle threshold","seam_slope_conditional_angle","°","155","Góc áp scarf (chỉ vùng phẳng-ish)"],
+   ["Scarf steps","scarf_steps","","10","Số bước vát (mượt hơn khi cao)"],
+   ["Scarf joint for inner walls","scarf_joint_inner_walls","","ON","Vát cả tường trong"],
+   ["Role-based wipe speed","role_based_wipe_speed","","ON","Tốc độ wipe theo vai trò"],
+  ]],
+  ["Precision",[
+   ["Slice gap closing radius","slice_closing_radius","mm","0.049","Bịt khe nhỏ khi slice"],
+   ["Resolution","resolution","mm","0.012","↓0.008 = giữ chi tiết nhỏ (file lớn, slice lâu)"],
+   ["Arc fitting","enable_arc_fitting","","ON","Đường cong mượt (G2/G3), g-code nhỏ"],
+   ["X-Y hole compensation","xy_hole_compensation","mm","0","↑ nếu lỗ in ra nhỏ (lắp trục/bulong)"],
+   ["X-Y contour compensation","xy_contour_compensation","mm","0","Bù biên ngoài (dung sai lắp)"],
+   ["Auto circle contour-hole compensation","circle_compensation_manual_offset","","OFF","Tự bù lỗ/biên tròn"],
+   ["Elephant foot compensation","elefant_foot_compensation","mm","0.075","Bù PHỒNG chân lớp đầu → cạnh đáy vuông"],
+   ["Precise Z height","precise_z_height","","OFF","Chiều cao tổng chính xác (không dư/thiếu lớp)"],
+  ]],
+  ["Ironing",[
+   ["Ironing type","ironing_type","","No ironing","Bật 'Top surfaces' nếu cần mặt trên phẳng bóng · PLA Matte KHÔNG cần"],
+  ]],
+  ["Wall generator",[
+   ["Wall generator","wall_generator","","Arachne","Arachne = thành biến thiên mượt (chi tiết mỏng) · Classic cho vase"],
+  ]],
+  ["Advanced",[
+   ["Order of walls","wall_sequence","","Inner/Outer","Inner/Outer/Inner = bề mặt+dung sai ĐẸP NHẤT (cần ≥3 wall — nên dùng) · Inner/Outer = OVERHANG tốt nhất · Outer/Inner = như I/O/I nhưng seam kém đều (dùng khi chỉ 2 wall)"],
+   ["Print infill first","is_infill_first","","OFF","Thường tắt (in tường trước cho nét)"],
+   ["Bridge flow","bridge_flow","","1.0","↑ nếu cầu hở · ↓ nếu cầu xệ"],
+   ["Thick bridges","thick_bridges","","OFF","Bật nếu cầu (bridge) xấu"],
+   ["Only one wall on top surfaces","top_one_wall_type","","Top surfaces","Mặt trên 1 tường → mịn hơn (nhiều mặt nhỏ loang → thử tắt)"],
+   ["Only one wall on first layer","only_one_wall_first_layer","","OFF","Thường tắt"],
+   ["Smooth speed discontinuity area","smooth_speed_discontinuity_area","","ON","Mượt chỗ đổi tốc → bớt lằn"],
+   ["Smooth coefficient","smooth_coefficient","","80","PETG mặt lồi lõm → ↓ 0.1"],
+   ["Avoid crossing wall","reduce_crossing_wall","","OFF","Né băng qua tường → bớt vệt (chậm hơn)"],
+  ]],
+ ]],
+ ["Strength","var(--s)","bar-s",[
+  ["Walls",[
+   ["Wall loops","wall_loops","","2–3","↑4–5 = BỀN hơn (chịu lực) · ↓ nhanh, yếu"],
+   ["Alternate extra wall","alternate_extra_wall","","OFF","Xen kẽ thêm 1 tường lẻ → tăng bền (tốn hơn)"],
+   ["Embedding the wall into the infill","wall_embedding","","OFF","Nhúng tường vào infill → bám ruột–thành chắc"],
+   ["Detect thin wall","detect_thin_wall","","ON","Nhận diện tường mỏng để in được (chi tiết nhỏ)"],
+  ]],
+  ["Top/bottom shells",[
+   ["Top surface pattern","top_surface_pattern","","Monotonic","Monotonic = mặt trên đều & đẹp nhất"],
+   ["Top surface density","top_surface_density","%","100","Mặt trên đặc kín"],
+   ["Top shell layers","top_shell_layers","","4–5","↑ mặt trên kín & phẳng (chống pillowing)"],
+   ["Top shell thickness","top_shell_thickness","mm","1","0 = tính theo số lớp"],
+   ["Bottom surface pattern","bottom_surface_pattern","","Monotonic","Mặt đáy đều"],
+   ["Bottom shell layers","bottom_shell_layers","","3","↑ đáy kín hơn"],
+   ["Internal solid infill pattern","internal_solid_infill_pattern","","Rectilinear","Lớp đặc trong"],
+  ]],
+  ["Sparse infill",[
+   ["Sparse infill density","sparse_infill_density","","15%","↑25–40 bền/nặng/chậm · ↓ nhẹ/nhanh · TRÁNH >50 (cong vênh)"],
+   ["Sparse infill pattern","sparse_infill_pattern","","Grid/Gyroid","Gyroid = đều mọi hướng (bền) · Grid = nhanh"],
+   ["Infill/wall overlap","infill_wall_overlap","%","15","↑ dính ruột–thành chắc hơn"],
+  ]],
+ ]],
+ ["Speed","var(--sp)","bar-sp",[
+  ["Initial layer speed",[
+   ["Initial layer","initial_layer_speed","mm/s","30–50","↓25–30 = bám bàn CHẮC (lớp 1 quyết định) · ↑ dễ bong"],
+   ["Initial layer infill","initial_layer_infill_speed","mm/s","80–105","ruột lớp 1"],
+  ]],
+  ["Other layers speed",[
+   ["Outer wall","outer_wall_speed","mm/s","150–200","TRÁNH ~120 (vân belt) → ≤100 hoặc ≥160 · ↑ nhanh, thô"],
+   ["Inner wall","inner_wall_speed","mm/s","200–300","↑ nhanh (không lộ ra ngoài)"],
+   ["Small perimeters","small_perimeter_speed","","50%","chi tiết nhỏ chậm → nét hơn"],
+   ["Sparse infill","sparse_infill_speed","mm/s","200–270","↑ nhanh nhưng bị trần Max volumetric"],
+   ["Internal solid infill","internal_solid_infill_speed","mm/s","200–250","Lớp đặc"],
+   ["Top surface","top_surface_speed","mm/s","100–200","↓100–150 mặt trên đẹp hơn"],
+  ]],
+  ["Overhang speed",[
+   ["Slow down for overhangs","enable_overhang_speed","","ON","giảm tốc phần đua → bớt rủ"],
+  ]],
+  ["Travel speed",[
+   ["Travel","travel_speed","mm/s","500","↑ bớt oozing · quá cao dễ va"],
+  ]],
+  ["Advanced (acceleration)",[
+   ["Default acceleration","default_acceleration","mm/s²","5000","↓ êm/đẹp hơn nhưng chậm"],
+   ["Outer wall acceleration","outer_wall_acceleration","mm/s²","2000–3000","↓ mặt ngoài mịn, bớt ringing"],
+  ]],
+ ]],
+ ["Support","var(--su)","bar-su",[
+  ["Support",[
+   ["Enable support","enable_support","","theo mẫu","Bật khi có overhang > threshold"],
+   ["Type","support_type","","tree(manual)","Tree = ít nhựa, dễ gỡ · Normal = mặt phẳng rộng · (manual) = chỉ đỡ chỗ mình sơn"],
+   ["Style","support_style","","Default","Default tự chọn organic · ⚠ Organic KHÔNG chạy chung Variable layer height"],
+   ["Threshold angle","support_threshold_angle","°","30","↑ SINH nhiều đỡ hơn · ↓ ít đỡ"],
+   ["On build plate only","support_on_build_plate_only","","ON","Không mọc đỡ trên thân vật → không để sẹo bề mặt"],
+  ]],
+  ["Advanced options",[
+   ["Top Z distance","support_top_z_distance","mm","0.2","0.2 cùng nhựa · 0 nhựa đỡ riêng · ↑ dễ gỡ/mặt xấu"],
+   ["Top interface layers","support_interface_top_layers","","2–3","↑ mặt đỡ phẳng, ít rủ"],
+   ["Support/object XY","support_object_xy_distance","mm","0.35","↑ dễ gỡ ngang · ↓ sát vật"],
+  ]],
+ ]],
+ ["Others","var(--ot)","bar-ot",[
+  ["Bed adhesion (Skirt/Brim)",[
+   ["Brim type","brim_type","","auto/outer","Chống cong đế nhỏ · PETG nên bật"],
+   ["Brim width","brim_width","mm","5","↑ bám mạnh hơn (phải cắt)"],
+  ]],
+  ["Prime tower",[
+   ["Enable prime tower","enable_prime_tower","","đa màu: ON","1 màu → TẮT (đỡ tốn)"],
+  ]],
+  ["Special mode",[
+   ["Fuzzy skin","fuzzy_skin","","None","Bề mặt nhám cố ý → chống trơn / giấu vân"],
+   ["Timelapse","timelapse_type","","Smooth","Traditional dễ lỗi mặt"],
+   ["Print sequence","print_sequence","","By layer","By object khi tránh va chạm"],
+  ]],
+ ]],
+];
+/* USE-CASE: đè giá trị khuyến nghị theo mục tiêu */
+const USECASE={
+ "Thông thường":{},
+ "Chi tiết trang trí":{layer_height:"0.08–0.12",initial_layer_speed:"25–30",outer_wall_speed:"50–100",wall_loops:"3",wall_sequence:"Inner/Outer/Inner",ironing_type:"Top surfaces",resolution:"0.008",top_shell_layers:"5",wall_generator:"Arachne",small_perimeter_speed:"50%"},
+ "Công năng cơ khí":{wall_loops:"4–5",sparse_infill_density:"30–40%",sparse_infill_pattern:"Gyroid",wall_sequence:"Inner/Outer/Inner",layer_height:"0.16–0.20",outer_wall_speed:"≤150",infill_wall_overlap:"20%",alternate_extra_wall:"ON"},
+ "Lớp 1 bám bàn (25mm/s)":{initial_layer_speed:"25",initial_layer_infill_speed:"80",initial_layer_line_width:"0.50",initial_layer_print_height:"0.24",brim_type:"outer_only",brim_width:"5"},
+};
+/* keys hay tinh chỉnh theo Mục tiêu (dùng để đánh dấu "nên chỉnh" trong Process clone) */
+const TUNABLE=new Set(); Object.values(USECASE).forEach(o=>Object.keys(o).forEach(k=>TUNABLE.add(k)));
+/* tra nhanh default/label/unit của mọi key Process (cho ô khuyến nghị) */
+const PROC_DEFAULT={},PROC_LABEL={},PROC_UNIT={};
+GROUPS.forEach(gr=>gr[3].forEach(sub=>sub[1].forEach(r=>{PROC_DEFAULT[r[1]]=r[3];PROC_LABEL[r[1]]=r[0];PROC_UNIT[r[1]]=r[2];})));
+const GOAL_PRESET={"Thông thường":"0.20mm Standard @BBL A1","Chi tiết trang trí":"0.12mm Fine @BBL A1","Công năng cơ khí":"0.20mm Strength @BBL A1","Lớp 1 bám bàn (25mm/s)":"0.20mm Standard @BBL A1"};
+/* OPTIONS: mọi lựa chọn của ô dropdown/enum — [ [tên EN, "khi nào dùng (VN)", recommended?], ... ] (nguồn: Firecrawl OrcaSlicer + Bambu wiki) */
+const OPTIONS={
+ sparse_infill_pattern:[
+  ["Grid","Chắc + NHANH, khỏe cả X-Y & Z — all-rounder tốt nhất",true],
+  ["Gyroid","Đẳng hướng, khỏe đều mọi hướng, ít vênh (in lâu hơn)",true],
+  ["Cubic","Hộp 3D, chịu lực mọi hướng — vật chức năng",true],
+  ["Adaptive Cubic","Như Cubic, dày gần thành/thưa giữa — TIẾT KIỆM cho vật lớn",true],
+  ["Lightning","Siêu nhanh, siêu ít nhựa (chỉ đỡ mặt trên) — bản nháp",true],
+  ["Tri-hexagon","Tam giác lệch (không chồng 3) — rất khỏe mặt X-Y",false],
+  ["Triangles","Lưới tam giác — khỏe X-Y",false],
+  ["Honeycomb","Tổ ong — khỏe nhưng NẶNG & in rất lâu",false],
+  ["3D Honeycomb","Tổ ong 3D — khỏe phương đứng (in lâu)",false],
+  ["Concentric","Vòng theo biên — cho TPU/nhựa dẻo & infill 100%",false],
+  ["Rectilinear","Đường thẳng song song — bám lớp yếu (nên dùng Zig Zag)",false],
+  ["Aligned Rectilinear","Đường cùng hướng — khỏe vuông góc, yếu song song",false],
+  ["Line","Rectilinear xoay — nhanh, nháp",false],
+  ["Zig Zag","Như rectilinear nhưng đều từng lớp — ít nhựa, nhanh",false],
+  ["Cross Hatch","Kiểu 'gyroid thẳng' — slice nhanh, yếu ở góc trong",false],
+  ["Cross Zag","Zig Zag lệch bước mỗi lớp",false],
+  ["Locked Zag","Zig Zag + lớp skin — cứng hơn nhưng tốn nhựa/thời gian",false],
+  ["Support Cubic","Rất thưa — chủ yếu đỡ mặt trên, cực ít nhựa",false],
+  ["2D Lattice","Yếu nhưng DẺO tốt (chỉnh Angle 1/2)",false],
+  ["Hilbert Curve","Trang trí (mê cung) — không chịu lực, in lâu",false],
+  ["Archimedean Chords","Trang trí (cung xoắn) — không chịu lực",false],
+  ["Octagram Spiral","Trang trí (sao xoắn) — không chịu lực",false],
+ ],
+ sparse_infill_density:[
+  ["0%","Rỗng ruột (vase/nhẹ) — chỉ còn top/bottom shell",false],
+  ["10%","Nháp/trang trí — nhanh, nhẹ",false],
+  ["15%","Mặc định Bambu — vật trưng bày thông thường",true],
+  ["25%","Chắc hơn — bán-chức năng",true],
+  ["40%","Vật chịu lực / cơ khí",false],
+  ["100%","Đặc — khỏe nhất/kín nước; tốn nhựa, lâu, dễ vênh mặt lớn",false],
+ ],
+ ironing_type:[
+  ["No ironing","Tắt (mặc định) — nhanh nhất",false],
+  ["Top surfaces","Là phẳng MỌI mặt trên đặc — hay dùng nhất",true],
+  ["Topmost surface","Chỉ lớp trên cùng — nhanh, thêm rất ít thời gian",false],
+  ["All solid layers","Mọi lớp đặc — rất mịn nhưng CỰC lâu",false],
+ ],
+ wall_generator:[
+  ["Classic","Bề rộng cố định — nhanh & ổn định, hình học thường",false],
+  ["Arachne","Bề rộng biến thiên — tốt cho thành mỏng, chữ, chi tiết",true],
+ ],
+ seam_position:[
+  ["Aligned","Giấu seam thành 1 cột dọc — sạch",true],
+  ["Aligned Back","Aligned dồn ra sau — tượng/nhân vật có mặt trước",false],
+  ["Nearest","Gần điểm lớp trước — nhanh, ít di chuyển",false],
+  ["Back","Luôn ra sau (mặt sau) — model cố định hướng",false],
+  ["Random","Rải ngẫu nhiên — khỏe nhất nhưng thấy đốm",false],
+ ],
+ top_surface_pattern:[
+  ["Monotonic","Kéo 1 hướng đều — mặt trên ĐẸP, phản xạ đều",true],
+  ["Monotonic Line","Như Monotonic, tránh chồng biên — ít dư nhựa (khuyên cho mặt trên)",true],
+  ["Concentric","Theo biên — cho mặt trên nhỏ / 1 wall",false],
+  ["Rectilinear","Đường thẳng cơ bản",false],
+  ["Aligned Rectilinear","Đường cùng hướng mỗi lớp",false],
+  ["Hilbert Curve","Trang trí (mê cung)",false],
+  ["Archimedean Chords","Trang trí (xoắn ốc)",false],
+  ["Octagram Spiral","Trang trí (sao xoắn)",false],
+ ],
+ bottom_surface_pattern:[
+  ["Monotonic","Đáy đều 1 hướng — đẹp nhất",true],
+  ["Concentric","Theo biên — đáy nhỏ",false],
+  ["Rectilinear","Đường thẳng cơ bản",false],
+  ["Hilbert Curve","Trang trí",false],
+  ["Archimedean Chords","Trang trí",false],
+  ["Octagram Spiral","Trang trí",false],
+ ],
+ /* support_type: ĐÚNG 4 giá trị (PrintConfig.cpp:5187–5190). KHÔNG có "hybrid(auto)" —
+    hybrid là một STYLE (support_style = tree_hybrid), không phải Type. Mặc định code = normal(auto). */
+ support_type:[
+  ["normal(auto)","Lưới chiếu THẲNG XUỐNG, tự sinh. Dùng khi overhang là mặt phẳng RỘNG → mặt đỡ đẹp/phẳng nhất. Đổi lại: tốn nhựa, khó gỡ, dễ để sẹo",true],
+  ["tree(auto)","Cành cây, tự sinh. Dùng khi overhang NHỎ / rải rác / hình phức tạp → ít nhựa, ít thời gian, dễ gỡ. Yếu khi phải đỡ mặt phẳng rộng",true],
+  ["normal(manual)","Chỉ sinh đỡ ở chỗ mình SƠN (enforcer), kiểu lưới. Dùng khi muốn kiểm soát tuyệt đối vùng đỡ mà vẫn cần mặt đỡ phẳng",false],
+  ["tree(manual)","Chỉ sinh đỡ ở chỗ mình SƠN, kiểu cành. Dùng cho ĐỒ TRANG TRÍ: không để sẹo ngoài vùng cần. Sơn bằng Support painting (chuột TRÁI = enforcer XANH, chuột PHẢI = blocker ĐỎ)",true],
+ ],
+ /* support_style: 7 giá trị (PrintConfig.cpp:5548–5554). 3 cái đầu cho NORMAL, 4 cái sau cho TREE.
+    Mặc định "Default" = tree organic cho đa số, và tree hybrid nếu bật adaptive layer height / interface tan được. */
+ support_style:[
+  ["Default","Để Bambu tự chọn: TREE → organic; nếu bật Variable layer height hoặc interface tan được → tự đổi sang hybrid. AN TOÀN NHẤT — cứ để nguyên nếu không có lý do đổi",true],
+  ["Grid","(cho normal) Chiếu xuống thành lưới đều — ỔN ĐỊNH/vững nhất. Dùng khi đỡ mặt phẳng lớn, vật nặng",false],
+  ["Snug","(cho normal) Tháp đỡ ôm sát biên vật — TIẾT KIỆM nhựa và ít sẹo hơn Grid. Dùng khi vẫn muốn normal nhưng đỡ tốn/đỡ xấu",false],
+  ["Tree Slim","(cho tree) Gộp cành mạnh tay → ÍT NHỰA NHẤT. Dùng khi tiết kiệm là ưu tiên; đỡ yếu hơn. Tương thích Variable layer height",false],
+  ["Tree Strong","(cho tree) Cành to, cấu trúc khỏe → đỡ được vùng nặng/cao. Tốn nhựa hơn. Tương thích Variable layer height",false],
+  ["Tree Hybrid","(cho tree) Cành mảnh + node kiểu normal ngay dưới mặt phẳng RỘNG → cân bằng nhất khi vật vừa có mặt phẳng vừa có chi tiết. Đây là style Bambu TỰ chọn khi bật Variable layer height",true],
+  ["Tree Organic","(cho tree) Cành hữu cơ, ít interface → DỄ GỠ nhất, mặt sạch. ⚠ KHÔNG dùng chung Variable layer height — Bambu báo 'Variable layer height is not supported with Organic supports'",false],
+ ],
+ support_on_build_plate_only:[
+  ["ON — chỉ đỡ từ MẶT BÀN","Không mọc giá đỡ trên thân vật → KHÔNG để sẹo lên bề mặt model. Chuẩn cho đồ trang trí (lòng chảo, tượng)",true],
+  ["OFF — đỡ cả trên thân vật","Cho phép đỡ mọc từ bề mặt model. Chỉ cần khi có overhang lơ lửng phía TRÊN thân mà đỡ từ bàn không với tới. Đổi lại: để sẹo",false],
+ ],
+ wall_sequence:[
+  ["Inner/Outer","OVERHANG tốt nhất (outer bám thành trong) — dùng khi nhiều mặt đua/cầu; bề mặt hơi kém",false],
+  ["Outer/Inner","Bề mặt + dung sai đẹp NHƯ I/O/I nhưng SEAM kém đều — dùng khi CHỈ 2 wall (I/O/I cần ≥3)",false],
+  ["Inner/Outer/Inner","ĐẸP nhất: bề mặt + dung sai + seam đều (cần ≥3 wall) — mặc định nên dùng; overhang yếu hơn",true],
+ ],
+ /* brim_type: giá trị enum thật + NHÃN Bambu hiển thị (PrintConfig.cpp:1554–1572).
+    Lưu ý: brim_ears trong Bambu Studio hiện tên "Painted" (Orca gọi là brim ears / tai chuột). */
+ brim_type:[
+  ["auto_brim  (UI: Auto)","Slicer tự phân tích hình học rồi tính bề rộng brim. Dùng khi chưa rõ vật có vênh không — mặc định của Bambu",true],
+  ["brim_ears  (UI: Painted)","Brim CHỈ ở chỗ mình sơn / các góc nhọn. Dùng khi chỉ vài góc bị cong: ít nhựa, ít phải cắt gọt",false],
+  ["outer_only  (UI: Outer brim only)","Chỉ vòng ngoài vật. Dùng khi đế LỚN/dễ vênh — chống vênh hiệu quả nhất mà vẫn dễ gỡ. Lựa chọn phổ biến nhất",true],
+  ["inner_only  (UI: Inner brim only)","Chỉ bên trong lỗ/hốc. Hiếm dùng — khi phần dễ bong nằm ở lòng trong, và không được để vết brim ở ngoài",false],
+  ["outer_and_inner  (UI: Outer and inner brim)","Cả trong lẫn ngoài — BÁM CHẮC NHẤT. Dùng cho vật rất dễ vênh (PETG/ABS đế rộng); đổi lại dọn brim lâu nhất",false],
+  ["no_brim  (UI: No-brim)","Tắt hẳn. Dùng khi đế nhỏ/đã bám tốt và cần cạnh đáy sạch tuyệt đối",false],
+ ],
+ fuzzy_skin:[
+  ["None","Tắt (mặc định)",false],
+  ["Outside walls","Chỉ thành ngoài — mặt nhám thẩm mỹ/chống trơn, giấu vân",true],
+  ["All walls","Mọi thành (kể cả trong) — nhám mạnh, tốn thời gian",false],
+ ],
+ print_sequence:[
+  ["By layer","Tất cả vật cùng 1 lớp — nhanh, ít di chuyển (chuẩn)",true],
+  ["By object","In xong từng vật rồi qua vật khác — tránh va/khác vật liệu, tốn thời gian",false],
+ ],
+ timelapse_type:[
+  ["Smooth","Đầu in né về prime tower rồi chụp — video mượt (in lâu hơn)",true],
+  ["Traditional","Chụp ngay sau mỗi lớp — không tốn thời gian, đầu in có thể lọt khung",false],
+ ],
+};
+/* Filament section is material-driven */
+let curMat="PLA Basic", curUC="Thông thường", curStep=0, curProc=0; const m0=()=>curMat;
+const STEP_COLORS={1:"var(--brand)",2:"var(--pink)",3:"var(--q)",4:"var(--su)"};
+function updateStepDots(){
+ document.querySelectorAll(".stepb").forEach(b=>{
+   const s=+b.dataset.step, dot=b.querySelector(".dot"), on=(s===curStep);
+   dot.style.background=on?STEP_COLORS[s]:"";
+   dot.style.color=on?"#fff":"";
+   b.style.opacity=(curStep===0||on)?"1":"0.45";
+   b.setAttribute("aria-selected",on?"true":"false");
+ });
+ const hint=$("#step-hint");
+ if(hint){
+   if(curStep===0)hint.innerHTML="<svg class='icn'><use href='#i-info'/></svg> Bấm vào từng bước để xem bảng cấu hình tương ứng · bấm lại bước đang chọn để hiện <b>tất cả</b>.";
+   else if(curStep===3)hint.innerHTML="Đang xem <b>bước 3 — Process</b>: bấm tab con <b>Quality / Strength / Speed / Support / Others</b> để xem từng bảng (clone giao diện) · bấm lại nút 3 để hiện tất cả.";
+   else hint.innerHTML="Đang xem <b>bước "+curStep+"</b> — bấm lại để hiện tất cả.";
+ }
+}
+function setStep(n){ curStep=(curStep===n)?0:n; updateStepDots(); renderSettings(); }
+function forceStep(n){ curStep=n; updateStepDots(); renderSettings(); }
+function filamentRows(m){
+ const bedRows=bedPlates({mat:curMat,bi:m.bedTex,bo:m.bedTex}).map(p=>
+   ["Bed · "+p[0],"bed_plate_temp","°C",(p[1]===p[2]?p[1]:p[1]+" / "+p[2]),p[4]||"Cấu hình theo tấm in đang dùng"]);
+ return [
+  ["Basic information",[
+   ["Type","filament_type","",curMat,"Chọn ĐÚNG loại để flow/nhiệt/PA khớp preset"],
+   ["Diameter","filament_diameter","mm","1.75","Cố định (A1 dùng sợi 1.75)"],
+   ["Flow ratio","filament_flow_ratio","",m.flow,"↑ đầy/khít hơn (tràn nếu quá) · ↓ bớt over-extrude (lắp khít)"],
+   ["Density","filament_density","g/cm³",String(m.density),"Tính khối lượng & giá (Matte 1.32 · PETG 1.27 — nguồn repo)"],
+   ["Shrinkage","filament_shrink","%","100","Bù co rút (PETG/ABS đôi khi <100 cho đúng kích thước)"],
+   ["Softening temperature","temperature_vitrification","°C",m.soft,"Trên nhiệt này vật bắt đầu biến dạng (PLA thấp ~55 · PETG ~75)"],
+   ["Recommended nozzle temp (Min–Max)","nozzle_temperature_range","°C",m.nzrange,"Khoảng an toàn của nhựa — cảnh báo nếu đặt Nozzle ngoài vùng"],
+  ]],
+  ["Print temperature",[
+   ["Nozzle temp (initial layer)","nozzle_temperature_initial_layer","°C",m.init,"↑ giúp lớp 1 bám (đặc biệt PETG/PLA Matte)"],
+   ["Nozzle temp (other layers)","nozzle_temperature","°C",m.nozzle,"↑5–10 nếu tắc/tách lớp/giòn · ↓ nếu stringing/rủ"],
+   ...bedRows,
+  ]],
+  ["Volumetric speed limitation",[
+   ["Max volumetric speed","filament_max_volumetric_speed","mm³/s",m.maxvol,"↓ nếu thiếu nhựa/tắc khi in nhanh · quá thấp = in chậm"],
+   ["Adaptive volumetric speed","filament_adaptive_volumetric_speed","","OFF","Để TẮT — chỉ vài máy có hệ số hiệu chỉnh mới bật"],
+  ]],
+  ["Cooling",[
+   ["Fan max speed","fan_max_speed","%",m.fan,"PLA 100% · PETG 30–50% · ↑ overhang đẹp/nét · ↓ dính lớp, bền hơn"],
+   ["Close fan for the first N layers","close_fan_the_first_x_layers","","1 (PETG/Matte 2–3)","↑ giúp lớp đầu bám bàn"],
+  ]],
+ ];
+}
+function renderSettings(){
+ curMat=$("#mat").value; curUC=$("#uc").value; const mm=MATERIALS[curMat]; const ov=mergeOv(curMat,curUC);
+ const nov=Object.keys(ov).length;
+ $("#mat-title").textContent=curMat; $("#ov-mat").textContent=curMat;
+ renderConfigSummary();
+ $("#mat-note").querySelector("div").innerHTML="<b>"+esc(curMat)+":</b> "+esc(mm.note)+
+   "<br>Bước 3 (Process) nhận <b>Nhựa ◆ + Mục tiêu ★</b> song song. Xem thẻ <b>KHUYẾN NGHỊ TOÀN BỘ</b> phía trên để có cả bộ.";
+ const grid=$("#settings-grid"); grid.innerHTML="";
+ const gobj=$("#gobj-block"); if(gobj)gobj.style.display=(curStep===0||curStep===4)?"grid":"none";
+ if(curStep===4){ grid.className="grid g2"; grid.innerHTML="<div class='callout c-info' style='grid-column:1/-1'><svg class='icn'><use href='#i-cube'/></svg><div><b>Bước 4 — Objects:</b> xem 2 thẻ Global/Objects phía trên. Thao tác trong Bambu Studio: chuyển <b>Global → Objects</b> → chọn vật → chuột phải → <b>Add settings</b> → tick thông số muốn đè (giá trị lấy từ bảng bước 3, chỉ đổi cho vật đó).</div></div>"; return; }
+ if(curStep===3){ grid.className=""; renderProcClone(ov); return; }
+ grid.className="grid g2";
+ let all=[PRINTER].concat(GROUPS.map((gr,i)=>[["③","④","⑤","⑥","⑦"][i]+" "+gr[0]+" (Process)",gr[1],gr[2],gr[3]]))
+   .concat([["② Filament (cấu hình nhựa · "+curMat+")","var(--pink)","bar-fl",filamentRows(mm)]]);
+ all.sort((a,b)=>a[0].localeCompare(b[0],"vi"));
+ if(curStep===1)all=all.filter(x=>x[0].startsWith("①"));
+ else if(curStep===2)all=all.filter(x=>x[0].startsWith("②"));
+ for(const [tab,color,bar,subs] of all){
+   const card=ce("div","card "+bar);
+   let h="<h3 style='color:"+color+"'>"+esc(tab)+"</h3><table><tr><th>Setting</th><th>Khuyến nghị</th><th>Ý nghĩa / điều chỉnh ↑↓</th></tr>";
+   for(const [subname,rows] of subs){
+     h+="<tr class='sub'><td colspan='3'>"+esc(subname)+"</td></tr>";
+     for(const [label,key,unit,rec,gd] of rows){
+       const o=ov[key]; const val=o||rec; const cls=o?" style='color:var(--brand-d);font-weight:800'":"";
+       h+="<tr><td><b>"+esc(label)+"</b></td><td class='val'"+cls+">"+esc(val)+" "+esc(unit)+(o?" ★":"")+"</td><td class='gd'>"+esc(gd)+"</td></tr>";
+     }
+   }
+   h+="</table>"; card.innerHTML=h; grid.appendChild(card);
+ }
+}
+/* Bước 3: clone giao diện Process kiểu Bambu/Orca — tab con + panel input-box */
+function renderProcClone(ov){
+ const grid=$("#settings-grid");
+ const path=document.createElement("div"); path.className="muted"; path.style.margin="0 0 8px";
+ path.innerHTML="<b>Vị trí:</b> cột trái → <b>Process</b> → bấm ✎ → tab <b>"+esc(GROUPS[curProc][0])+"</b>. "+
+   "<span class='need'>★ theo mục tiêu</span> · <span class='matb'>◆ theo nhựa</span> · <span class='tune'>nên chỉnh</span> · <span class='def'>để mặc định</span>."+
+   "<br>Bước 3 nhận <b>2 yếu tố SONG SONG</b>: <b>Nhựa</b> (◆) + <b>Mục tiêu</b> (★) — Mục tiêu ưu tiên khi trùng ô. Nhiệt/flow/fan/bed theo nhựa nằm ở <b>bước 2 · Filament</b>. Ô có <b>▾ Các lựa chọn</b> = xem mọi option + cách chọn.";
+ grid.appendChild(path);
+ const bar=document.createElement("div"); bar.className="proctabs"; bar.setAttribute("role","tablist");
+ GROUPS.forEach((gr,i)=>{const b=document.createElement("button");b.textContent=gr[0];b.setAttribute("role","tab");b.setAttribute("aria-selected",i===curProc?"true":"false");if(i===curProc)b.className="on";b.addEventListener("click",()=>{curProc=i;renderSettings();});bar.appendChild(b);});
+ grid.appendChild(bar);
+ const gr=GROUPS[curProc]; const panel=document.createElement("div"); panel.className="bsp";
+ const goalOv=USECASE[curUC]||{}, matOv=matProc(curMat);
+ for(const [subname,rows] of gr[3]){
+   const sh=document.createElement("div"); sh.className="sec";
+   sh.innerHTML="<svg class='icn ico'><use href='#i-grid'/></svg> "+esc(subname);
+   panel.appendChild(sh);
+   for(const [label,key,unit,rec,gd] of rows){
+     const [s0,o0]=ovSource(key,matOv,goalOv);
+     const src=s0||(TUNABLE.has(key)?"tune":"def");
+     const o=o0; const val=o!=null?o:rec;
+     const isWord=/[a-zA-Z]/.test(String(val))&&!/^[\d≤<>~.]/.test(String(val));
+     const badge=src==="goal"?"<span class='need'>★ theo mục tiêu</span>":src==="mat"?"<span class='matb'>◆ theo nhựa</span>":src==="tune"?"<span class='tune'>nên chỉnh</span>":"<span class='def'>để mặc định</span>";
+     const rowcls=src==="goal"?" hl":src==="mat"?" mat-row":src==="tune"?" tune-row":"";
+     const boxcls=src==="goal"?" ov":src==="mat"?" ovm":"";
+     const mark=src==="goal"?" ★":src==="mat"?" ◆":"";
+     const opt=OPTIONS[key];
+     const optHtml=opt?"<details class='optbox'><summary>▾ Các lựa chọn ("+opt.length+")</summary><ul class='opts'>"+
+       opt.map(x=>"<li"+(x[2]?" class='rec'":"")+"><b>"+esc(x[0])+"</b> — "+esc(x[1])+(x[2]?" ✓":"")+"</li>").join("")+"</ul></details>":"";
+     const r=document.createElement("div"); r.className="r"+rowcls;
+     r.innerHTML="<div class='lb'><b>"+esc(label)+"</b>"+badge+"<span class='g'>"+esc(gd)+"</span>"+optHtml+"</div>"+
+       "<div class='in'><div class='box"+boxcls+"'>"+(isWord?"<span class='chev'>⌄</span>":"")+
+       "<span>"+esc(val)+"</span>"+(unit?"<span class='unit'>"+esc(unit)+"</span>":"")+mark+"</div></div>";
+     panel.appendChild(r);
+   }
+ }
+ grid.appendChild(panel);
+}
+
+/* ---------- FLOW / GOALS / SYMPTOMS / RESOURCES ---------- */
+const FLOW=[
+ ["Kiểm tra máy & tấm in","Lắp đúng Textured PEI, rửa nước nóng+xà phòng, không chạm tay; gạt sạch nozzle."],
+ ["Chuẩn bị nhựa & AMS","Nạp đủ màu, đúng loại; PETG/TPU/PVA phải SẤY (VN ẩm); AMS cách máy ~50mm."],
+ ["Mở Studio · chọn A1","Bật AMS, kết nối Wi-Fi 2.4G, bấm Sync info lấy màu thật."],
+ ["Nạp model & đặt hướng","Kéo .3mf; xoay (R) để lực chính vuông góc mặt lớp & giảm support."],
+ ["Chọn Process & 5 nhóm","0.20 Standard rồi tinh chỉnh theo nhựa (tab Thông số)."],
+ ["Cấu hình màu & support","Gán filament/Color painting; bật support cho overhang; kiểm tra AMS mapping."],
+ ["Slice & soi Preview","Thời gian/nhựa/flush; color scheme = Speed để bắt vân belt."],
+ ["Print / Send","Bed Leveling + Flow calibration ON → gửi; đảm bảo có thẻ microSD."],
+ ["Theo dõi & lấy mẫu","Quan sát lớp 1 qua camera; chờ nguội mới gỡ; gỡ support < 2 giờ."],
+];
+const GOALS=[
+ ["Chi tiết cao / nét đẹp","var(--su)","Mini, trưng bày, chữ/hoa văn nhỏ — IN CHẬM.",[["Layer height","0.08–0.12"],["Initial layer speed","25–30"],["Outer wall","50–100"],["Wall loops","3"],["Order of walls","Inner/Outer/Inner"],["Fan","100%"]]],
+ ["Cân bằng (mặc định)","var(--q)","Đa số nhu cầu.",[["Layer height","0.20"],["Initial layer speed","40–50"],["Outer wall","150–200"],["Wall loops","2–3"],["Sparse infill","15%"]]],
+ ["Nhanh / nháp","var(--sp)","Không cần nét: prototype, vật lớn.",[["Layer height","0.28"],["Initial layer speed","50"],["Outer wall","250+"],["Wall loops","2"],["Sparse infill","10%"]]],
+ ["Bền / chức năng","var(--s)","Chịu lực, bản lề, snap-fit.",[["Wall loops","4–5"],["Sparse infill","30–40% Gyroid"],["Order of walls","Inner/Outer"],["Flow ratio","0.96"]]],
+];
+const SYMP=[
+ ["Lớp 1 không bám","Bàn bẩn / Z cao / sai tấm","Rửa bàn + Bed Leveling; ↓ Initial layer speed 25–30; ↑ Initial layer height; TẮT fan lớp 1–3; hạ Z (G29.1 −0.04)"],
+ ["Kéo râu (stringing)","Nhựa ẩm / nhiệt cao / retract thiếu","SẤY nhựa; ↓ Nozzle temp 5–10°C; ↑ Retraction; ↑ Travel speed"],
+ ["Thiếu nhựa (under-extrusion)","Vượt Max volumetric / flow thấp / tắc","↓ Speed hoặc ↓ Max volumetric; ↑ Nozzle temp 5–10°C; ↑ Flow ratio; Flow Dynamics"],
+ ["Hở/rỗ sau overhang","Đổi tốc đột ngột ở outer wall","BẬT 'Slow down for overhangs'; ↓ Smooth coefficient (0.1)"],
+ ["Overhang rủ","Làm mát kém / in nhanh","↑ Fan 100%; ↓ Outer wall speed; BẬT slow-down overhang; Order Inner/Outer"],
+ ["Tách lớp / dễ gãy","Nhiệt thấp / fan cao / nhanh","↑ Nozzle temp 5–10°C; ↓ Fan; ↓ Speed; ↑ Wall loops"],
+ ["Cong vênh / bong góc","Co rút / bám kém","↑ Bed temp; BẬT Brim + keo; ↓ Sparse infill; tránh gió lùa"],
+ ["Mặt trên hở/rỗ","Top shell mỏng / infill thấp","↑ Top shell layers 5; ↑ Sparse infill; BẬT Ironing"],
+ ["Lắp khít quá chặt","Over-extrude / flow cao","↓ Flow ratio (0.96); ↑ XY hole compensation; dung sai +0.2mm"],
+ ["Màu lẫn (đa màu)","Flush ít / thiếu prime tower","↑ Flushing volume; BẬT Prime tower"],
+];
+const RES=[
+ ["Wiki — Setup & Tham số",[["Studio Quick Start","https://wiki.bambulab.com/en/software/bambu-studio/studio-quick-start"],["Setting Guide (params)","https://wiki.bambulab.com/en/software/bambu-studio/how-to-set-slicing-parameters"],["Support","https://wiki.bambulab.com/en/software/bambu-studio/support"],["Ironing","https://wiki.bambulab.com/en/software/bambu-studio/parameter/ironing"],["Volumetric speed","https://wiki.bambulab.com/en/knowledge-sharing/volumetric-speed"],["Fix lỗi lớp 1","https://wiki.bambulab.com/en/knowledge-sharing/identify-and-fix-first-layer-issues-with-a-test-print"]]],
+ ["Forum / Cộng đồng",[["Reddit — First layer","https://www.reddit.com/r/BambuLab/comments/1e5kte7/first_layer_improvement_on_carbon_smooth_plate/"],["Reddit — PLA Matte settings","https://www.reddit.com/r/BambuLab/comments/1s59u3r/best_settings_for_pla_matte_in_bambu_studio_need/"],["Reddit — Wall order cheatcode","https://www.reddit.com/r/BambuLab/comments/1hzhui2/outerinner_wall_order_is_a_cheatcode/"],["Orca wiki — Walls & Surfaces","https://orca-slicer.com/wiki/walls-and-surfaces/"],["Obico — Orca Calibration Guide","https://www.obico.io/blog/orcaslicer-comprehensive-calibration-guide/"],["Bambu forum — Smooth top surfaces","https://forum.bambulab.com/t/how-to-make-multiple-top-surfaces-smooth/28843"],["Bambu forum — Large prints warp","https://forum.bambulab.com/t/large-prints-always-warp/5369"]]],
+ ["MakerWorld & Engine",[["Print quality guide A1","https://makerworld.com/en/models/536929-print-quality-guide-for-a1-a1-mini-p1s-x1c"],["First Layer calibration","https://makerworld.com/en/models/981466-first-layer-calibration-perfect-flow-test"],["Optimized profiles","https://makerworld.com/en/models/2196052-bambulab-optimized-print-profiles"],["OrcaSlicer-bambulab (engine)","https://github.com/FULU-Foundation/OrcaSlicer-bambulab"]]],
+];
+
+const ORCA=[
+ ["Precise wall","Tường ngoài ĐÚNG kích thước → lắp khít/snap-fit chuẩn. Bật cho đồ lắp ghép."],
+ ["Wall generator: Arachne","Tường biến thiên độ rộng → xử lý chi tiết mỏng, chữ nhỏ tốt hơn Classic."],
+ ["Adaptive / Variable layer height","Lớp MỎNG ở mặt cong, DÀY ở mặt phẳng → mặt cong mịn + in nhanh hơn. Tốt cho tượng/vật cong. Bật bằng TAY trên object (không phải preset key). CHẶN: không chạy chung Organic support; tắt Prime tower."],
+ ["Scarf seam (mối nối vát)","Giấu đường seam trên mặt cong (chồng dần) → gần như tàng hình."],
+ ["Small area flow compensation","Bù over-extrude ở chi tiết/đoạn ngắn nhỏ → hết phồng ở vùng nhỏ."],
+ ["Seam painting","Tự chỉ định vị trí seam → giấu vào cạnh khuất."],
+ ["Only one wall on top surfaces","Mặt trên 1 tường → mịn hơn, ít lằn."],
+ ["Avoid crossing walls","Đầu in tránh băng qua tường ngoài → bớt vệt/stringing bề mặt (chậm hơn)."],
+ ["Fuzzy skin","Bề mặt nhám cố ý → giấu vân lớp / chống trơn / thẩm mỹ."],
+ ["Ironing (top surfaces)","Là mặt trên phẳng bóng (mặt phẳng lớn)."],
+ ["Precise Z height","Chiều cao tổng chính xác (không dư/thiếu 1 lớp)."],
+ ["Elephant foot compensation","Bù phồng chân lớp đầu → cạnh đáy vuông vắn (KN 0.075)."],
+ ["Arc fitting (G2/G3)","Đường cong mượt hơn, g-code nhỏ hơn."],
+ ["Resolution ↓ (0.008–0.02)","Giảm để giữ chi tiết nhỏ (file & thời gian slice tăng)."],
+ ["Slow down for overhangs","Giảm tốc + tăng fan ở mặt đua → hết rủ."],
+ ["Support painting (enforcer/blocker)","Thêm/chặn đỡ đúng chỗ → gỡ dễ, không kẹt khớp."],
+ ["Flow Dynamics / Pressure Advance","Hiệu chỉnh áp lực → góc sắc nét, hết phồng đầu/cuối đường."],
+ ["Order of walls: Inner/Outer/Inner","Mặt ngoài đẹp + dung sai + overhang tốt (cần ≥3 wall)."],
+ ["Sandwich mode","= Inner/Outer/Inner (tên gọi Orca) — tối ưu mặt ngoài."],
+ ["Polyholes","Bù đa giác cho LỖ TRÒN → in đúng đường kính (lắp trục/bulong khít)."],
+ ["Mouse ear brims","'Tai chuột' chỉ ở góc → chống vênh góc mà ít brim, dễ cắt."],
+ ["Adaptive bed mesh","Dò mặt bàn thích ứng → lớp 1 đều trên bàn hơi cong."],
+ ["Network / Remote (Klipper·PrusaLink·OctoPrint)","Điều khiển & theo dõi máy MẠNG từ xa (ngoài Bambu Cloud)."],
+ ["Calibration suite","Temp tower · Flow rate · Pressure Advance · Retraction · Max volumetric — hiệu chỉnh gốc."],
+];
+/* Vị trí chỉnh trong Bambu Studio cho từng thông số preset */
+const LOC={
+ "Layer height":"Quality › Layer height","Initial layer speed":"Speed › Initial layer speed",
+ "Outer wall":"Speed › Other layers speed","Inner wall":"Speed › Other layers speed",
+ "Wall loops":"Strength › Walls","Order of walls":"Strength › Advanced",
+ "Sparse infill":"Strength › Sparse infill","Top shell":"Strength › Top/bottom shells",
+ "Fan":"Filament › Cooling (fan max)","Flow ratio":"Filament › Flow ratio",
+ "Ironing":"Quality › Ironing","Nozzle temp":"Filament › Print temperature",
+ "Bed temp":"Filament › Print temperature","Resolution":"Quality › Precision",
+ "Wall generator":"Quality › Wall generator",
+};
+/* Moi hang = 1 profile Filament day du → biet DIEN VAO O NAO */
+const BRANDS=[
+ {n:"Bambu PLA Basic",mat:"PLA",nzr:"220",bedr:"65",flow:"0.98",den:"1.26",nzi:"220",nzo:"220",bi:"65",bo:"65",mv:"21",fan:"80",note:"Số từ preset chính thức 'Bambu PLA Basic @BBL A1' (bed 65 · fan 80/60 · max vol 21 · density 1.26). RFID tự nhận. ↑fan 100 nếu cần overhang nét."},
+ {n:"Bambu PLA Lite",mat:"PLA",nzr:"220",bedr:"65",flow:"0.98",den:"1.40",nzi:"220",nzo:"220",bi:"65",bo:"65",mv:"16",fan:"80",note:"Số từ preset chính thức (bed 65 · fan 80 · max vol 16 · density 1.40 — NẶNG hơn PLA thường!). Kinh tế / in nháp."},
+ {n:"Bambu PLA Matte",mat:"PLA Matte",nzr:"220 (→255)",bedr:"60–65",flow:"0.98",den:"1.32",nzi:"220",nzo:"220",bi:"65",bo:"65",mv:"22",fan:"80",note:"Số liệu lấy từ preset chính thức 'Bambu PLA Matte @BBL A1' (bed 65 · fan 80/60 · max vol 22). Giòn hơn → wall ≥3; KHÔNG ironing; kém dính lớp thì tăng nhiệt 5°/lần tới 255."},
+ {n:"Generic PLA (Orca)",mat:"PLA",nzr:"190–230",bedr:"55–60",flow:"1.00",den:"1.24",nzi:"220",nzo:"220",bi:"55",bo:"55",mv:"15",fan:"100",note:"An toàn đa hãng; hơi chậm."},
+ {n:"eSun PLA+",mat:"PLA",nzr:"210–225",bedr:"55 (l1 65)",flow:"0.98",den:"1.24",nzi:"220",nzo:"220",bi:"65",bo:"55",mv:"15",fan:"100",note:"Cần nhiệt cao hơn trên Bambu; chống warp bed lớp-1 65 / còn lại 55 (reddit)."},
+ {n:"eSun PLA Matte",mat:"PLA Matte",nzr:"225–230",bedr:"55–60",flow:"0.98",den:"1.24",nzi:"230",nzo:"230",bi:"60",bo:"60",mv:"12",fan:"100",note:"Nhiệt CAO hơn Bambu Matte; nhiều người dùng preset Silk (230 + Max vol thấp)."},
+ {n:"Sunlu PLA",mat:"PLA",nzr:"200–230",bedr:"50–60",flow:"0.98",den:"1.24",nzi:"210",nzo:"210",bi:"55",bo:"55",mv:"15",fan:"100",note:"Rẻ, phổ biến VN."},
+ {n:"Polymaker PolyTerra PLA",mat:"PLA",nzr:"190–210",bedr:"50–60",flow:"0.98",den:"1.31",nzi:"200",nzo:"200",bi:"55",bo:"55",mv:"12",fan:"100",note:"Matte mờ, dễ in."},
+ {n:"Bambu PETG HF",mat:"PETG",nzr:"240 (230–270)",bedr:"70",flow:"0.94",den:"1.28",nzi:"230",nzo:"240",bi:"70",bo:"70",mv:"18",fan:"50",note:"Số từ preset chính thức 'Bambu PETG HF @BBL A1' (nozzle 230/240 · bed 70 · fan 50/30 · max vol 18 · flow 0.94). BẮT BUỘC sấy."},
+ {n:"Sunlu PETG",mat:"PETG",nzr:"235–245",bedr:"70",flow:"0.95",den:"1.27",nzi:"240",nzo:"240",bi:"70",bo:"70",mv:"12",fan:"40",note:"Hạ ~240 → ít kéo râu (forum)."},
+ {n:"eSun PETG",mat:"PETG",nzr:"230–250",bedr:"70–80",flow:"0.95",den:"1.27",nzi:"240",nzo:"240",bi:"75",bo:"75",mv:"12",fan:"40",note:"Sấy kỹ trước khi in."},
+ {n:"Polymaker PETG",mat:"PETG",nzr:"240–260",bedr:"70–80",flow:"0.95",den:"1.27",nzi:"250",nzo:"250",bi:"75",bo:"75",mv:"12",fan:"40",note:"Bền, chịu nhiệt."},
+];
+/* ---- Filament Settings clone (faithful — Bambu Studio, dùng chung OrcaSlicer) ---- */
+const _isWord=v=>/[a-zA-Z]/.test(String(v))&&!/^[\d≤<>~.\-]/.test(String(v));
+const _tab=(name,path)=>"<div class='bsp-tab'><span class='tb'>TAB</span>"+esc(name)+"<span class='pth'>"+esc(path)+"</span></div>";
+const _sec=name=>"<div class='sec'><svg class='icn ico'><use href='#i-sliders'/></svg> "+esc(name)+"</div>";
+const _badge=(fill,ro)=>fill?"<span class='need'>★ cần điền</span>":(ro?"<span class='def'>tự động</span>":"<span class='def'>để mặc định</span>");
+function _row1(label,v,u,gd,fill,ro){
+ return "<div class='r"+(fill?" hl":"")+"'><div class='lb'><b>"+esc(label)+"</b>"+_badge(fill,ro)+
+   "<span class='g'>"+esc(gd)+"</span></div><div class='in'><div class='box"+(fill?" ov":"")+"'>"+
+   (_isWord(v)?"<span class='chev'>⌄</span>":"")+"<span>"+esc(v)+"</span>"+(u?"<span class='unit'>"+esc(u)+"</span>":"")+"</div></div></div>";
+}
+function _row2(label,a,bv,u,gd,fill,caps){
+ caps=caps||["Initial layer","Other layers"];
+ const us=Array.isArray(u)?u:[u,u];
+ const cell=(cap,x,uu)=>"<div class='cell'><span class='cap'>"+esc(cap)+"</span><div class='box"+(fill?" ov":"")+"'><span>"+esc(x)+"</span>"+(uu?"<span class='unit'>"+esc(uu)+"</span>":"")+"</div></div>";
+ return "<div class='r"+(fill?" hl":"")+"'><div class='lb'><b>"+esc(label)+"</b>"+_badge(fill,false)+
+   "<span class='g'>"+esc(gd)+"</span></div><div class='twin'>"+cell(caps[0],a,us[0])+cell(caps[1],bv,us[1])+"</div></div>";
+}
+/* 5 tấm in như Filament Settings hiển thị (Initial/Other °C); tấm khuyên dùng = highlight */
+function bedPlates(b){
+ const bi=b.bi,bo=b.bo,m=b.mat;
+ if(m.indexOf("PETG")>=0)return[
+  ["Bambu Cool Plate SuperTack","0","0",false,"Không dùng cho PETG (dính quá chặt, hại tấm)"],
+  ["Cool Plate","0","0",false,"Không dùng cho PETG"],
+  ["Engineering Plate",bi,bo,false,"Nếu dùng tấm Engineering (bôi keo tách)"],
+  ["Smooth PEI Plate / High Temp Plate",bi,bo,true,"Bám tốt — PETG dễ dính CHẾT, nên bôi keo tách"],
+  ["Textured PEI Plate",bi,bo,true,"Tấm A1 mặc định · PETG khuyên dùng (↑ bám hơn · ↓ nếu dính quá khó tháo)"],
+ ];
+ if(m.indexOf("TPU")>=0)return[
+  ["Bambu Cool Plate SuperTack",bi,bo,false,"TPU bám tốt trên SuperTack"],
+  ["Cool Plate",bi,bo,false,""],
+  ["Engineering Plate","0","0",false,"Không cần cho TPU"],
+  ["Smooth PEI Plate / High Temp Plate",bi,bo,true,""],
+  ["Textured PEI Plate",bi,bo,true,"Tấm A1 mặc định"],
+ ];
+ return[
+  ["Bambu Cool Plate SuperTack","45","45",false,"PLA bám cực tốt, KHÔNG cần keo"],
+  ["Cool Plate","35","35",false,"PLA — tháo vật khi tấm đã nguội"],
+  ["Engineering Plate","0","0",false,"Không dùng cho PLA (0 = tắt)"],
+  ["Smooth PEI Plate / High Temp Plate",bi,bo,true,"Cho mặt đáy bóng gương"],
+  ["Textured PEI Plate",bi,bo,true,"Tấm A1 mặc định · khuyên dùng. HẠ 55–60 khi: trời NÓNG (hè VN), phồng chân (elephant foot), vật nhỏ, khó tháo · GIỮ 65 khi đế lớn dễ vênh / phòng lạnh"],
+ ];
+}
+function renderBrandProfile(i){
+ const b=BRANDS[i];
+ const baseType=b.mat.indexOf("PETG")>=0?"PETG":(b.mat.indexOf("TPU")>=0?"TPU":"PLA");
+ const nums=String(b.nzr).match(/\d+/g)||[String(b.nzr)], nmin=nums[0], nmax=nums[nums.length-1];
+ const fanFirst=(b.mat.indexOf("PETG")>=0)?"3":(b.mat==="PLA Matte"?"2–3":"1");
+ const fanMax=String(b.fan), fanMin=(b.mat.indexOf("PETG")>=0)?"20":(b.mat.indexOf("TPU")>=0?"0":fanMax);
+ let h="<div class='callout c-ok'><svg class='icn'><use href='#i-check'/></svg><div><b>Điền cho \""+esc(b.n)+"\":</b> "+esc(b.note)+
+   "<br><span style='color:var(--muted)'>Ô <b style='color:var(--brand-d)'>viền xanh · ★ cần điền</b> = giá trị RIÊNG của hãng bạn PHẢI nhập; ô <b>để mặc định</b> = giữ nguyên theo preset/tấm in.</span></div></div>";
+ h+="<div class='muted' style='margin:0 0 10px'><b>Dùng cho cả Bambu Studio &amp; OrcaSlicer.</b> Mở <b>Filament Settings</b> (bấm ✎ cạnh khe nhựa, hoặc ⋯ → Edit). Bambu Studio 2.0+ có tab: <b>Filament · Cooling · Setting Overrides · Advanced · Notes · Multi Filament</b>. OrcaSlicer tương tự (tab cuối tên <i>Multimaterial</i>) — tên tấm in &amp; ô nhập giống nhau.</div>";
+ h+="<div class='bsp'>";
+ h+=_tab("Filament","Filament Settings ▸ tab Filament");
+ h+=_sec("Basic information");
+ h+=_row1("Type",baseType,"","Loại nhựa gốc — chọn đúng để preset nhiệt/flow/PA khớp (Matte/Lite vẫn là PLA)",false,true);
+ h+=_row1("Diameter","1.75","mm","Cố định — A1 dùng sợi 1.75 mm",false,true);
+ h+=_row1("Flow ratio",b.flow,"","↑ nhựa ĐẦY/khít hơn (tràn, phồng nếu quá) · ↓ bớt over-extrude, lắp khít hơn",true);
+ h+=_row1("Density",b.den,"g/cm³","Chỉ để tính KHỐI LƯỢNG & giá — KHÔNG ảnh hưởng chất lượng in",false);
+ h+=_row2("Recommended nozzle temperature",nmin,nmax,"°C","Khoảng nhiệt an toàn của nhựa (Min / Max) — cảnh báo nếu đặt Nozzle ngoài vùng này",false,["Min","Max"]);
+ h+=_sec("Print temperature");
+ h+=_row2("Nozzle",b.nzi,b.nzo,"°C","↑5–10° nếu tách lớp / tắc / giòn · ↓ nếu stringing (kéo râu) hoặc overhang rủ",true);
+ bedPlates(b).forEach(p=>{h+=_row2(p[0],p[1],p[2],"°C",p[4],p[3]);});
+ h+=_sec("Volumetric speed limitation");
+ h+=_row1("Adaptive volumetric speed","OFF","","Để TẮT (chỉ vài máy có hệ số hiệu chỉnh mới bật)",false,true);
+ h+=_row1("Max volumetric speed",b.mv,"mm³/s","TRẦN lưu lượng nhựa — ↓ nếu THIẾU nhựa/tắc khi in nhanh · quá thấp = in chậm không cần",true);
+ h+=_tab("Cooling","Filament Settings ▸ tab Cooling");
+ h+=_sec("Part cooling fan");
+ h+=_row2("Min fan speed threshold",fanMin,"8",["%","s"],"Layer LÂU hơn Layer time → quạt giữ mức nền này · ↑% mát hơn (giảm bám/độ bền lớp)",false,["Fan speed","Layer time"]);
+ h+=_row2("Max fan speed threshold",fanMax,"4",["%","s"],"Layer NHANH hơn Layer time → quạt lên mức TỐI ĐA (giá trị chính của hãng): PLA 100 · PETG 30–50 · ↑ overhang/nét · ↓ bền lớp",true,["Fan speed","Layer time"]);
+ h+=_row1("Close fan for the first N layers",fanFirst,"lớp","↑ giúp lớp đầu BÁM bàn (nhất là PETG / PLA Matte) · ↓ nếu overhang xuất hiện sớm cần mát",false);
+ h+=_row1("Keep fan always on",(b.mat.indexOf("PETG")>=0?"ON":"OFF"),"","Giữ quạt chạy tối thiểu liên tục — PETG nên ON nhẹ · PLA để OFF cho lớp đầu bám",false);
+ h+=_row1("Slow printing down for better layer cooling","ON","","Tự giảm tốc khi lớp quá nhỏ/nguội nhanh → giữ hình khối chi tiết nhỏ",false);
+ h+=_row1("Min print speed","20","mm/s","Tốc TỐI THIỂU khi bị ép giảm để làm mát — ↓ = mát hơn nhưng dễ chảy xệ",false);
+ h+=_row1("Fan speed for overhang","100","%","Quạt cho mặt đua/cầu (overhang) — ↑ hết rủ · ↓ nếu ưu tiên bám lớp/bền",false);
+ h+="</div>";
+ h+="<div class='callout c-info' style='margin-top:10px'><svg class='icn'><use href='#i-info'/></svg><div><b>Không thấy ô \"Pressure advance\"?</b> Máy Bambu (A1) <b>ẨN</b> ô này trong Filament — thay bằng <b>Flow Dynamics Calibration (K factor)</b> (Device ▸ Calibration, hoặc bật lúc gửi in). Chạy K mỗi khi ĐỔI hãng nhựa → góc sắc, hết phồng đầu/cuối đường. (OrcaSlicer trên máy KHÁC Bambu mới hiện ô Pressure advance trực tiếp.)</div></div>";
+ $("#brand-profile").innerHTML=h;
+}
+/* ================= XUẤT PRESET CHUẨN BAMBU (import được) =================
+   Schema user-preset đã verify từ %AppData%\BambuStudio\user\<uid>\:
+   KHÔNG có "type"/"instantiation"/"compatible_printers"; BẮT BUỘC "version" + *_settings_id + *_extruder_variant.
+   Chỉ ghi các ô KHÁC preset gốc (phần còn lại kế thừa qua "inherits").                */
+const BBL_VERSION="2.7.0.8";
+const EXTR_VAR=["Direct Drive Standard"];
+const FIL_INHERITS={"PLA Basic":"Bambu PLA Basic @BBL A1","PLA Matte":"Bambu PLA Matte @BBL A1","PLA Lite":"Bambu PLA Lite @BBL A1","PETG":"Bambu PETG HF @BBL A1","TPU (dẻo)":"Bambu TPU 95A HF @BBL A1"};
+/* 0 = scalar · 1 = array (per-extruder). Chỉ export key có trong bảng này → không bao giờ sai shape. */
+const PROC_SHAPE={layer_height:0,initial_layer_print_height:0,wall_loops:0,wall_sequence:0,wall_generator:0,
+ sparse_infill_density:0,sparse_infill_pattern:0,infill_wall_overlap:0,alternate_extra_wall:0,is_infill_first:0,
+ top_shell_layers:0,bottom_shell_layers:0,top_surface_pattern:0,bottom_surface_pattern:0,
+ ironing_type:0,seam_position:0,resolution:0,elefant_foot_compensation:0,
+ brim_type:0,brim_width:0,enable_support:0,support_type:0,reduce_crossing_wall:0,enable_overhang_speed:0,
+ outer_wall_speed:1,inner_wall_speed:1,initial_layer_speed:1,top_surface_speed:1,outer_wall_acceleration:1,default_acceleration:1};
+/* tên hiển thị trong hub → giá trị nội bộ Bambu (lấy từ PrintConfig.cpp) */
+const V2BBL={"Inner/Outer":"inner wall/outer wall","Outer/Inner":"outer wall/inner wall","Inner/Outer/Inner":"inner-outer-inner wall",
+ "No ironing":"no ironing","Top surfaces":"top","Topmost surface":"topmost","All solid layers":"solid",
+ "Classic":"classic","Arachne":"arachne","Aligned":"aligned","Nearest":"nearest","Back":"back","Random":"random",
+ "Monotonic":"monotonic","Monotonic Line":"monotonicline","Concentric":"concentric","Rectilinear":"rectilinear",
+ "Gyroid":"gyroid","Grid":"grid","Grid/Gyroid":"grid","Cubic":"cubic","Adaptive Cubic":"adaptivecubic","Lightning":"lightning",
+ "Zig Zag":"zig-zag","Tri-hexagon":"tri-hexagon","Honeycomb":"honeycomb","3D Honeycomb":"3dhoneycomb",
+ "auto":"auto_brim","auto/outer":"auto_brim","outer_only":"outer_only","no_brim":"no_brim","brim_ears":"brim_ears",
+ "tree(auto)":"tree(auto)","normal(auto)":"normal(auto)","tree(manual)":"tree(manual)","normal(manual)":"normal(manual)",
+ "ON":"1","OFF":"0"};
+const lastNum=v=>{const m=String(v).match(/-?\d+(\.\d+)?/g);return m?m[m.length-1]:null;};
+/* đổi giá trị hiển thị → giá trị Bambu; trả null nếu không chuyển được (→ bỏ qua, dùng giá trị kế thừa) */
+function toBBL(val){
+ const s=String(val).trim();
+ if(V2BBL[s]!=null) return V2BBL[s];
+ const n=lastNum(s);                        // range "4–5"→"5" · "≤150"→"150" · "0.08–0.12"→"0.12"
+ if(n==null) return null;
+ return /%/.test(s)? n+"%" : n;             // giữ "%" nếu gốc có
+}
+const safeName=s=>String(s).replace(/[\\\/:*?"<>|]/g,"-").trim();
+const presetName=(mat,goal)=>"BambuLab - "+mat+" - LP - "+goal;
+
+function filamentPresetJSON(mat,goal){
+ const mm=MATERIALS[mat]; const nm=presetName(mat,goal);
+ const inh=FIL_INHERITS[mat]||"Bambu PLA Basic @BBL A1";
+ const bed=lastNum(mm.bedTex), nozI=lastNum(mm.init), nozO=lastNum(mm.nozzle), fanMax=lastNum(mm.fan);
+ const closeFan=(mat.indexOf("PETG")>=0)?"3":(mat==="PLA Matte"?"3":"1");
+ const o={from:"User",inherits:inh,name:nm,filament_settings_id:[nm],filament_extruder_variant:EXTR_VAR.slice(),version:BBL_VERSION};
+ const put=(k,v)=>{if(v!=null)o[k]=[String(v)];};
+ put("nozzle_temperature_initial_layer",nozI); put("nozzle_temperature",nozO);
+ put("textured_plate_temp_initial_layer",bed); put("textured_plate_temp",bed);
+ put("hot_plate_temp_initial_layer",bed);      put("hot_plate_temp",bed);
+ put("fan_max_speed",fanMax); put("overhang_fan_speed","100"); put("close_fan_the_first_x_layers",closeFan);
+ return JSON.stringify(o,null,4);
+}
+function processPresetJSON(mat,goal){
+ const ov=mergeOv(mat,goal), base=GOAL_PRESET[goal]||"0.20mm Standard @BBL A1";
+ const lh=lastNum(ov.layer_height!=null?ov.layer_height:PROC_DEFAULT.layer_height)||"0.20";
+ const nm=presetName(mat,goal)+" - "+lh+"mm";
+ const o={from:"User",inherits:base,name:nm,print_settings_id:nm,print_extruder_id:["1"],print_extruder_variant:EXTR_VAR.slice(),version:BBL_VERSION};
+ Object.keys(ov).forEach(k=>{                 // CHỈ ghi ô khác preset gốc
+   if(!(k in PROC_SHAPE))return;              // key lạ / chưa verify shape → bỏ
+   const v=toBBL(ov[k]); if(v==null)return;
+   o[k]=PROC_SHAPE[k]?[String(v)]:String(v);
+ });
+ return JSON.stringify(o,null,4);
+}
+function downloadJSON(text,name){
+ const blob=new Blob([text],{type:"application/json"}); const url=URL.createObjectURL(blob);
+ const a=document.createElement("a"); a.href=url; a.download=name;
+ document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1500);
+}
+function downloadBrandPreset(){ downloadJSON(filamentPresetJSON(curMat,curUC),safeName(presetName(curMat,curUC))+" (filament).json"); }
+/* xuất CẢ 2 preset (Bambu tách Process & Filament thành 2 file riêng) */
+function downloadBothPresets(mat,goal){
+ const fil=filamentPresetJSON(mat,goal), proc=processPresetJSON(mat,goal);
+ downloadJSON(fil,safeName(JSON.parse(fil).name)+" (filament).json");
+ setTimeout(()=>downloadJSON(proc,safeName(JSON.parse(proc).name)+" (process).json"),350);
+}
+/* Process gợi ý THEO NHỰA (song song với Mục tiêu) — key Process : giá trị */
+const MAT_PROC_BASE={
+ "PETG":{brim_type:"outer_only",infill_wall_overlap:"20%",wall_sequence:"Inner/Outer"},
+ "PLA Matte":{wall_loops:"3",wall_sequence:"Inner/Outer/Inner",ironing_type:"No ironing"},
+ "TPU":{sparse_infill_pattern:"Concentric",wall_loops:"2",enable_support:"OFF"},
+ "PLA":{}
+};
+const matProc=mat=>MAT_PROC_BASE[MAT2BM(mat)]||{};
+/* Ô do VẬT LIỆU quyết định — thắng cả Mục tiêu (ràng buộc vật lý). VD: PLA Matte KHÔNG nên ironing (bóng loang, mất nhám). */
+const MAT_WINS=new Set(["ironing_type"]);
+function ovSource(key,matOv,goalOv){
+ const m=matOv[key], g=goalOv[key];
+ if(MAT_WINS.has(key)&&m!=null) return ["mat",m];
+ if(g!=null) return ["goal",g];
+ if(m!=null) return ["mat",m];
+ return [null,null];
+}
+function mergeOv(mat,goal){
+ const m=matProc(mat), g=USECASE[goal]||{}, o=Object.assign({},m,g);
+ MAT_WINS.forEach(k=>{ if(m[k]!=null) o[k]=m[k]; });
+ return o;
+}
+const cfgnode=(t,d,c)=>"<div class='cfgn' style='border-left-color:"+c+"'><div class='ct'>"+t+"</div><div class='cd'>"+d+"</div></div>";
+const recoRow=(label,val,cls,note)=>"<tr><td><b>"+esc(label)+"</b></td><td class='val'"+(cls?" style='color:"+cls+"'":"")+">"+esc(val)+"</td><td class='gd'>"+esc(note||"")+"</td></tr>";
+function renderConfigSummary(){
+ const el=$("#config-summary"); if(!el)return;
+ const mat=$("#mat").value, goal=$("#uc").value, mm=MATERIALS[mat], goalOv=USECASE[goal]||{}, matOv=matProc(mat);
+ const base=GOAL_PRESET[goal]||"0.20mm Standard @BBL A1";
+ const nOv=Object.keys(Object.assign({},matOv,goalOv)).length;
+ const want=MAT2BM(mat); const bi=BRANDS.findIndex(b=>b.mat===want); const bn=bi>=0?BRANDS[bi].n:mat;
+ const fil=[["Nozzle temp (other)",mm.nozzle+" °C"],["Bed · Textured PEI",mm.bedTex+" °C"],["Flow ratio",mm.flow],["Max volumetric speed",mm.maxvol+" mm³/s"],["Fan max speed",mm.fan]];
+ const filH=fil.map(r=>recoRow(r[0],r[1],"var(--pink)","theo nhựa")).join("");
+ const recoKeys=["layer_height","wall_loops","sparse_infill_density","sparse_infill_pattern","wall_sequence","outer_wall_speed","initial_layer_speed","top_shell_layers","ironing_type","brim_type"];
+ let procH="";
+ recoKeys.forEach(k=>{ if(PROC_LABEL[k]==null)return;
+   const [s,ovv]=ovSource(k,matOv,goalOv);
+   const base2=(ovv!=null?ovv:PROC_DEFAULT[k]);
+   const v=base2+(PROC_UNIT[k]?" "+PROC_UNIT[k]:"")+(s==="goal"?" ★":(s==="mat"?" ◆":""));
+   const src=s==="goal"?"theo mục tiêu ★":(s==="mat"?"theo nhựa ◆":"mặc định");
+   const cls=s==="goal"?"var(--brand-d)":(s==="mat"?"var(--pink)":"");
+   procH+=recoRow(PROC_LABEL[k],v,cls,src);
+ });
+ el.innerHTML="<div class='card' style='border-top:3px solid var(--brand);margin-bottom:14px'>"+
+  "<h3><svg class='icn' style='color:var(--brand-d)'><use href='#i-cube'/></svg> KHUYẾN NGHỊ TOÀN BỘ — cấu hình khép kín cho \""+esc(mat)+" + "+esc(goal)+"\"</h3>"+
+  "<div class='cfgflow'>"+
+   cfgnode("① Printer","Bambu Lab A1 · nozzle 0.4 · khổ 256","var(--s)")+
+   cfgnode("② Filament","<b>"+esc(mat)+"</b><br>preset: "+esc(bn),"var(--pink)")+
+   cfgnode("③ Process","base <b>"+esc(base)+"</b><br>+ "+nOv+" ô đổi (nhựa ◆ + mục tiêu ★)","var(--q)")+
+   cfgnode("④ Objects","(tuỳ chọn) đè riêng từng vật","var(--su)")+
+  "</div>"+
+  "<div class='grid g2' style='margin-top:12px'>"+
+   "<div class='card bar-fl' style='box-shadow:none'><h3 style='color:var(--pink)'>② Filament — theo nhựa</h3><table><tr><th>Setting</th><th>Khuyến nghị</th><th></th></tr>"+filH+"</table></div>"+
+   "<div class='card bar-q' style='box-shadow:none'><h3 style='color:var(--q)'>③ Process — ★ mục tiêu · ◆ nhựa (song song)</h3><table><tr><th>Setting</th><th>Khuyến nghị</th><th></th></tr>"+procH+"</table></div>"+
+  "</div>"+
+  "<div class='callout c-ok' style='margin:12px 0 8px'><svg class='icn'><use href='#i-check'/></svg><div><b>Chuyên gia:</b> Bambu Studio → Process <b>"+esc(base)+"</b> + Filament <b>"+esc(bn)+"</b> → chỉnh các ô ★/◆ (bước 3) → 💾 lưu thành preset của bạn. Chi tiết + mọi lựa chọn: xem bước 2/3 dưới.</div></div>"+
+  "<div style='display:flex;gap:8px;flex-wrap:wrap'><button class='btn' id='expBundle' style='border-color:var(--brand);color:var(--brand-d)'><svg class='icn'><use href='#i-download'/></svg> Xuất 2 preset Bambu (.json)</button>"+
+   "<span class='muted' style='font-size:11.5px;align-self:center'>Tải <b>"+esc(presetName(mat,goal))+"</b> (filament + process) → <b>File ▸ Import ▸ Import Configs…</b> chọn cả 2.</span></div>"+
+  "</div>";
+ $("#expBundle").addEventListener("click",()=>downloadBothPresets(mat,goal));
+}
+/* ---- Đồng bộ combobox "Nhựa" (trên cùng) <-> dropdown hãng ---- */
+const MAT2BM=m=>m==="PLA Matte"?"PLA Matte":(m==="PETG"?"PETG":(m.indexOf("TPU")>=0?"TPU":"PLA"));
+const BM2MAT=bm=>bm==="PLA Matte"?"PLA Matte":(bm==="PETG"?"PETG":(bm.indexOf("TPU")>=0?"TPU (dẻo)":"PLA Basic"));
+function fillBrandSelForMat(){
+ const sel=$("#brandSel"); if(!sel)return;
+ const want=MAT2BM($("#mat").value);
+ const list=BRANDS.map((b,i)=>[b,i]).filter(x=>x[0].mat===want);
+ sel.innerHTML="";
+ if(!list.length){
+   const o=document.createElement("option");o.value="";o.textContent="(chưa có preset hãng cho loại này)";sel.appendChild(o);
+   $("#brand-profile").innerHTML="<div class='callout c-amber'><svg class='icn'><use href='#i-info'/></svg><div>Chưa có preset hãng sẵn cho <b>"+esc($("#mat").value)+"</b>. Điền tay theo bảng ở <b>bước 2 · Filament</b> phía trên, hoặc chọn vật liệu khác ở combobox <b>Nhựa</b>.</div></div>";
+   return;
+ }
+ list.forEach(x=>{const o=document.createElement("option");o.value=x[1];o.textContent=x[0].n+" ("+x[0].mat+")";sel.appendChild(o);});
+ sel.value=String(list[0][1]); renderBrandProfile(list[0][1]);
+}
+function renderBrands(){
+ let h="<div class='sectitle'>Nhựa theo HÃNG — chọn hãng → panel CLONE Filament Settings, chỉ đúng ĐIỀN GÌ VÀO Ô NÀO</div>";
+ h+="<div class='callout c-info'><svg class='icn'><use href='#i-info'/></svg><div><b>Setting theo MÀU?</b> Cùng hãng+loại → các MÀU dùng nhiệt/flow GIỐNG nhau. Màu chỉ khác <b>Flushing volumes</b> + tinh chỉnh ±5°C (đen ↓ · trắng ↑). Không có profile riêng mỗi màu → muốn 1 màu khác thì đè <b>Objects</b>.</div></div>";
+ h+="<div style='margin-bottom:6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap'><label style='font-weight:700'>Chọn hãng / loại: <select id='brandSel' style='margin-left:6px'></select></label>"+
+    "<button class='btn' id='exportPreset'><svg class='icn'><use href='#i-download'/></svg> Xuất preset .json</button></div>";
+ h+="<div class='muted' style='margin:0 0 10px;font-size:12px'>Đồng bộ 2 chiều với combobox <b>Nhựa</b> ở trên. Tải .json → nạp vào Bambu Studio: <b>File ▸ Import ▸ Import Configs…</b> (OrcaSlicer tương tự).</div>";
+ h+="<div id='brand-profile'></div>";
+ h+="<details style='margin-top:14px'><summary style='cursor:pointer;font-weight:700;color:var(--muted)'>▸ Xem bảng tổng hợp tất cả hãng</summary><div class='card' style='margin-top:8px'><table><tr><th>Hãng · loại</th><th>Vật liệu</th><th>Nozzle °C</th><th>Bed °C</th><th>Flow</th><th>Ghi chú</th></tr>";
+ BRANDS.forEach(b=>h+="<tr><td><b>"+esc(b.n)+"</b></td><td>"+esc(b.mat)+"</td><td class='val'>"+esc(b.nzr)+"</td><td class='val'>"+esc(b.bedr)+"</td><td class='val'>"+esc(b.flow)+"</td><td class='gd'>"+esc(b.note)+"</td></tr>");
+ h+="</table><div class='muted' style='margin-top:6px'>Mẹo: chọn preset hãng nếu Bambu Studio có; nếu không → dùng Generic + điền các ô trên; luôn chạy Flow Dynamics khi đổi hãng.</div></div></details>";
+ $("#brand-block").innerHTML=h;
+ const sel=$("#brandSel");
+ sel.addEventListener("change",()=>{
+   const idx=+sel.value; if(sel.value===""||isNaN(idx))return;
+   renderBrandProfile(idx);
+   const topWant=BM2MAT(BRANDS[idx].mat);
+   if($("#mat").value!==topWant){$("#mat").value=topWant;renderSettings();}
+ });
+ $("#exportPreset").addEventListener("click",downloadBrandPreset);
+ fillBrandSelForMat();
+}
+function renderStatic(){
+ renderBrands();
+ const fg=$("#flow-grid");
+ FLOW.forEach((f,i)=>{const c=ce("div","card");c.innerHTML="<h3><span style='background:var(--surface3);color:var(--brand-d);border-radius:8px;width:28px;height:28px;display:inline-grid;place-items:center;font-weight:900'>"+(i+1)+"</span> "+esc(f[0])+"</h3><div class='muted'>"+esc(f[1])+"</div>";fg.appendChild(c);});
+ const gg=$("#goal-grid");
+ GOALS.forEach(g=>{const c=ce("div","card");let h="<h3 style='color:"+g[1]+"'>"+esc(g[0])+"</h3><div class='muted' style='margin-bottom:6px'>"+esc(g[2])+"</div><table><tr><th>Setting</th><th>Giá trị</th><th>Chỉnh ở đâu</th></tr>";g[3].forEach(r=>h+="<tr><td><b>"+esc(r[0])+"</b></td><td class='val'>"+esc(r[1])+"</td><td class='gd'>"+esc(LOC[r[0]]||"—")+"</td></tr>");c.style.borderTop="3px solid "+g[1];c.innerHTML=h+"</table>";gg.appendChild(c);});
+ let st="<tr><th>Triệu chứng</th><th>Nguyên nhân</th><th>Chỉnh gì (↑ tăng / ↓ giảm)</th></tr>";
+ SYMP.forEach(r=>st+="<tr><td><b>"+esc(r[0])+"</b></td><td>"+esc(r[1])+"</td><td class='gd'>"+esc(r[2])+"</td></tr>");
+ $("#symp-table").innerHTML=st;
+ const rg=$("#res-grid");
+ RES.forEach(r=>{const c=ce("div","card");let h="<h3>"+esc(r[0])+"</h3><ul class='t' style='font-size:13px'>";r[1].forEach(l=>h+="<li><a href='"+l[1]+"'>"+esc(l[0])+"</a></li>");c.innerHTML=h+"</ul>";rg.appendChild(c);});
+ let ot="<tr><th>Tính năng (EN)</th><th>Cải thiện gì / khi nào dùng</th></tr>";
+ ORCA.forEach(r=>ot+="<tr><td><b>"+esc(r[0])+"</b></td><td class='gd' style='max-width:none'>"+esc(r[1])+"</td></tr>");
+ $("#orca-table").innerHTML=ot;
+}
+
+/* ---------- TABS ---------- */
+document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>{
+ document.querySelectorAll(".tab").forEach(x=>{x.classList.remove("on");x.setAttribute("aria-selected","false");});
+ document.querySelectorAll(".panel").forEach(x=>x.classList.remove("on"));
+ t.classList.add("on"); t.setAttribute("aria-selected","true"); $("#"+t.dataset.tab).classList.add("on"); window.scrollTo({top:0,behavior:"smooth"});
+}));
+$("#mat").addEventListener("change",()=>{fillBrandSelForMat();forceStep(2);rerenderAnalysis();});
+$("#uc").addEventListener("change",()=>{forceStep(3);rerenderAnalysis();});
+document.querySelectorAll(".stepb").forEach(b=>b.addEventListener("click",()=>setStep(+b.dataset.step)));
+
+/* ================= FILE ANALYSIS (in-browser .3mf) ================= */
+async function inflateRaw(bytes){
+ if(bytes.length===0) return new Uint8Array();
+ const ds=new DecompressionStream("deflate-raw");
+ const s=new Blob([bytes]).stream().pipeThrough(ds);
+ return new Uint8Array(await new Response(s).arrayBuffer());
+}
+async function unzip(buf){
+ const dv=new DataView(buf), u8=new Uint8Array(buf), len=buf.byteLength;
+ const u32=o=>(o>=0&&o+4<=len)?dv.getUint32(o,true):-1;   // bounds-safe reads
+ const u16=o=>(o>=0&&o+2<=len)?dv.getUint16(o,true):-1;
+ const nm=(o,n)=>new TextDecoder().decode(u8.subarray(o,Math.min(o+n,len)));
+ const entries=[];
+ // ---- Primary: End-Of-Central-Directory (+ ZIP64) ----
+ let eocd=-1;
+ for(let i=len-22;i>=0 && i>len-22-65557;i--){ if(u32(i)===0x06054b50){eocd=i;break;} }
+ if(eocd>=0){
+   let cnt=u16(eocd+10), cd=u32(eocd+16);
+   if(cnt===0xFFFF||cd===0xFFFFFFFF||cd<0){                 // ZIP64
+     const loc=eocd-20;
+     if(loc>=0&&u32(loc)===0x07064b50){ const z=u32(loc+8);
+       if(z>=0&&u32(z)===0x06064b50){ cnt=u32(z+32); cd=u32(z+48); } }
+   }
+   let p=cd;
+   for(let i=0;i<cnt && p>=0 && p+46<=len;i++){
+     if(u32(p)!==0x02014b50) break;
+     const method=u16(p+10), compSize=u32(p+20), nl=u16(p+28), el=u16(p+30), cl=u16(p+32), lo=u32(p+42);
+     if(nl<0||lo<0){break;}
+     entries.push({name:nm(p+46,nl),method,compSize,lo});
+     p+=46+nl+el+cl;
+   }
+ }
+ // ---- Fallback: quét Local File Headers từ đầu (bền với ZIP64/central-dir hỏng) ----
+ if(!entries.length){
+   let q=0;
+   while(q+30<=len){
+     if(u32(q)!==0x04034b50){ q++; continue; }
+     const method=u16(q+8), flag=u16(q+6); let compSize=u32(q+18);
+     const nl=u16(q+26), el=u16(q+28); const start=q+30+nl+el;
+     if(nl<0||start>len){ q++; continue; }
+     if((flag&8)||compSize<=0){                              // size trong data-descriptor → tới header kế
+       let nx=start; while(nx+4<=len && u32(nx)!==0x04034b50 && u32(nx)!==0x02014b50) nx++;
+       compSize=nx-start;
+     }
+     entries.push({name:nm(q+30,nl),method,compSize,lo:q}); q=start+Math.max(compSize,0);
+   }
+ }
+ if(!entries.length) throw new Error("Không đọc được cấu trúc ZIP của .3mf (file có thể lỗi hoặc mã hoá)");
+ // ---- Giải nén (deflate-raw tự kết thúc nên over-estimate range vẫn đúng) ----
+ const files={};
+ for(const e of entries){
+   if(e.lo<0||e.lo+30>len) continue;
+   const nl=u16(e.lo+26), el=u16(e.lo+28); const start=e.lo+30+nl+el;
+   if(nl<0||start<0||start>len) continue;
+   const end=Math.min(start+(e.compSize>=0?e.compSize:len),len);
+   const raw=u8.subarray(start,end);
+   try{ files[e.name]=e.method===0?raw:await inflateRaw(raw); }catch(_){ /* bỏ qua entry lỗi */ }
+ }
+ return files;
+}
+const td=b=>new TextDecoder("utf-8").decode(b);
+const firstOf=v=>Array.isArray(v)?(v[0]??""):(v??"");
+function densOf(ps){
+ const n=((firstOf(ps.filament_settings_id)||"")+" "+(firstOf(ps.filament_type)||"")).toLowerCase();
+ if(n.includes("matte"))return 1.32; if(n.includes("lite"))return 1.40; if(n.includes("petg"))return 1.28; if(n.includes("abs"))return 1.04;
+ if(n.includes("asa"))return 1.07; if(n.includes("tpu"))return 1.21; if(n.includes("nylon"))return 1.15;
+ return 1.26;
+}
+/* mesh geometry from *.model */
+function meshStats(files){
+ const parser=new DOMParser(); const strip=t=>t.split(":").pop();
+ const mx=a=>{let m=-Infinity;for(let i=0;i<a.length;i++)if(a[i]>m)m=a[i];return m;};
+ const mn=a=>{let m=Infinity;for(let i=0;i<a.length;i++)if(a[i]<m)m=a[i];return m;};
+ const meshes={},comps={},builds=[];
+ const pT=s=>{if(!s)return null;const v=s.trim().split(/\s+/).map(Number);return v.length===12?v:null;};
+ for(const name in files){
+   if(!name.toLowerCase().endsWith(".model")) continue;
+   let doc; try{doc=parser.parseFromString(td(files[name]),"application/xml");}catch(e){continue;}
+   doc.querySelectorAll("object").forEach(obj=>{
+     const id=obj.getAttribute("id"); const mesh=obj.querySelector("mesh");
+     if(mesh){
+       const vs=[],ts=[];
+       mesh.querySelectorAll("vertices > vertex").forEach(v=>vs.push([+v.getAttribute("x"),+v.getAttribute("y"),+v.getAttribute("z")]));
+       mesh.querySelectorAll("triangles > triangle").forEach(t=>ts.push([+t.getAttribute("v1"),+t.getAttribute("v2"),+t.getAttribute("v3")]));
+       meshes[id]=[vs,ts];
+     }
+     const cl=[]; obj.querySelectorAll("components > component").forEach(c=>cl.push([c.getAttribute("objectid"),pT(c.getAttribute("transform"))]));
+     if(cl.length)comps[id]=cl;
+   });
+   doc.querySelectorAll("build > item").forEach(it=>builds.push([it.getAttribute("objectid"),pT(it.getAttribute("transform"))]));
+ }
+ if(!Object.keys(meshes).length) return null;
+ const ap=(T,p)=>!T?p:[p[0]*T[0]+p[1]*T[3]+p[2]*T[6]+T[9],p[0]*T[1]+p[1]*T[4]+p[2]*T[7]+T[10],p[0]*T[2]+p[1]*T[5]+p[2]*T[8]+T[11]];
+ const mul=(A,B)=>{if(!A)return B;if(!B)return A;const r=new Array(12).fill(0);for(let i=0;i<3;i++)for(let j=0;j<3;j++)r[i*3+j]=A[j]*B[i*3]+A[3+j]*B[i*3+1]+A[6+j]*B[i*3+2];for(let j=0;j<3;j++)r[9+j]=A[j]*B[9]+A[3+j]*B[10]+A[6+j]*B[11]+A[9+j];return r;};
+ const world=[]; const objDims=[];
+ const emit=(id,T,d=0)=>{if(d>8)return;if(meshes[id]){const[vs,ts]=meshes[id];const wv=vs.map(v=>ap(T,v));for(const[a,b,c]of ts)if(a<wv.length&&b<wv.length&&c<wv.length)world.push([wv[a],wv[b],wv[c]]);}for(const[cid,ct]of(comps[id]||[]))emit(cid,mul(T,ct),d+1);};
+ for(const[id,T]of builds){const before=world.length;emit(id,T);const seg=world.slice(before);if(seg.length){const xs=[],ys=[],zs=[];for(const t of seg)for(const p of t){xs.push(p[0]);ys.push(p[1]);zs.push(p[2]);}objDims.push(Math.max(mx(xs)-mn(xs),mx(ys)-mn(ys),mx(zs)-mn(zs)));}}
+ if(!world.length){for(const id in meshes)emit(id,null);}
+ if(!world.length)return null;
+ let vol=0,area=0,down=0,top=0,vert=0,slope=0; const xs=[],ys=[],zs=[]; const c45=Math.cos(Math.PI/4);
+ for(const[p1,p2,p3]of world){
+   for(const p of[p1,p2,p3]){xs.push(p[0]);ys.push(p[1]);zs.push(p[2]);}
+   vol+=(p1[0]*(p2[1]*p3[2]-p3[1]*p2[2])-p1[1]*(p2[0]*p3[2]-p3[0]*p2[2])+p1[2]*(p2[0]*p3[1]-p3[0]*p2[1]))/6;
+   const ux=p2[0]-p1[0],uy=p2[1]-p1[1],uz=p2[2]-p1[2],vx=p3[0]-p1[0],vy=p3[1]-p1[1],vz=p3[2]-p1[2];
+   const nx=uy*vz-uz*vy,ny=uz*vx-ux*vz,nz=ux*vy-uy*vx; const a=Math.hypot(nx,ny,nz)/2; if(a<1e-9)continue;
+   area+=a; const cz=nz/(2*a);
+   if(cz>0.985)top+=a; else if(cz<-c45)down+=a; else if(Math.abs(cz)<0.15)vert+=a; else slope+=a;
+ }
+ const dx=mx(xs)-mn(xs),dy=mx(ys)-mn(ys),dz=mx(zs)-mn(zs);
+ const pc=v=>area?v/area*100:0;
+ return {objects:builds.length||Object.keys(meshes).length,tris:world.length,dx,dy,dz,
+   vol_cm3:Math.abs(vol)/1000,area_cm2:area/100,down:pc(down),top:pc(top),vert:pc(vert),slope:pc(slope),
+   aspect:Math.min(dx,dy)>0?dz/Math.min(dx,dy):0,n:objDims.length||1,maxObj:objDims.length?mx(objDims):Math.max(dx,dy,dz)};
+}
+/* ================= CONFLICT: Filament ĐÈ Process =================
+   Nguồn: Tab.cpp — trang "Setting Overrides" (13 key Retraction + 7 key Overhang/Bridge). MỖI ô có
+   CHECKBOX bật/tắt override; khi TẮT giá trị lưu là "nil" ⇒ Process thắng. Nhóm Overhang/Bridge còn
+   bị chặn thêm bởi công tắc tổng `override_process_overhang_speed`.
+   RIÊNG nhóm scarf seam nằm ở trang "Filament", KHÔNG có checkbox ⇒ LUÔN đè, mặc định = "none".
+   ⇒ Bẫy im lặng: Process bật scarf, Filament để 'none' → scarf TẮT mà không báo gì. */
+const OV_RETRACT=[
+ ["filament_retraction_length","retraction_length","Chiều dài rút"],
+ ["filament_z_hop","z_hop","Z hop"],
+ ["filament_z_hop_types","z_hop_types","Kiểu Z hop"],
+ ["filament_retraction_speed","retraction_speed","Tốc độ rút"],
+ ["filament_deretraction_speed","deretraction_speed","Tốc độ đẩy lại"],
+ ["filament_retract_restart_extra","retract_restart_extra","Bù thêm khi đẩy lại"],
+ ["filament_retraction_minimum_travel","retraction_minimum_travel","Quãng di chuyển tối thiểu"],
+ ["filament_retract_when_changing_layer","retract_when_changing_layer","Rút khi đổi lớp"],
+ ["filament_wipe","wipe","Wipe"],
+ ["filament_wipe_distance","wipe_distance","Quãng wipe"],
+ ["filament_retract_before_wipe","retract_before_wipe","Rút trước wipe"],
+ ["filament_long_retractions_when_cut","long_retractions_when_cut","Rút dài khi cắt"],
+ ["filament_retraction_distances_when_cut","retraction_distances_when_cut","Quãng rút khi cắt"],
+];
+const OV_OVERHANG=[
+ ["filament_enable_overhang_speed","enable_overhang_speed","Bật tốc độ overhang"],
+ ["filament_overhang_1_4_speed","overhang_1_4_speed","Overhang 1/4"],
+ ["filament_overhang_2_4_speed","overhang_2_4_speed","Overhang 2/4"],
+ ["filament_overhang_3_4_speed","overhang_3_4_speed","Overhang 3/4"],
+ ["filament_overhang_4_4_speed","overhang_4_4_speed","Overhang 4/4"],
+ ["filament_overhang_totally_speed","overhang_totally_speed","Overhang hoàn toàn"],
+ ["filament_bridge_speed","bridge_speed","Tốc độ bắc cầu"],
+];
+const isNil=v=>{const s=String(firstOf(v)).trim().toLowerCase();return s===""||s==="nil";};
+const bothHave=(ps,fk,pk)=>(fk in ps)&&(pk in ps);
+function auditOverrides(ps){
+ const F=[],add=(l,t,d)=>F.push([l,t,d]); const g=k=>firstOf(ps[k]);
+ /* 1) Scarf seam — LUÔN đè (không checkbox) */
+ const fs=String(g("filament_scarf_seam_type")||"").toLowerCase();
+ const ss=String(g("seam_slope_type")||"").toLowerCase();
+ if(ss&&ss!=="none"&&fs==="none")
+   add("bad","Scarf seam bị Filament TẮT âm thầm",
+     "Process seam_slope_type='"+ss+"' (BẬT) nhưng Filament filament_scarf_seam_type='none'. Ô này KHÔNG có checkbox override nên filament LUÔN thắng ⇒ scarf không chạy, seam vẫn lộ. Sửa: Filament Settings ▸ filament_scarf_seam_type = 'all' (Contour and hole).");
+ else if(fs==="external"&&ss==="external")
+   add("warn","Scarf chỉ áp cho CONTOUR ngoài","Cả hai đang 'external' (Contour). Seam nằm trên LỖ / lòng trong (hole) sẽ KHÔNG được vát — đổi cả hai sang 'all' (Contour and hole).");
+ else if(fs&&fs!=="none"&&ss&&ss!==fs)
+   add("warn","Scarf: Filament khác Process","Filament='"+fs+"' đè Process='"+ss+"'. Giá trị THỰC THI là của Filament.");
+ else if(fs&&fs!=="none")
+   add("ok","Scarf seam đang BẬT","filament_scarf_seam_type='"+fs+"' — khớp Process.");
+ /* 2) Retraction — 'nil' = không đè */
+ const rets=OV_RETRACT.filter(([fk,pk])=>bothHave(ps,fk,pk)&&!isNil(ps[fk])&&String(firstOf(ps[fk]))!==String(firstOf(ps[pk])));
+ if(rets.length)add("info","Filament ĐÈ "+rets.length+" thiết lập Retraction",
+   rets.map(([fk,pk,vn])=>vn+" = "+firstOf(ps[fk])+" (đè Process "+firstOf(ps[pk])+")").join(" · ")+". Chỉ đúng chủ ý nếu bạn ĐÃ tick ô override ở Filament ▸ Setting Overrides.");
+ else add("ok","Retraction: không xung đột","Mọi ô override retraction đang 'nil' ⇒ dùng giá trị của Process.");
+ /* 3) Overhang/bridge — chặn bởi công tắc tổng */
+ const master=["1","true"].includes(String(g("override_process_overhang_speed")||"0").toLowerCase());
+ const oh=OV_OVERHANG.filter(([fk,pk])=>bothHave(ps,fk,pk)&&!isNil(ps[fk])&&String(firstOf(ps[fk]))!==String(firstOf(ps[pk])));
+ if(oh.length&&!master)
+   add("info","Overhang/bridge của Filament đang bị BỎ QUA",
+     "override_process_overhang_speed=0 ⇒ "+oh.length+" giá trị filament ("+oh.map(x=>x[2]).join(", ")+") KHÔNG áp dụng, Process thắng. Ví dụ filament_bridge_speed="+(g("filament_bridge_speed")||"—")+" nhưng chạy thật là bridge_speed="+(g("bridge_speed")||"—")+". Muốn dùng phải BẬT công tắc 'Override process overhang speed'.");
+ else if(oh.length)
+   add("warn","Filament ĐÈ tốc độ overhang/bridge","Công tắc override đang BẬT ⇒ "+oh.map(([fk,pk,vn])=>vn+" = "+firstOf(ps[fk])+" thay cho "+firstOf(ps[pk])).join(" · ")+".");
+ return F;
+}
+
+/* ================= TỐI ƯU THỜI GIAN =================
+   Trần lưu lượng: v_max = filament_max_volumetric_speed / (layer_height × line_width).
+   Đặt tốc độ > v_max là VÔ NGHĨA (slicer tự hạ về trần).
+   Chỉ tăng vùng KHUẤT (inner wall / sparse infill / solid trong). KHÔNG đụng outer wall & top surface. */
+function auditTime(ps){
+ const F=[],add=(l,t,d)=>F.push([l,t,d]); const g=k=>firstOf(ps[k]);
+ const h=+g("layer_height")||0, mv=+g("filament_max_volumetric_speed")||0;
+ if(!h||!mv)return F;
+ const rows=[["inner_wall","Tường trong",true],["sparse_infill","Infill thưa",true],["internal_solid_infill","Solid bên trong",true],["outer_wall","Tường NGOÀI",false],["top_surface","Mặt TRÊN",false]];
+ const gains=[],over=[];
+ for(const [k,vn,hidden] of rows){
+   const w=+g(k+"_line_width"), s=+g(k+"_speed");
+   if(!w||!s)continue;
+   const vmax=mv/(h*w), flow=h*w*s;
+   if(s>vmax+1)over.push(vn+": đang "+s.toFixed(0)+" nhưng trần chỉ "+vmax.toFixed(0)+" mm/s (flow "+flow.toFixed(1)+" > "+mv+" mm³/s)");
+   else if(hidden&&vmax>s*1.03)gains.push(vn+": "+s.toFixed(0)+" → "+vmax.toFixed(0)+" mm/s (+"+((vmax/s-1)*100).toFixed(0)+"%)");
+ }
+ if(over.length)add("warn","Tốc độ VƯỢT trần lưu lượng → đặt cao vô nghĩa",over.join(" · ")+". Máy tự hạ về trần, số nhập thêm không có tác dụng. Muốn nhanh hơn: ↑ max volumetric speed (nếu nhựa chịu được) hoặc ↑ layer height.");
+ if(gains.length)add("info","Còn DƯ trần lưu lượng ở vùng khuất → tăng tốc MIỄN PHÍ",gains.join(" · ")+". Các vùng này không lộ ra ngoài nên tăng tốc không ảnh hưởng bề mặt. GIỮ NGUYÊN Outer wall & Top surface.");
+ const inf=parseFloat(g("sparse_infill_density")), tl=+g("top_shell_layers"), bl=+g("bottom_shell_layers"), wl=+g("wall_loops");
+ const prime=["1","true"].includes(String(g("enable_prime_tower")).toLowerCase());
+ const tips=[];
+ if(inf>10)tips.push("Sparse infill "+g("sparse_infill_density")+" → 10% (time infill ∝ thể tích × mật độ — đòn MẠNH nhất)");
+ if(tl>5)tips.push("Top shell "+tl+" → 5 lớp");
+ if(bl>4)tips.push("Bottom shell "+bl+" → 3–4 lớp");
+ if(wl>3)tips.push("Wall loops "+wl+" → 2–3");
+ if(prime)tips.push("TẮT Prime tower (in 1 màu không cần — nó còn CHẶN Variable layer height)");
+ tips.push("Dày lớp ở vùng PHẲNG bằng Variable layer height (time tường ∝ SỐ LỚP), giữ lớp mỏng chỉ ở mặt cong");
+ add("info","Đòn bẩy giảm THỜI GIAN mà không đụng bề mặt",tips.join(" · ")+
+   ". ⛔ KHÔNG hạ outer_wall_speed / outer_wall_acceleration để 'mua' chất lượng — đó là cách chắc chắn nhất khiến thời gian tăng gấp 3 (đo thật: 10h37m → 31h54m).");
+ return F;
+}
+
+/* audit */
+function auditFile(ps,geo,slice){
+ const F=[],add=(l,t,d)=>F.push([l,t,d]); const g=k=>firstOf(ps[k]);
+ const ft=(g("filament_type")||"").toUpperCase();
+ const fn=(g("filament_settings_id")||""); const isMatte=/matte/i.test(fn)||/matte/i.test(ft);
+ if(geo){
+   if(geo.maxObj>256)add("bad","Vật đơn lẻ VƯỢT khổ A1 (256mm)","Vật lớn nhất "+geo.maxObj.toFixed(0)+"mm > 256 → phải cắt/thu nhỏ.");
+   else add("ok","Kích thước vừa khổ A1","Vật lớn nhất "+geo.maxObj.toFixed(0)+"mm < 256"+(geo.n>1?" · "+geo.n+" vật trên khay (union "+geo.dx.toFixed(0)+"×"+geo.dy.toFixed(0)+"mm)":"")+".");
+   const sup=["1","true"].includes(String(g("enable_support")).toLowerCase());
+   const st=(g("support_type")||"").toLowerCase();
+   if(geo.down>8&&!sup)add("warn","Có overhang nhưng Support TẮT","~"+geo.down.toFixed(0)+"% mặt hướng xuống >45°. Vật trang trí: BẬT Enable support + Type = 'tree(manual)' rồi dùng Support painting (chuột TRÁI = enforcer XANH = CÓ support · chuột PHẢI = blocker ĐỎ) — chỉ đỡ chỗ cần, không để sẹo.");
+   else if(geo.down>8&&sup&&st.includes("auto"))add("info","Support đang (auto) — cân nhắc (manual)","Support tự sinh có thể để SẸO lên mặt trang trí. Đổi Type = 'tree(manual)' + tô Support painting chỉ ở chỗ cần.");
+   else if(geo.down>8&&sup)add("ok","Support hợp lý với overhang","~"+geo.down.toFixed(0)+"% mặt hướng xuống; support đang bật (manual).");
+   const dens=densOf(ps),sg=geo.vol_cm3*dens; const pw=slice&&slice.weight?+slice.weight:null;
+   if(pw&&sg>0)add("info","Tỷ lệ đặc (real)","Nhựa thực "+pw.toFixed(0)+"g / khối đặc "+sg.toFixed(0)+"g (khối lượng riêng "+dens+") = "+(pw/sg*100).toFixed(0)+"% — còn lại rỗng/infill+support.");
+ }
+ const lh=+g("layer_height")||0.2, ow=+g("outer_wall_speed"), wl=+g("wall_loops"), inf=parseFloat(g("sparse_infill_density"));
+ const bed=+(g("textured_plate_temp")||g("hot_plate_temp"));
+ if(ow>=100&&ow<=145)add("warn","Outer wall vùng 'vân belt'",ow+"mm/s ~120 → A1 dễ vân sóng. Giảm <100 hoặc tăng >160.");
+ if(ft.includes("PLA")&&bed>=65)add("warn","Bed hơi nóng cho PLA","bed "+bed+"°C → dễ phồng chân (elephant foot) + heat-creep. Hè VN 55–60°C là đủ.");
+ const ws=(g("wall_sequence")||"").toLowerCase(); const isIOI=ws.includes("inner-outer-inner");
+ if(isIOI&&wl<3)add("bad","Inner/Outer/Inner nhưng chỉ "+wl+" wall","Thứ tự 'Inner/Outer/Inner' CẦN ≥3 wall mới có tác dụng (in tường trong từ vòng 3 trở đi) → đang "+wl+" wall nên nó KHÔNG hiệu lực. Tăng Wall loops = 3, hoặc đổi về 'Outer/Inner'.");
+ else if(!isIOI&&wl>=3)add("info","Có ≥3 wall → nên dùng Inner/Outer/Inner","Đang '"+(g("wall_sequence")||"—")+"'. Với ≥3 wall, 'Inner/Outer/Inner' cho bề mặt + dung sai đẹp nhất (đổi lại overhang yếu hơn).");
+ const pw=String(g("precise_outer_wall")).toLowerCase();
+ if(["1","true"].includes(pw)&&!ws.includes("inner wall/outer wall"))add("warn","Precise wall sẽ BỊ BỎ QUA","Bambu chỉ áp dụng 'Precise outer wall' khi Order of walls = <b>Inner/Outer</b>. Đang '"+(g("wall_sequence")||"—")+"' → TẮT Precise wall (nó là tuỳ chọn Develop, mặc định OFF). Chỉ bật khi cần dung sai MẶT NGOÀI chính xác (lắp khít) và chấp nhận đổi order về Inner/Outer.");
+ const iron=(g("ironing_type")||"").toLowerCase();
+ if(isMatte&&iron&&!iron.includes("no"))add("warn","Ironing BẬT trên PLA Matte","Matte bị là sẽ chảy BÓNG LOANG từng vệt, mất vẻ nhám đồng đều → để 'No ironing'. Muốn mặt trên phẳng: ↑Top shell 5 + Monotonic Line + ↓Top surface speed.");
+ else if((!iron||iron.includes("no"))&&!isMatte)add("info","Ironing đang TẮT","Bật 'Top surfaces' nếu cần mặt trên phẳng bóng (mặt phẳng lớn).");
+ if(ft.includes("PLA")&&/basic|generic/i.test(fn))add("warn","Kiểm tra đúng profile nhựa","Profile = '"+fn+"'. Nếu spool là PLA Matte/Lite… hãy chọn đúng profile.");
+ if(inf>50)add("warn","Infill quá cao",inf+"% → cong vênh/tốn. Ít khi cần >50%.");
+ // ---- Gợi ý ĐỘNG: kết hợp hình học × cài đặt (không cứng) ----
+ if(geo){
+   const brim=(g("brim_type")||"").toLowerCase();
+   const adap=geo.slope>3&&geo.vert>60&&geo.slope<20;
+   if(geo.slope>3&&lh>=0.2){
+     add("warn","Lộ vân BẬC THANG trên mặt cong","~"+geo.slope.toFixed(0)+"% mặt cong/dốc + layer "+lh+"mm → thấy rõ bậc thang."+
+       (adap?" Vật có ~"+geo.vert.toFixed(0)+"% thành ĐỨNG → ĐỪNG hạ layer toàn bộ (tăng thời gian vô ích). Dùng Variable layer height (Prepare → chọn vật → công cụ Variable layer height → Adaptive): lớp mỏng CHỈ ở mặt cong.":" ↓ Layer 0.12, hoặc dùng Variable layer height riêng cho vùng cong."));
+   }
+   /* Variable layer height có 2 thứ CHẶN nó — chỉ nhắc khi VLH thực sự đáng dùng (adap) */
+   if(adap){
+     const supOn=["1","true"].includes(String(g("enable_support")).toLowerCase());
+     const stype=(g("support_type")||"").toLowerCase();
+     const sstyle=(g("support_style")||"").trim().toLowerCase();
+     const organic=sstyle.includes("organic")||((sstyle===""||sstyle==="default")&&stype.includes("tree"));
+     if(supOn&&organic)add("warn","Variable layer height XUNG ĐỘT với Organic support",
+       "Bambu chặn: \"Variable layer height is not supported with Organic supports\". Đang Type='"+(g("support_type")||"—")+"' · Style='"+(g("support_style")||"Default")+"'"+
+       (sstyle===""||sstyle==="default"?" → Style 'Default' TỰ CHỌN organic cho tree support (bẫy ngầm).":".")+
+       " Cách xử lý: để Style='Default' thì Bambu tự đổi sang Tree Hybrid khi bật VLH; hoặc chọn tay Tree Hybrid / Tree Slim / Tree Strong. Đừng chọn cứng Tree Organic.");
+     const primeOn=["1","true"].includes(String(g("enable_prime_tower")).toLowerCase());
+     if(primeOn)add("bad","Prime tower CHẶN Variable layer height",
+       "Bambu: \"Prime tower does not work when Adaptive Layer Height is on\" (prime tower đòi MỌI vật cùng layer height). In 1 màu → TẮT prime tower rồi mới bật Variable layer height.");
+   }
+   if(geo.top>15&&(!iron||iron.includes("no"))&&!isMatte)add("info","Mặt phẳng trên LỚN → nên bật Ironing","~"+geo.top.toFixed(0)+"% mặt phẳng trên → Ironing 'Top surfaces' cho mịn/bóng.");
+   const baseArea=geo.dx*geo.dy;
+   if(baseArea>15000&&(brim===""||brim.includes("no")||brim.includes("auto")))add("warn","Đế LỚN → rủi ro CONG VÊNH","Đế "+geo.dx.toFixed(0)+"×"+geo.dy.toFixed(0)+"mm ("+(baseArea/100).toFixed(0)+" cm²) trên A1 hở khung. Brim đang '"+(g("brim_type")||"—")+"' → đổi 'Outer brim only' rộng 5–8mm; fan OFF 2–3 lớp đầu; tránh gió lùa.");
+   if(geo.aspect>3&&(brim===""||brim.includes("no")))add("warn","Cao & MẢNH nhưng Brim TẮT","tỉ lệ "+geo.aspect.toFixed(1)+" dễ đổ/vênh → BẬT Brim (outer) + giảm tốc + giảm acceleration.");
+   if(geo.vert>45&&ow<160&&ow>0)add("info","Nhiều thành ĐỨNG → in nhanh được","~"+geo.vert.toFixed(0)+"% thành đứng (ít bậc thang) → có thể ↑ Inner/Outer wall speed để tiết kiệm thời gian.");
+   const dens2=densOf(ps),sg2=geo.vol_cm3*dens2,pw2=slice&&slice.weight?+slice.weight:0;
+   if(pw2&&sg2>0&&pw2/sg2<0.30&&inf>15)add("info","Vật RỖNG nhiều → có thể hạ infill","Tỷ lệ đặc "+(pw2/sg2*100).toFixed(0)+"% (thành mỏng/rỗng) → Sparse infill "+g("sparse_infill_density")+" có thể giảm để tiết kiệm nhựa/thời gian.");
+   if(geo.maxObj<60&&lh>=0.2)add("info","Vật NHỎ → nên in nét hơn","Vật lớn nhất "+geo.maxObj.toFixed(0)+"mm (mini) → cân nhắc nozzle 0.2 + Layer 0.08–0.12 + Initial layer speed 25 cho chi tiết.");
+ }
+ return F.concat(auditOverrides(ps),auditTime(ps));
+}
+function geoAdvice(geo){
+ if(!geo)return[]; const it=[];
+ if(geo.slope>25)it.push(["Nhiều mặt CONG/DỐC (~"+geo.slope.toFixed(0)+"%)","var(--su)","Dùng Variable layer height (mỏng CHỈ chỗ cong) thay vì hạ layer toàn cục. Bật Slow down for overhangs."]);
+ else it.push(["Ít mặt cong (~"+geo.slope.toFixed(0)+"%)","var(--q)","Chủ yếu phẳng/đứng → Layer 0.20 vẫn đẹp → in nhanh hơn."]);
+ if(geo.top>12)it.push(["Mặt TRÊN phẳng lớn (~"+geo.top.toFixed(0)+"%)","var(--teal)","Bật Ironing = Top surfaces (mịn/bóng); ↑ Top shell 5; Monotonic."]);
+ if(geo.down>8)it.push(["Overhang (~"+geo.down.toFixed(0)+"%)","var(--red)","Cần Support + ↑ Fan 100% + ↓ Outer wall speed vùng đua. In-place → dùng Support blocker."]);
+ else it.push(["Ít overhang (~"+geo.down.toFixed(0)+"%)","var(--q)","Gần như không cần support → tiết kiệm nhựa."]);
+ if(geo.aspect>3)it.push(["Cao & MẢNH (tỉ lệ "+geo.aspect.toFixed(1)+")","var(--s)","Dễ rung/đổ → ↓ tốc độ, BẬT Brim, giảm acceleration."]);
+ return it;
+}
+function goalSuggest(geo){
+ if(!geo)return[1,"phù hợp đa số"];
+ const dens=geo.area_cm2?geo.tris/geo.area_cm2:0, md=Math.max(geo.dx,geo.dy,geo.dz);
+ if(dens>150||md<60)return[0,"nhiều chi tiết ("+dens.toFixed(0)+" tam giác/cm², "+md.toFixed(0)+"mm) → nên in nét/chậm"];
+ if(dens<40&&md>120)return[2,"đơn giản & lớn ("+dens.toFixed(0)+" tam giác/cm², "+md.toFixed(0)+"mm) → in nhanh được"];
+ return[1,"chi tiết trung bình ("+dens.toFixed(0)+" tam giác/cm²)"];
+}
+const LV={bad:["#dc2626","LỖI"],warn:["#d97706","CẢNH BÁO"],ok:["#16a34a","OK"],info:["#2563eb","THÔNG TIN"]};
+function fmtTime(s){s=+s;if(!s)return"—";const h=(s/3600|0),m=((s%3600)/60|0);return(h?h+"h ":"")+m+"m";}
+
+let lastAnalysis=null;
+/* so 1 giá trị file với khuyến nghị (range/enum) */
+function within(fileV,recV){
+ const f=parseFloat(fileV), nums=(String(recV).match(/-?\d+(\.\d+)?/g)||[]).map(Number);
+ if(!isNaN(f)&&nums.length){
+   if(nums.length>=2){ const lo=Math.min.apply(null,nums), hi=Math.max.apply(null,nums); return f>=lo-1e-6 && f<=hi+1e-6; }
+   return Math.abs(f-nums[0])<=Math.max(0.01,0.03*Math.abs(nums[0]));
+ }
+ const nz=s=>String(s).toLowerCase().replace(/[\s_\/-]/g,"");   // bỏ cả "/", "-" (tên nội bộ vs tên hiển thị)
+ const a=nz(fileV), b=nz(recV);
+ return a===b || (a.length>1&&b.includes(a)) || (b.length>1&&a.includes(b));
+}
+/* đối chiếu setting trong file vs KHUYẾN NGHỊ theo Nhựa(curMat)+Mục tiêu(curUC) */
+function compareToTarget(ps){
+ if(!ps) return [];
+ const g=k=>firstOf(ps[k]); const mm=MATERIALS[curMat]||MATERIALS["PLA Basic"];
+ const goalOv=USECASE[curUC]||{}, matOv=matProc(curMat), rows=[];
+ const add=(label,key,rec,src)=>{const fv=g(key); if(fv===""||rec==null)return; rows.push([label,fv,String(rec),within(fv,rec),src]);};
+ add("Nozzle temp (other)","nozzle_temperature",mm.nozzle,"nhựa");
+ add("Bed · Textured PEI","textured_plate_temp",mm.bedTex,"nhựa");
+ add("Flow ratio","filament_flow_ratio",mm.flow,"nhựa");
+ add("Max volumetric speed","filament_max_volumetric_speed",mm.maxvol,"nhựa");
+ add("Fan max speed","fan_max_speed",mm.fan,"nhựa");
+ ["layer_height","wall_loops","sparse_infill_density","sparse_infill_pattern","wall_sequence","outer_wall_speed","top_shell_layers","ironing_type","brim_type"].forEach(k=>{
+   if(PROC_LABEL[k]==null)return;
+   const [s,ovv]=ovSource(k,matOv,goalOv);
+   const rec=(ovv!=null?ovv:PROC_DEFAULT[k]);
+   const src=s==="goal"?"mục tiêu ★":(s==="mat"?"nhựa ◆":"chung");
+   add(PROC_LABEL[k],k,rec,src);
+ });
+ return rows;
+}
+function rerenderAnalysis(){ if(lastAnalysis) render(lastAnalysis.ps,lastAnalysis.geo,lastAnalysis.slice,lastAnalysis.findings,lastAnalysis.name); }
+/* ---- IRONING: bật hay không + TỰ TÍNH thời gian thêm ----
+   Bambu mặc định: ironing_speed 30 mm/s · ironing_spacing 0.15 mm · flow 10%
+   => tốc độ phủ = speed × spacing (mm²/s). t = diện_tích_mặt_trên / tốc_độ_phủ.   */
+function ironingAdvice(ps,geo){
+ if(!geo) return "";
+ const g=k=>ps?firstOf(ps[k]):"";
+ const iron=(g("ironing_type")||"no ironing").toLowerCase(), on=!!iron&&!iron.includes("no");
+ const isMatte=/matte/i.test(curMat);   // theo NHỰA BẠN CHỌN (combobox), nhất quán với bảng so sánh
+ const spd=+g("ironing_speed")||30, spc=+g("ironing_spacing")||0.15;
+ const topA_mm2=geo.area_cm2*geo.top;          // cm² × (%) = mm²  (vì cm²×100×(top/100))
+ const rate=spd*spc;                           // mm²/s
+ const sec=rate>0?topA_mm2/rate:0;
+ const t=sec>=60?(sec/60>=60?Math.floor(sec/3600)+"h "+Math.round((sec%3600)/60)+"m":Math.round(sec/60)+" phút"):Math.round(sec)+" giây";
+ let verdict,cls;
+ if(isMatte){verdict="<b>KHÔNG nên bật</b> (bạn đang chọn <b>"+esc(curMat)+"</b>). Nhựa <b>Matte</b> bị là sẽ <b>chảy bóng loang</b> từng vệt → mất vẻ nhám đồng đều (xấu hơn để nguyên). Muốn mặt trên phẳng: ↑Top shell 5 + <b>Monotonic Line</b> + ↓Top surface speed.";cls="c-warn";}
+ else if(geo.top<5){verdict="<b>Ít lợi.</b> Mặt phẳng trên chỉ ~"+geo.top.toFixed(0)+"% → ironing gần như không thấy khác, mà vẫn tốn thời gian.";cls="c-info";}
+ else {verdict="<b>NÊN bật <code>Top surfaces</code></b> — mặt phẳng trên ~"+geo.top.toFixed(0)+"% đủ lớn để thấy rõ khác biệt (mịn/bóng).";cls="c-ok";}
+ return "<div class='sectitle'>Ironing — bật hay không?</div>"+
+  "<div class='callout "+cls+"'><svg class='icn'><use href='#i-info'/></svg><div>"+verdict+
+   "<br><br><b>Chi phí thời gian (tự tính):</b> mặt phẳng trên ≈ <b>"+(topA_mm2/100).toFixed(0)+" cm²</b> · tốc độ phủ = "+spd+" mm/s × "+spc+" mm = <b>"+rate.toFixed(2)+" mm²/s</b> → ironing thêm <b style='color:var(--amber)'>≈ "+t+"</b>"+
+   (on?" <i>(đang BẬT — thời gian này đã nằm trong dự tính của slicer)</i>":" <i>(đang TẮT — bật thì cộng thêm chừng này)</i>")+
+   ".<br><span class='muted' style='font-size:11.5px'>Thông số Bambu: Ironing flow 10% · spacing 0.15mm · speed 30mm/s. ↓spacing = mịn hơn nhưng lâu hơn (tỉ lệ nghịch).</span></div></div>";
+}
+async function analyze(file){
+ const R=$("#result"); R.innerHTML="<div class='card'>Đang đọc & giải nén…</div>";
+ try{
+   const buf=await file.arrayBuffer(); const files=await unzip(buf);
+   let ps=null;
+   for(const k in files){if(k.toLowerCase().endsWith("project_settings.config")){ps=JSON.parse(td(files[k]));break;}}
+   // slice_info
+   let slice=null;
+   for(const k in files){if(k.toLowerCase().endsWith("slice_info.config")){
+     const doc=new DOMParser().parseFromString(td(files[k]),"application/xml");
+     const pl=doc.querySelector("plate"); if(pl){const md={};pl.querySelectorAll("metadata").forEach(m=>md[m.getAttribute("key")]=m.getAttribute("value"));
+       const fil=[...pl.querySelectorAll("filament")].map(f=>({type:f.getAttribute("type"),color:f.getAttribute("color"),m:f.getAttribute("used_m"),g:f.getAttribute("used_g")}));
+       slice={time:md.prediction,weight:md.weight,fil};}
+     break;}}
+   const geo=meshStats(files);
+   if(!ps&&!geo){R.innerHTML="<div class='callout c-warn'><svg class='icn'><use href='#i-alert'/></svg><div>File không có thông số Process cũng không có mesh. Hãy export .3mf (Project) hoặc .gcode.3mf từ Bambu Studio.</div></div>";return;}
+   const findings=ps?auditFile(ps,geo,slice):[];
+   lastAnalysis={ps,geo,slice,findings,name:file.name};
+   render(ps,geo,slice,findings,file.name);
+ }catch(e){
+   R.innerHTML="<div class='callout c-warn'><svg class='icn'><use href='#i-alert'/></svg><div>Lỗi đọc file: "+esc(e.message)+". Trình duyệt cần hỗ trợ DecompressionStream (Chrome/Edge mới).</div></div>";
+ }
+}
+function render(ps,geo,slice,findings,name){
+ const g=k=>ps?firstOf(ps[k]):"";
+ let h="";
+ // stats
+ const layers=geo?Math.round(geo.dz/(+g("layer_height")||0.2)):"—";
+ const hasTime=slice&&slice.time, hasWeight=slice&&slice.weight;
+ let estW="";
+ if(geo&&!hasWeight){
+   const dens=densOf(ps||{});
+   const wl=+g("wall_loops")||2, lw=+g("line_width")||0.42;
+   const infill=(parseFloat(g("sparse_infill_density"))||15)/100;
+   const vol_mm3=geo.vol_cm3*1000, area_mm2=geo.area_cm2*100;
+   const wallT=wl*lw, charT=area_mm2>0?2*vol_mm3/area_mm2:wallT*4;
+   const shellFrac=Math.min(1,(2*wallT)/Math.max(charT,2*wallT));
+   const fill=shellFrac+(1-shellFrac)*infill;
+   estW=(geo.vol_cm3*dens*fill).toFixed(0);
+ }
+ h+="<h2 class='sec' style='margin-top:18px'>Kết quả: "+esc(name)+"</h2><div class='stats'>";
+ h+=statH("Thời gian in",hasTime?esc(fmtTime(slice.time)):"<span style='font-size:15px;color:var(--faint)'>— chưa slice</span>");
+ h+=statH("Khối lượng",hasWeight?(+slice.weight).toFixed(0)+" g":(estW?"<span style='color:var(--amber)'>≈ "+estW+" g</span> <span style='font-size:10px;color:var(--faint);font-weight:600'>ước tính</span>":"—"));
+ h+=stat("Kích thước vật lớn nhất",geo?geo.maxObj.toFixed(0)+" mm":"—");
+ h+=stat("Số lớp (@layer height)",layers);
+ h+="</div>";
+ if(!hasWeight)h+="<div class='callout c-amber'><svg class='icn'><use href='#i-info'/></svg><div><b>File CHƯA Slice</b> (slice_info không có &lt;plate&gt;) → không có <b>Thời gian in</b> &amp; <b>Khối lượng THẬT</b>. Mở trong Bambu Studio → <b>Slice</b> → <b>File ▸ Save Project</b> (.3mf) để nhúng số chính xác. Số <b>≈ khối lượng</b> ở trên là ƯỚC TÍNH từ thể tích × mật độ × tỉ lệ đặc (wall "+(+g("wall_loops")||2)+" + infill "+(g("sparse_infill_density")||"15%")+") — sai số lớn với vật rỗng/nhiều support.</div></div>";
+ // So với KHUYẾN NGHỊ (Nhựa + Mục tiêu đang chọn trên cùng)
+ const cmp=compareToTarget(ps);
+ if(cmp.length){
+   const bad=cmp.filter(r=>!r[3]).length;
+   h+="<div class='sectitle'>So với KHUYẾN NGHỊ cho \""+esc(curMat)+" + "+esc(curUC)+"\" — "+(bad?"<span style='color:var(--amber)'>"+bad+" ô nên xem lại</span>":"<span style='color:var(--brand-d)'>khớp hết ✓</span>")+"</div>";
+   h+="<div class='card'><table><tr><th>Setting</th><th>Trong file</th><th>Khuyến nghị</th><th>Nguồn</th><th>Trạng thái</th></tr>";
+   cmp.forEach(r=>{h+="<tr><td><b>"+esc(r[0])+"</b></td><td class='val'>"+esc(r[1])+"</td><td class='val'"+(r[3]?"":" style='color:var(--amber)'")+">"+esc(r[2])+"</td><td class='gd'>"+esc(r[4])+"</td><td>"+(r[3]?"<b style='color:var(--brand-d)'>✓ khớp</b>":"<b style='color:var(--amber)'>⚠ nên chỉnh</b>")+"</td></tr>";});
+   h+="</table><div class='muted' style='font-size:11.5px;margin-top:6px'>Đổi combobox <b>Nhựa</b>/<b>Mục tiêu</b> ở trên cùng → bảng này TỰ cập nhật. ⚠ = khác khuyến nghị (vài enum tên nội bộ có thể lệch tên hiển thị → kiểm tra tay).</div></div>";
+ }
+ h+=ironingAdvice(ps,geo);
+ // real geometry card
+ if(geo){
+   const dens=densOf(ps||{}); h+="<div class='sectitle'>Tính toán THẬT từ mesh</div><div class='grid g2'>";
+   h+="<div class='card bar-s'><h3><svg class='icn'><use href='#i-cube'/></svg> Hình học mô hình</h3><table>"+
+     row("Số object / vật xếp",geo.objects+" ("+geo.n+" trên khay)")+row("Số tam giác",geo.tris.toLocaleString())+
+     row("Kích thước X×Y×Z",geo.dx.toFixed(1)+" × "+geo.dy.toFixed(1)+" × "+geo.dz.toFixed(1)+" mm")+
+     row("Thể tích khối",geo.vol_cm3.toFixed(1)+" cm³")+row("KL nếu đặc",(geo.vol_cm3*dens).toFixed(0)+" g (mật độ "+dens+")")+
+     row("Mặt phẳng trên",geo.top.toFixed(0)+" %")+row("Mặt cong/dốc",geo.slope.toFixed(0)+" %")+
+     row("Thành đứng",geo.vert.toFixed(0)+" %")+row("Overhang (hướng xuống)",geo.down.toFixed(0)+" %")+"</table></div>";
+   // goal suggest
+   const [si,reason]=goalSuggest(geo); const ggoal=GOALS[si];
+   let gh="<div class='card' style='border-top:3px solid "+ggoal[1]+"'><h3 style='color:"+ggoal[1]+"'>Gợi ý mục tiêu: "+esc(ggoal[0])+"</h3><div class='muted' style='margin-bottom:6px'>Vì "+esc(reason)+".</div><table>";
+   ggoal[3].forEach(r=>gh+="<tr><td>"+esc(r[0])+"</td><td class='val'>"+esc(r[1])+"</td></tr>"); h+=gh+"</table></div></div>";
+   // geometry advice
+   const adv=geoAdvice(geo);
+   if(adv.length){h+="<div class='sectitle'>Hình học → thông số nên chỉnh</div><div class='grid g2'>";
+     adv.forEach(a=>h+="<div class='card' style='border-top:3px solid "+a[1]+"'><h3 style='color:"+a[1]+"'>"+esc(a[0])+"</h3><div class='gd'>"+esc(a[2])+"</div></div>");h+="</div>";}
+ }
+ // findings
+ if(findings.length){
+   findings.sort((a,b)=>({bad:0,warn:1,info:2,ok:3}[a[0]])-({bad:0,warn:1,info:2,ok:3}[b[0]]));
+   h+="<div class='sectitle'>Cảnh báo &amp; gợi ý (tính từ file)</div>";
+   findings.forEach(f=>{const[c,lab]=LV[f[0]];h+="<div class='find'><span class='badge' style='background:"+c+"'>"+lab+"</span><div><b>"+esc(f[1])+"</b><div class='gd'>"+esc(f[2])+"</div></div></div>";});
+ }
+ // form (actual values)
+ if(ps){
+   h+="<div class='sectitle'>Thông số trong file (form Bambu Studio)</div><div class='grid g2'>";
+   const all=GROUPS.concat([["Filament","var(--pink)","bar-fl",filamentRows(MATERIALS[curMat])]]);
+   for(const[tab,color,bar,subs]of all){
+     let t="",any=false;
+     for(const[subname,rows]of subs){
+       let rt="";
+       for(const[label,key,unit,rec,gd]of rows){const v=g(key);if(v==="")continue;rt+="<tr><td><b>"+esc(label)+"</b></td><td class='val'>"+esc(v)+" "+esc(unit)+"</td><td class='gd'>"+esc(gd)+"</td></tr>";}
+       if(rt){any=true;t+="<tr class='sub'><td colspan='3'>"+esc(subname)+"</td></tr>"+rt;}
+     }
+     if(any)h+="<div class='card "+bar+"'><h3 style='color:"+color+"'>"+esc(tab)+"</h3><table><tr><th>Setting</th><th>Giá trị trong file</th><th>Ý nghĩa ↑↓</th></tr>"+t+"</table></div>";
+   }
+   h+="</div>";
+ }
+ $("#result").innerHTML=h;
+}
+const stat=(l,v)=>"<div class='stat'><div class='l'>"+esc(l)+"</div><div class='v'>"+esc(v)+"</div></div>";
+const statH=(l,v)=>"<div class='stat'><div class='l'>"+esc(l)+"</div><div class='v'>"+v+"</div></div>";
+const row=(k,v)=>"<tr><td>"+esc(k)+"</td><td class='val'>"+esc(v)+"</td></tr>";
+
+/* dropzone wiring */
+const drop=$("#drop"),file=$("#file");
+drop.addEventListener("click",()=>file.click());
+drop.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();file.click();}});
+drop.addEventListener("dragover",e=>{e.preventDefault();drop.classList.add("hot");});
+drop.addEventListener("dragleave",()=>drop.classList.remove("hot"));
+drop.addEventListener("drop",e=>{e.preventDefault();drop.classList.remove("hot");if(e.dataTransfer.files[0])analyze(e.dataTransfer.files[0]);});
+file.addEventListener("change",()=>{if(file.files[0])analyze(file.files[0]);});
+
+/* init */
+renderSettings(); renderStatic();
+</script>
+</body>
+</html>

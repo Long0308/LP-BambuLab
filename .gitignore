@@ -1,0 +1,20 @@
+# Cấu hình máy in THẬT — chứa PRINTER_HOST / BAMBU_SERIAL / BAMBU_TOKEN (LAN access code).
+# Dùng .mcp.example.json làm khuôn; chạy `python bambu_connect.py` để sinh file này.
+.mcp.json
+
+# Local tooling
+.claude/settings.local.json
+.qodo/
+temp/
+
+# Trang lỗi HTTP bị lưu nhầm thành .json (429 / 404), không phải dữ liệu.
+# Muốn commit vẫn được: git add -f A1_04.json A1_base.json
+A1_04.json
+A1_base.json
+
+# Artifacts
+__pycache__/
+*.pyc
+node_modules/
+*.gcode
+*.gcode.3mf
