@@ -1603,6 +1603,15 @@ function auditFile(ps,geo,slice){
  const F=[],add=(l,t,d)=>F.push([l,t,d]); const g=k=>firstOf(ps[k]);
  const ft=(g("filament_type")||"").toUpperCase();
  const fn=(g("filament_settings_id")||""); const isMatte=/matte/i.test(fn)||/matte/i.test(ft);
+ /* Bẫy: chọn filament/process có đuôi "0.2 nozzle" → Bambu ĐỔI LUÔN printer preset sang đầu 0.2,
+    kéo max_volumetric_speed 22 → 2 và line width 0.45 → 0.22. Rất dễ dính mà không hề báo. */
+ const nzd=+g("nozzle_diameter")||0, pid=String(g("printer_settings_id")||"");
+ if(nzd&&nzd<0.3){
+   const mvv=g("filament_max_volumetric_speed")||"—";
+   if(geo&&geo.maxObj>100)add("bad","Đang dùng preset ĐẦU PHUN "+nzd+"mm cho vật LỚN",
+     "printer_settings_id = '"+pid+"' ⇒ nozzle "+nzd+"mm, max_volumetric_speed chỉ "+mvv+" mm³/s (đầu 0.4 là 22) và line width ~0.22mm. Vật lớn "+geo.maxObj.toFixed(0)+"mm sẽ in LÂU GẤP NHIỀU LẦN. Nếu máy đang lắp đầu 0.4 thì bạn đã lỡ chọn preset có đuôi '0.2 nozzle' (chọn Filament đuôi đó là Bambu tự đổi cả Printer lẫn Process). Sửa: Printer = 'Bambu Lab A1' → rồi chọn lại Filament/Process KHÔNG có đuôi '0.2 nozzle'.");
+   else add("info","Đang dùng đầu phun "+nzd+"mm","max_volumetric_speed "+mvv+" mm³/s. Chỉ đúng nếu bạn THẬT SỰ đã thay đầu phun "+nzd+" trên máy.");
+ }
  if(geo){
    if(geo.maxObj>256)add("bad","Vật đơn lẻ VƯỢT khổ A1 (256mm)","Vật lớn nhất "+geo.maxObj.toFixed(0)+"mm > 256 → phải cắt/thu nhỏ.");
    else add("ok","Kích thước vừa khổ A1","Vật lớn nhất "+geo.maxObj.toFixed(0)+"mm < 256"+(geo.n>1?" · "+geo.n+" vật trên khay (union "+geo.dx.toFixed(0)+"×"+geo.dy.toFixed(0)+"mm)":"")+".");
