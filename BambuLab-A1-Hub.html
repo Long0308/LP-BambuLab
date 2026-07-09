@@ -1482,19 +1482,25 @@ function meshStats(files){
  for(const[id,T]of builds){const before=world.length;emit(id,T);const seg=world.slice(before);if(seg.length){const xs=[],ys=[],zs=[];for(const t of seg)for(const p of t){xs.push(p[0]);ys.push(p[1]);zs.push(p[2]);}objDims.push(Math.max(mx(xs)-mn(xs),mx(ys)-mn(ys),mx(zs)-mn(zs)));}}
  if(!world.length){for(const id in meshes)emit(id,null);}
  if(!world.length)return null;
- let vol=0,area=0,down=0,top=0,vert=0,slope=0; const xs=[],ys=[],zs=[]; const c45=Math.cos(Math.PI/4);
+ let vol=0,area=0,down=0,base=0,top=0,vert=0,slope=0; const xs=[],ys=[],zs=[]; const c45=Math.cos(Math.PI/4);
+ /* Mặt ĐÁY nằm trên khay KHÔNG phải overhang — phải loại ra, nếu không mọi vật đáy phẳng đều bị
+    coi là "có overhang" (vd Body 14: 10.0% raw -> 0.3% thật; alphabet: 35.3% -> 11.2%). */
+ let zmin=Infinity; for(const t of world)for(const p of t)if(p[2]<zmin)zmin=p[2];
+ const zBase=zmin+0.6; // ~1 lớp đầu
  for(const[p1,p2,p3]of world){
    for(const p of[p1,p2,p3]){xs.push(p[0]);ys.push(p[1]);zs.push(p[2]);}
    vol+=(p1[0]*(p2[1]*p3[2]-p3[1]*p2[2])-p1[1]*(p2[0]*p3[2]-p3[0]*p2[2])+p1[2]*(p2[0]*p3[1]-p3[0]*p2[1]))/6;
    const ux=p2[0]-p1[0],uy=p2[1]-p1[1],uz=p2[2]-p1[2],vx=p3[0]-p1[0],vy=p3[1]-p1[1],vz=p3[2]-p1[2];
    const nx=uy*vz-uz*vy,ny=uz*vx-ux*vz,nz=ux*vy-uy*vx; const a=Math.hypot(nx,ny,nz)/2; if(a<1e-9)continue;
    area+=a; const cz=nz/(2*a);
-   if(cz>0.985)top+=a; else if(cz<-c45)down+=a; else if(Math.abs(cz)<0.15)vert+=a; else slope+=a;
+   if(cz>0.985)top+=a;
+   else if(cz<-c45){ if((p1[2]+p2[2]+p3[2])/3<=zBase)base+=a; else down+=a; }
+   else if(Math.abs(cz)<0.15)vert+=a; else slope+=a;
  }
  const dx=mx(xs)-mn(xs),dy=mx(ys)-mn(ys),dz=mx(zs)-mn(zs);
  const pc=v=>area?v/area*100:0;
  return {objects:builds.length||Object.keys(meshes).length,tris:world.length,dx,dy,dz,
-   vol_cm3:Math.abs(vol)/1000,area_cm2:area/100,down:pc(down),top:pc(top),vert:pc(vert),slope:pc(slope),
+   vol_cm3:Math.abs(vol)/1000,area_cm2:area/100,down:pc(down),down_cm2:down/100,base:pc(base),top:pc(top),vert:pc(vert),slope:pc(slope),
    aspect:Math.min(dx,dy)>0?dz/Math.min(dx,dy):0,n:objDims.length||1,maxObj:objDims.length?mx(objDims):Math.max(dx,dy,dz)};
 }
 /* ================= CONFLICT: Filament ĐÈ Process =================
@@ -1601,10 +1607,14 @@ function auditFile(ps,geo,slice){
    if(geo.maxObj>256)add("bad","Vật đơn lẻ VƯỢT khổ A1 (256mm)","Vật lớn nhất "+geo.maxObj.toFixed(0)+"mm > 256 → phải cắt/thu nhỏ.");
    else add("ok","Kích thước vừa khổ A1","Vật lớn nhất "+geo.maxObj.toFixed(0)+"mm < 256"+(geo.n>1?" · "+geo.n+" vật trên khay (union "+geo.dx.toFixed(0)+"×"+geo.dy.toFixed(0)+"mm)":"")+".");
    const sup=["1","true"].includes(String(g("enable_support")).toLowerCase());
-   const st=(g("support_type")||"").toLowerCase();
-   if(geo.down>8&&!sup)add("warn","Có overhang nhưng Support TẮT","~"+geo.down.toFixed(0)+"% mặt hướng xuống >45°. Vật trang trí: BẬT Enable support + Type = 'tree(manual)' rồi dùng Support painting (chuột TRÁI = enforcer XANH = CÓ support · chuột PHẢI = blocker ĐỎ) — chỉ đỡ chỗ cần, không để sẹo.");
-   else if(geo.down>8&&sup&&st.includes("auto"))add("info","Support đang (auto) — cân nhắc (manual)","Support tự sinh có thể để SẸO lên mặt trang trí. Đổi Type = 'tree(manual)' + tô Support painting chỉ ở chỗ cần.");
-   else if(geo.down>8&&sup)add("ok","Support hợp lý với overhang","~"+geo.down.toFixed(0)+"% mặt hướng xuống; support đang bật (manual).");
+   const st=(g("support_type")||"").toLowerCase(); const manual=st.includes("manual");
+   const oh=geo.down, ohcm=geo.down_cm2||0;
+   if(oh<=2)add("ok","Gần như KHÔNG cần support","Chỉ ~"+oh.toFixed(1)+"% diện tích ("+ohcm.toFixed(1)+" cm²) là mặt hướng xuống >45° — đã LOẠI mặt đáy nằm trên khay ("+(geo.base||0).toFixed(0)+"% diện tích). Vật này gần như tự đỡ được.");
+   else if(oh>8&&!sup)add("warn","Có overhang nhưng Support TẮT","~"+oh.toFixed(0)+"% mặt hướng xuống >45° ("+ohcm.toFixed(0)+" cm²). Vật trang trí: BẬT Enable support + Type = 'tree(manual)' rồi dùng Support painting (chuột TRÁI = enforcer XANH = CÓ support · chuột PHẢI = blocker ĐỎ) — chỉ đỡ chỗ cần, không để sẹo.");
+   else if(oh>8&&sup&&st.includes("auto"))add("info","Support đang (auto) — cân nhắc (manual)","Support tự sinh có thể để SẸO lên mặt trang trí. Đổi Type = 'tree(manual)' + tô Support painting chỉ ở chỗ cần.");
+   else if(oh>8&&sup)add("ok","Support hợp lý với overhang","~"+oh.toFixed(0)+"% mặt hướng xuống ("+ohcm.toFixed(0)+" cm²); support đang bật (manual).");
+   /* Vì sao Preview KHÔNG hiện support dù enable_support=1 */
+   if(sup&&manual)add("info","Support '(manual)' → CHỈ sinh ở chỗ bạn SƠN","Bambu: \"If normal(manual) or tree(manual) is selected, only support enforcers are generated\". Nếu chưa sơn enforcer nào thì Preview sẽ KHÔNG thấy một cọng support nào — đó là ĐÚNG, không phải lỗi. Sơn ở Prepare ▸ Support painting: chuột TRÁI = enforcer (có đỡ) · chuột PHẢI = blocker (cấm đỡ). Muốn máy tự sinh thì đổi Type sang 'tree(auto)'.");
    const dens=densOf(ps),sg=geo.vol_cm3*dens; const pw=slice&&slice.weight?+slice.weight:null;
    if(pw&&sg>0)add("info","Tỷ lệ đặc (real)","Nhựa thực "+pw.toFixed(0)+"g / khối đặc "+sg.toFixed(0)+"g (khối lượng riêng "+dens+") = "+(pw/sg*100).toFixed(0)+"% — còn lại rỗng/infill+support.");
  }
