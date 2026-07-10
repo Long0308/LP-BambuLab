@@ -2052,19 +2052,25 @@ function derive(cfg,L){
   }
   const tt=num('top_shell_thickness'), tl=parseInt(f(cfg.top_shell_layers),10)||0;
   const bt=num('bottom_shell_thickness'), bl=parseInt(f(cfg.bottom_shell_layers),10)||0;
+  /* PrintConfig.cpp:7423-7437 — spiral_mode ép wall_loops=1, top_shell_layers=0,
+     sparse_infill_density=0 lúc slice. Bề dày trần kế thừa không còn nghĩa lý. */
+  const spiral=['1','true'].includes(String(f(cfg.spiral_mode)??'').toLowerCase());
   return {
-    layerHeight:lh, flow,
-    effTopLayers:tt>0?Math.max(tl,Math.ceil(tt/lh)):tl,
+    layerHeight:lh, flow, spiral,
+    effTopLayers:spiral?0:(tt>0?Math.max(tl,Math.ceil(tt/lh)):tl),
     effBottomLayers:bt>0?Math.max(bl,Math.ceil(bt/lh)):bl,
     firstFlow:(num('initial_layer_print_height')||lh)*(num('initial_layer_line_width')||0.5)*(num('initial_layer_speed')||25),
   };
 }
 
-/* Tab.cpp:4256 — override_process_overhang_speed là công tắc gác đúng 7 ô filament này.
+/* PrintConfig.cpp:93-101 — filament_overhang_override_keys có đúng 7 key này.
+   Tab.cpp:4256-4269 gác chúng bằng HAI điều kiện khác nhau, không phải một:
+     · 2 key dưới đây          → chỉ cần override_process_overhang_speed
+     · 5 key phần trăm         → override AND filament_enable_overhang_speed
    overhang_fan_speed KHÔNG nằm trong danh sách (nó là quạt, không phải tốc độ). */
-const OVERHANG_GATED=['filament_enable_overhang_speed','filament_bridge_speed',
-  'filament_overhang_1_4_speed','filament_overhang_2_4_speed','filament_overhang_3_4_speed',
-  'filament_overhang_4_4_speed','filament_overhang_totally_speed'];
+const OVERHANG_NEED_OVERRIDE=['filament_enable_overhang_speed','filament_bridge_speed'];
+const OVERHANG_NEED_BOTH=['filament_overhang_1_4_speed','filament_overhang_2_4_speed',
+  'filament_overhang_3_4_speed','filament_overhang_4_4_speed','filament_overhang_totally_speed'];
 
 /* Trả mảng vi phạm. `vlhWanted` = optimizer định xuất vlhRanges. */
 function checkInvariants(cfg,L,d,vlhWanted){
@@ -2094,9 +2100,15 @@ function checkInvariants(cfg,L,d,vlhWanted){
   }
   if(N('elefant_foot_compensation')>0&&N('brim_object_gap')>0)
     V.push({id:'I6',key:'brim_object_gap',msg:`elephant foot compensation > 0 ⇒ brim_object_gap phải = 0, nếu không brim tách khỏi vật`});
-  const gated=OVERHANG_GATED.filter(set);
-  if(gated.length&&!['1','true'].includes(S('override_process_overhang_speed')))
-    V.push({id:'I7',key:'override_process_overhang_speed',msg:`Đặt ${gated.join(', ')} nhưng override tắt ⇒ Bambu Studio bỏ qua các giá trị này (Tab.cpp:4256 chỉ mở các ô đó khi override bật)`});
+  const ovr=['1','true'].includes(S('override_process_overhang_speed'));
+  const feo=['1','true'].includes(S('filament_enable_overhang_speed'));
+  const dead=[].concat(ovr?[]:OVERHANG_NEED_OVERRIDE.filter(set),
+                       (ovr&&feo)?[]:OVERHANG_NEED_BOTH.filter(set));
+  if(dead.length){
+    const need=[]; if(!ovr)need.push('override_process_overhang_speed=1');
+    if(!feo&&OVERHANG_NEED_BOTH.some(k=>dead.includes(k)))need.push('filament_enable_overhang_speed=1');
+    V.push({id:'I7',key:'override_process_overhang_speed',msg:`Đặt ${dead.join(', ')} nhưng chưa bật ${need.join(' + ')} ⇒ Tab.cpp:4256 khoá các ô này, giá trị không có hiệu lực`});
+  }
   return V;
 }
 function optimize(F,L,mat,goal,ps){ return null; }

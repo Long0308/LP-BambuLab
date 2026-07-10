@@ -69,22 +69,64 @@ test('I6: elephant foot > 0 mà brim_object_gap > 0', () => {
   assert.ok(v.some(x => x.id === 'I6'));
 });
 
-/* Tab.cpp:4256 — override_process_overhang_speed gác đúng 6 key filament:
-   filament_enable_overhang_speed, filament_bridge_speed, filament_overhang_{1..4}_4_speed,
-   filament_overhang_totally_speed. Không gác overhang_fan_speed (đó là quạt). */
-test('I7: đặt filament_bridge_speed mà override tắt → giá trị bị bỏ qua', () => {
+/* PrintConfig.cpp:93-101 — filament_overhang_override_keys có đúng 7 key. Nhưng
+   Tab.cpp:4256-4269 gác chúng bằng HAI điều kiện khác nhau:
+     · filament_enable_overhang_speed, filament_bridge_speed  → chỉ cần override
+     · 5 key filament_overhang_*_speed                        → override AND enable
+   overhang_fan_speed không nằm trong danh sách (đó là quạt, không phải tốc độ). */
+test('I7: đặt filament_bridge_speed mà override tắt → giá trị không có hiệu lực', () => {
   assert.ok(ids({ ...BASE, filament_bridge_speed: ['50'] }).includes('I7'));
   assert.ok(ids({ ...BASE, filament_overhang_totally_speed: ['10'] }).includes('I7'));
 });
 
-test('I7: bật override thì không báo', () => {
+test('I7: bật override thì không báo (nhóm chỉ cần override)', () => {
   const ps = { ...BASE, filament_bridge_speed: ['50'], override_process_overhang_speed: ['1'] };
   assert.ok(!ids(ps).includes('I7'));
+});
+
+test('I7: 5 key phần trăm cần CẢ override lẫn filament_enable_overhang_speed', () => {
+  const on = { ...BASE, override_process_overhang_speed: ['1'] };
+  assert.ok(ids({ ...on, filament_enable_overhang_speed: ['0'], filament_overhang_1_4_speed: ['100'] }).includes('I7'),
+    'override bật nhưng enable tắt → Tab.cpp:4269 vẫn khoá 5 ô này');
+  assert.ok(!ids({ ...on, filament_enable_overhang_speed: ['1'], filament_overhang_1_4_speed: ['100'] }).includes('I7'),
+    'bật cả hai → hợp lệ');
 });
 
 test('I7: overhang_fan_speed KHÔNG bị gác (là quạt, không phải tốc độ)', () => {
   assert.ok(!ids({ ...BASE, overhang_fan_speed: ['100'] }).includes('I7'),
     'tầng 4 đặt overhang_fan_speed; nếu I7 bắt nhầm thì golden test sẽ đỏ oan');
+});
+
+/* PrintConfig.cpp:7423-7437 — spiral_mode ép cứng top_shell_layers=0 lúc slice,
+   bất kể top_shell_thickness. Preset vase hợp lệ không được báo I2. */
+test('I2: spiral_mode ép top_shell_layers=0 → không báo oan preset vase', () => {
+  const ps = { ...BASE, spiral_mode: '1', wall_loops: '1', top_shell_layers: '0', top_shell_thickness: '0.8' };
+  const L = printerLimits(ps);
+  const d = derive(ps, L);
+  assert.equal(d.effTopLayers, 0, 'engine ép 0, derive phải phản ánh đúng');
+  assert.ok(!checkInvariants(ps, L, d).includes('I2'));
+  assert.ok(!ids(ps).includes('I2'));
+});
+
+/* Task 7-11 ghép cấu hình bằng Object.assign({}, ps, deltaProcess, deltaFilament),
+   trong đó delta là SỐ JS thô chứ không phải mảng chuỗi. Khoá hành vi đó lại. */
+test('nhận số JS thô như nhận mảng chuỗi', () => {
+  const raw = { ...BASE, layer_height: 0.24, inner_wall_speed: 240, brim_object_gap: 0.1,
+                elefant_foot_compensation: 0.12, enable_prime_tower: 0 };
+  const v = ids(raw);
+  assert.ok(v.includes('I1'), 'flow 25.92 > 22 dù speed là số thô');
+  assert.ok(v.includes('I6'), 'brim_object_gap số thô 0.1 > 0');
+});
+
+test('I3: đúng biên [layerMin, layerMax] thì không báo', () => {
+  assert.ok(!ids({ ...BASE, layer_height: 0.10 }).includes('I3'), 'sàn 0.10');
+  assert.ok(!ids({ ...BASE, layer_height: 0.28, inner_wall_speed: 100, sparse_infill_speed: 100,
+                   internal_solid_infill_speed: 100, outer_wall_speed: 100, top_surface_speed: 100 }).includes('I3'), 'trần 0.28');
+});
+
+test('cfg rỗng: không nổ, không bịa vi phạm', () => {
+  const L = printerLimits({});
+  assert.deepEqual(checkInvariants({}, L, derive({}, L)).map(x => x.id), []);
 });
 
 test('BASE sạch: không vi phạm gì (trừ khi bật VLH)', () => {
