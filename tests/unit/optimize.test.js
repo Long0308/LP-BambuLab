@@ -1,0 +1,222 @@
+'use strict';
+const { test } = require('node:test');
+const assert = require('node:assert');
+const { loadPure } = require('./lib/loadPure');
+const { geoFeatures, printerLimits, optimize, MODES } = loadPure();
+const { box, sphere, frustum, bridge } = require('./fixtures/meshes');
+
+/* Kế thừa '0.20mm Standard @BBL A1' + Bambu PLA Matte (maxvol 22). */
+const PS = {
+  nozzle_diameter: ['0.4'], layer_height: '0.2', filament_max_volumetric_speed: ['22'],
+  inner_wall_line_width: '0.45', sparse_infill_line_width: '0.45',
+  internal_solid_infill_line_width: '0.42', outer_wall_line_width: '0.42', top_surface_line_width: '0.45',
+  filament_type: ['PLA'], curr_bed_type: 'Textured PEI Plate',
+  top_shell_layers: '5', top_shell_thickness: '1.0',
+  bottom_shell_layers: '3', bottom_shell_thickness: '0',
+  inner_wall_speed: ['300'], sparse_infill_speed: ['270'], internal_solid_infill_speed: ['250'],
+  outer_wall_speed: ['200'], top_surface_speed: ['150'],
+  seam_slope_type: 'all', filament_scarf_seam_type: ['all'],
+  enable_pressure_advance: ['0'], filament_flow_ratio: ['0.98'],
+  elefant_foot_compensation: '0.12', brim_object_gap: '0',
+  support_style: 'tree_hybrid', enable_prime_tower: '0',
+  override_process_overhang_speed: ['0'],
+};
+const DECOR = 'Chi tiết trang trí';
+const run = (tris, goal = DECOR, mode = 'balanced', ps = PS) =>
+  optimize(geoFeatures(tris), printerLimits(ps), 'PLA Matte', goal, ps, mode);
+
+/* ---------- Tầng 0: hiệu chuẩn ---------- */
+test('Tầng 0: chưa hiệu chuẩn thì cảnh báo, KHÔNG bịa giá trị K', () => {
+  const P = run(box(100, 100, 50));
+  assert.ok(P.calibration.some(c => /Flow Dynamics/.test(c.msg)));
+  assert.equal(P.deltaFilament.pressure_advance, undefined, 'không được đề xuất giá trị K');
+});
+
+/* ---------- Tầng 1: first layer ---------- */
+test('Tầng 1: luôn đặt close_fan 3 và initial_layer_speed 25', () => {
+  const P = run(box(100, 100, 50));
+  assert.equal(P.deltaFilament.close_fan_the_first_x_layers, 3);
+  assert.equal(P.deltaProcess.initial_layer_speed, 25);
+});
+
+/* ---------- Tầng 2: warping ---------- */
+test('Tầng 2: đế lớn → brim 8mm + gyroid + bed 65', () => {
+  const P = run(box(200, 150, 20));
+  assert.equal(P.deltaProcess.brim_type, 'outer_only');
+  assert.equal(P.deltaProcess.brim_width, 8);
+  assert.equal(P.deltaProcess.sparse_infill_pattern, 'gyroid');
+  assert.equal(P.deltaFilament.textured_plate_temp, 65);
+});
+
+test('Tầng 2 ghi đè tầng 5: gyroid thắng adaptivecubic, có ghi conflict', () => {
+  const P = run(box(200, 150, 20));
+  assert.equal(P.deltaProcess.sparse_infill_pattern, 'gyroid');
+  assert.ok(P.conflicts.some(c => c.key === 'sparse_infill_pattern'));
+});
+
+test('Hình cầu: KHÔNG hạ acceleration (aspect 1.0), nhưng CÓ brim vì tiếp xúc bé', () => {
+  const P = run(sphere(40));
+  assert.equal(P.deltaProcess.default_acceleration, undefined, 'cầu không cao mảnh');
+  assert.equal(P.deltaProcess.brim_type, 'outer_only');
+});
+
+test('Cột cao mảnh: CÓ hạ acceleration', () => {
+  const P = run(box(20, 20, 150));
+  assert.ok(P.deltaProcess.default_acceleration < 6000);
+});
+
+/* ---------- Tầng 3 + 3b + 4b ---------- */
+/* Ở vùng dốc <25°, ngay tại sàn 0.08 bậc thang vẫn còn 0.33mm ⇒ hạ layer là vô ích.
+   Tầng 3 phải chữa bằng top shell + monotonic, tuyệt đối không đụng layer_height —
+   layer_height chỉ do mode quyết, và bị khoá ở tầng 1. */
+test('Tầng 3: chữa bề mặt bằng top shell/monotonic, KHÔNG hạ layer_height', () => {
+  const P = run(sphere(40));
+  assert.equal(P.deltaProcess.top_surface_pattern, 'monotonicline');
+  const lhReasons = P.reasons.filter(r => r.key === 'layer_height');
+  assert.equal(lhReasons.length, 1, 'chỉ một nơi được ghi layer_height');
+  assert.equal(lhReasons[0].tier, 1, 'và đó là tầng 1 (mode), không phải tầng 3');
+  assert.equal(lhReasons[0].src, 'mode');
+});
+
+test('Tầng 3b: goal chức năng → wall_loops tăng TRƯỚC, layer <= 0.25', () => {
+  const P = run(box(100, 100, 50), 'Công năng cơ khí');
+  assert.ok(P.deltaProcess.wall_loops >= 3);
+  assert.equal(P.deltaProcess.infill_wall_overlap, '15%');
+  assert.ok(P.limits.layerMaxEff <= 0.25);
+});
+
+test('Tầng 3b KHÔNG bật cho đồ trang trí', () => {
+  const P = run(box(100, 100, 50));
+  assert.equal(P.deltaProcess.wall_loops, undefined);
+});
+
+test('Tầng 4b: mặt trên lớn + infill thưa → cảnh báo võng', () => {
+  const P = run(box(200, 150, 20), DECOR, 'fast');
+  assert.ok(P.warnings.some(w => /võng/i.test(w.msg)), JSON.stringify(P.warnings));
+});
+
+/* ---------- Tầng 4: support / bridge / VLH ---------- */
+test('Support: 3 khoảng rạch ròi, không có vùng xám', () => {
+  assert.equal(run(box(100, 100, 50)).deltaProcess.enable_support, 0, 'overhang 0% → tắt');
+  const P2 = run(sphere(40));
+  assert.equal(P2.deltaProcess.enable_support, 1);
+  assert.equal(P2.deltaProcess.support_type, 'tree(auto)', 'overhang 14% > 8% → auto');
+});
+
+test('Bridge: bật enable_overhang_speed + overhang_fan_speed', () => {
+  const P = run(bridge());
+  assert.equal(P.deltaProcess.enable_overhang_speed, 1);
+  assert.equal(P.deltaFilament.overhang_fan_speed, 100);
+});
+
+test('VLH: vase có nhiều mặt dốc → sinh ranges + gỡ blocker', () => {
+  const P = run(frustum(40, 55, 150));
+  assert.ok(P.vlhRanges.length > 0);
+  assert.equal(P.deltaProcess.support_style, 'tree_hybrid');
+  assert.equal(P.deltaProcess.enable_prime_tower, 0);
+});
+
+test('VLH: mọi layer nằm trong [layerMin, layerMaxEff]', () => {
+  const P = run(sphere(40));
+  for (const r of P.vlhRanges) {
+    assert.ok(r.layer >= P.limits.layerMin - 1e-9, `layer ${r.layer} < min`);
+    assert.ok(r.layer <= P.limits.layerMaxEff + 1e-9, `layer ${r.layer} > max`);
+    assert.ok(r.z1 > r.z0);
+  }
+});
+
+/* ---------- Tầng 5: tốc độ vùng khuất = floor(trần) ----------
+   Đo preset stock trên máy (2026-07-10, đã giải chuỗi inherits):
+     0.16mm Optimal : inner 300 < trần 305.6 · internal_solid 300 < trần 327.4  (bỏ lỡ 9.1%)
+     0.20mm Standard: inner 300 > trần 244.4 · internal_solid 250 < trần 261.9  (bỏ lỡ 4.8%)
+     0.24mm Draft   : cả ba đều TRÊN trần → engine đã ghì về v_max
+   Ghi đúng floor(trần): flow = lh × w × floor(cap) ≤ maxvol nên I1 không bao giờ bắn;
+   tệ nhất kém bản kế thừa 0.4%, tốt nhất hơn 9.1%. Và số trong preset = số chạy thật.
+   TUYỆT ĐỐI không đụng outer_wall (bề mặt) và top_surface (tầng 3 đã đặt). */
+test('Tầng 5: ba vùng khuất = floor(trần), không đụng outer_wall', () => {
+  const P = run(box(100, 100, 50));           // balanced, layer 0.20, maxvol 22
+  assert.equal(P.deltaProcess.inner_wall_speed, 244, '22/(0.20×0.45)=244.4');
+  assert.equal(P.deltaProcess.sparse_infill_speed, 244);
+  assert.equal(P.deltaProcess.internal_solid_infill_speed, 261, '22/(0.20×0.42)=261.9');
+  assert.equal(P.deltaProcess.outer_wall_speed, undefined, 'cấm chạm outer wall');
+  assert.ok(!P.reasons.some(r => r.tier === 5 && /^(outer_wall|top_surface)_speed$/.test(r.key)),
+    'tầng 5 không được đụng hai vùng lộ bề mặt');
+  assert.deepEqual(P.violations, [], 'floor(trần) không bao giờ vượt trần');
+});
+
+test('top_surface_speed do tầng 3 đặt, chỉ khi vật có mặt dốc', () => {
+  assert.equal(run(sphere(40)).deltaProcess.top_surface_speed, 150);
+  assert.equal(run(box(100, 100, 50)).deltaProcess.top_surface_speed, undefined, 'hộp không có mặt dốc');
+});
+
+test('Tầng 5: trần đổi theo layer height của mode', () => {
+  assert.equal(run(box(100, 100, 50), DECOR, 'quality').deltaProcess.inner_wall_speed, 305, 'layer 0.16');
+  assert.equal(run(box(100, 100, 50), DECOR, 'fast').deltaProcess.inner_wall_speed, 203, 'layer 0.24');
+});
+
+test('Tầng 5: nozzle 0.2 maxvol 2 → tốc độ bé xíu nhưng vẫn hợp lệ, không âm', () => {
+  const ps = { ...PS, nozzle_diameter: ['0.2'], filament_max_volumetric_speed: ['2'],
+               inner_wall_line_width: '0.25', sparse_infill_line_width: '0.25',
+               internal_solid_infill_line_width: '0.25', outer_wall_line_width: '0.25', top_surface_line_width: '0.25' };
+  const P = optimize(geoFeatures(box(20, 20, 20)), printerLimits(ps), 'PLA Matte', DECOR, ps, 'balanced');
+  assert.ok(P.deltaProcess.inner_wall_speed > 0);
+  assert.deepEqual(P.violations, []);
+});
+
+test('Tầng 5: tắt prime tower khi không cần VLH', () => {
+  assert.equal(run(box(100, 100, 50)).deltaProcess.enable_prime_tower, 0);
+});
+
+/* ---------- 3 mode ---------- */
+test('3 mode có layer height tăng dần, đều trong [layerMin, layerMax]', () => {
+  const L = printerLimits(PS);
+  const lh = ['quality', 'balanced', 'fast'].map(m => run(box(100, 100, 50), DECOR, m).deltaProcess.layer_height);
+  assert.deepEqual(lh, [0.16, 0.20, 0.24]);
+  lh.forEach(x => { assert.ok(x >= L.layerMin && x <= L.layerMax, `${x} ngoài [${L.layerMin},${L.layerMax}]`); });
+});
+
+test('mode đổi layer → top_shell_layers phải đủ dày (I2 không được vỡ)', () => {
+  for (const [m, want] of [['quality', 7], ['balanced', 5], ['fast', 5]]) {
+    const P = run(box(100, 100, 50), DECOR, m);
+    assert.equal(P.deltaProcess.top_shell_layers, want, `mode ${m}: ceil(1.0/${P.deltaProcess.layer_height})`);
+  }
+});
+
+test('mode nhanh: infill thưa nhất, mode chắc: dày nhất', () => {
+  const d = m => run(box(100, 100, 50), DECOR, m).deltaProcess.sparse_infill_density;
+  assert.equal(d('fast'), '10%');
+  assert.equal(d('quality'), '20%');
+});
+
+test('MODES lộ ra tên tiếng Việt để UI dùng', () => {
+  assert.deepEqual(Object.keys(MODES), ['quality', 'balanced', 'fast']);
+  assert.equal(MODES.balanced.name, 'Cân bằng');
+});
+
+/* ---------- Fixpoint ---------- */
+test('Fixpoint: I4 được sửa — filament scarf khớp process', () => {
+  const ps = { ...PS, filament_scarf_seam_type: ['none'] };
+  const P = optimize(geoFeatures(box(100, 100, 50)), printerLimits(ps), 'PLA Matte', DECOR, ps, 'balanced');
+  assert.equal(P.deltaFilament.filament_scarf_seam_type, 'all');
+});
+
+test('Fixpoint: I6 được sửa — brim_object_gap về 0', () => {
+  const ps = { ...PS, brim_object_gap: '0.1' };
+  const P = optimize(geoFeatures(box(200, 150, 20)), printerLimits(ps), 'PLA Matte', DECOR, ps, 'balanced');
+  assert.equal(P.deltaProcess.brim_object_gap, 0);
+});
+
+test('Fixpoint: I1 sửa bằng cách XOÁ key, không hạ xuống số chậm hơn', () => {
+  /* ép tầng 5 giả lập ghi tốc độ vượt trần bằng cách chọn mode fast (layer 0.24 → trần thấp) */
+  const ps = { ...PS, top_shell_thickness: '1.0' };
+  const P = optimize(geoFeatures(box(100, 100, 50)), printerLimits(ps), 'PLA Matte', DECOR, ps, 'fast');
+  assert.deepEqual(P.violations, [], JSON.stringify(P.violations));
+});
+
+test('Không còn bất biến nào vỡ sau fixpoint, ở cả 3 mode', () => {
+  for (const m of ['quality', 'balanced', 'fast'])
+    for (const tris of [box(200, 150, 20), sphere(40), frustum(40, 55, 150), bridge()]) {
+      const P = run(tris, DECOR, m);
+      assert.deepEqual(P.violations, [], `mode ${m}: ${JSON.stringify(P.violations)}`);
+    }
+});

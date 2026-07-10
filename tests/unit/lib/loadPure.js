@@ -14,7 +14,7 @@ function loadPure() {
   const j = src.indexOf(END);
   if (i < 0 || j < 0) throw new Error('Không tìm thấy marker PURE:START / PURE:END trong hub');
   const body = src.slice(i + START.length, j);
-  const names = ['geoFeatures', 'printerLimits', 'derive', 'checkInvariants', 'optimize'];
+  const names = ['geoFeatures', 'printerLimits', 'derive', 'checkInvariants', 'optimize', 'MODES'];
   const fn = new Function(`${body}\n; return {${names.join(',')}};`);
   return fn();
 }

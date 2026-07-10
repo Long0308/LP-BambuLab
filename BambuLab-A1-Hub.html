@@ -2129,7 +2129,199 @@ function checkInvariants(cfg,L,d,vlhWanted,owned){
   }
   return V;
 }
-function optimize(F,L,mat,goal,ps){ return null; }
+/* Ba mode. `lh` là bội số 0.02 (bước layer của A1), kẹp vào [layerMin, layerMaxEff]. */
+const MODES={
+  quality: {name:'Chắc',     lh:0.16, infill:'20%', ironing:true },
+  balanced:{name:'Cân bằng', lh:0.20, infill:'15%', ironing:false},
+  fast:    {name:'Nhanh',    lh:0.24, infill:'10%', ironing:false},
+};
+
+function optimize(F,L,mat,goal,ps,mode){
+  ps=ps||{}; mode=MODES[mode]?mode:'balanced';
+  const M=MODES[mode];
+  const f=v=>Array.isArray(v)?v[0]:v;
+  const S=k=>String(f(ps[k])??'').toLowerCase();
+  const num=k=>parseFloat(f(ps[k]));
+  const dP={}, dF={}, reasons=[], conflicts=[], calibration=[], warnings=[], notes=[], vlh=[], locked=new Set();
+  const put=(bag,k,v,tier,why,src)=>{
+    if(locked.has(k)){ conflicts.push({key:k,tier,wanted:v,kept:bag[k]}); return; }
+    bag[k]=v; reasons.push({key:k,value:v,tier,why,src});
+    if(tier<=2)locked.add(k);
+  };
+  const isPLA=/pla/i.test(mat)||/pla/i.test(String(f(ps.filament_type)||''));
+  const isMatte=/matte/i.test(mat);
+  const functional=/cơ khí|chức năng|functional/i.test(goal||'');
+  const layerMaxEff=functional?Math.min(L.layerMax,0.25):L.layerMax;
+
+  /* Layer height của mode, kẹp vào giới hạn máy + quy tắc nozzle. Đặt SỚM vì mọi
+     trần lưu lượng và số lớp vỏ đều dẫn xuất từ nó. */
+  /* Kẹp TRƯỚC rồi làm tròn XUỐNG bội 0.02 — làm tròn sau khi kẹp có thể vọt qua trần
+     (nozzle 0.2: trần 0.15 → round() cho 0.16). Epsilon vì 0.16/0.02 = 7.999… trong float. */
+  let lh=Math.min(layerMaxEff,Math.max(L.layerMin,M.lh));
+  lh=Math.floor(lh/0.02+1e-6)*0.02;
+  if(lh<L.layerMin)lh=Math.ceil(L.layerMin/0.02-1e-6)*0.02;
+  lh=+lh.toFixed(2);
+  const Lh=printerLimits(Object.assign({},ps,{layer_height:lh}));  // trần tính lại ở lh này
+
+  /* Tầng 0 — hiệu chuẩn: chỉ phát hiện, KHÔNG bịa giá trị */
+  if(['0','false'].includes(S('enable_pressure_advance')))
+    calibration.push({key:'enable_pressure_advance',msg:'Chưa bật Pressure Advance → chạy Flow Dynamics Calibration trên máy. Hub không đề xuất giá trị K.'});
+  calibration.push({key:'filament_flow_ratio',msg:'Nếu flow ratio vẫn bằng giá trị stock của profile → chưa chạy Flow Rate Calibration. Đo trên máy, đừng đoán.'});
+
+  /* Tầng 1 — first layer, không ai được ghi đè */
+  put(dF,'close_fan_the_first_x_layers',3,1,'wiki: first layer not sticking','wiki/warping');
+  put(dP,'initial_layer_speed',25,1,'lớp đầu chạy chậm để bám','—');
+  put(dP,'initial_layer_print_height',Math.min(0.28,Math.max(0.20,lh+0.04)),1,'lớp đầu dày hơn để dung sai mặt bàn','—');
+  /* layer_height là LỰA CHỌN của mode, không phải luật bề mặt — khoá ở tầng 1 để không
+     tầng nào (nhất là tầng 3) hạ nó xuống hòng chữa bậc thang. Đo thật: ở vùng dốc <25°,
+     ngay tại sàn 0.08 bậc vẫn còn 0.33mm ⇒ hạ layer chỉ tốn thời gian mà không hết bậc. */
+  put(dP,'layer_height',lh,1,`mode ${M.name}`,'mode');
+
+  /* Tầng 2 — warping. Ba điều kiện TÁCH BẠCH. */
+  const bigBase=F.firstArea_cm2>150||F.baseDiag_mm>150;
+  const tinyContact=F.firstArea_cm2<5;
+  const tallThin=F.aspect>3;
+  if(bigBase||tinyContact||tallThin){
+    put(dP,'brim_type','outer_only',2,bigBase?`đế ${F.firstArea_cm2.toFixed(0)} cm² / chéo ${F.baseDiag_mm.toFixed(0)} mm`:`tiếp xúc bé ${F.firstArea_cm2.toFixed(1)} cm²`,'wiki/warping');
+    put(dP,'brim_width',8,2,'wiki PLA: brim 8–10mm','wiki/warping');
+  }else{
+    put(dP,'brim_type','auto_brim',2,'đế vừa, không rủi ro đặc biệt','wiki/brim');
+  }
+  if(tallThin){
+    put(dP,'default_acceleration',4500,2,`aspect ${F.aspect.toFixed(1)} → wiki giảm 20–30%`,'wiki/warping');
+    put(dP,'outer_wall_acceleration',3750,2,`aspect ${F.aspect.toFixed(1)} → wiki giảm 20–30%`,'wiki/warping');
+  }
+  if(bigBase){
+    put(dP,'sparse_infill_pattern','gyroid',2,'wiki: large flat model → gyroid','wiki/warping');
+    if(isPLA)put(dF,'textured_plate_temp',65,2,'wiki: PLA trên Textured PEI đích 55–65°C','wiki/warping');
+  }
+  if(num('elefant_foot_compensation')>0)
+    put(dP,'brim_object_gap',0,2,'I6: EFC>0 ⇒ gap phải 0, nếu không brim tách khỏi vật','wiki/brim');
+
+  /* Tầng 3 — bề mặt nhìn thấy. KHÔNG được đụng layer_height (tầng 1 đã khoá). */
+  if(F.top>12&&!isMatte&&M.ironing)
+    put(dP,'ironing_type','top surfaces',3,`mặt phẳng trên ${F.top.toFixed(0)}%`,'wiki/ironing');
+  if(F.bands.lo>5){
+    put(dP,'top_surface_pattern','monotonicline',3,'mặt trên đều','—');
+    put(dP,'top_surface_speed',150,3,'chậm để mặt trên mịn','—');
+  }
+  /* I2: bề dày trần là ràng buộc thật, số lớp phải suy từ layer height của mode. */
+  const tt=num('top_shell_thickness');
+  if(tt>0)put(dP,'top_shell_layers',Math.ceil(tt/lh),3,`${tt}mm bề dày ÷ layer ${lh.toFixed(2)} — engine sẽ tự tăng nếu ta đặt thấp hơn`,'PrintConfig top_shell_thickness');
+  put(dP,'wall_generator','arachne',3,'thành mỏng / chữ nhỏ','—');
+
+  /* Tầng 3b — độ bền (chỉ khi goal chức năng). Thành TRƯỚC infill. */
+  if(functional){
+    put(dP,'wall_loops',3,3,'UltiMaker: 2 perimeter thêm > nâng infill 20→30%','ultimaker/infill');
+    put(dP,'sparse_infill_density','25%',3,'PLA cứng: 20–30%','ultimaker/infill');
+    put(dP,'sparse_infill_pattern','gyroid',3,'pattern chịu lực đẳng hướng','ultimaker/infill');
+    put(dP,'infill_wall_overlap','15%',3,'khuyến nghị 10–25%; thấp hơn gây bong thành↔infill','ultimaker/infill');
+  }else{
+    put(dP,'sparse_infill_density',M.infill,3,`mode ${M.name}`,'mode');
+  }
+
+  /* Tầng 4b — võng mặt trên do infill quá thưa */
+  const infPct=parseFloat(String(dP.sparse_infill_density||f(ps.sparse_infill_density)||'15'));
+  if(F.top>15&&infPct<12)
+    warnings.push({key:'sparse_infill_density',msg:`Mặt phẳng trên ${F.top.toFixed(0)}% + infill ${infPct}% → nguy cơ VÕNG mặt trên (UltiMaker). Nâng infill lên 15% hoặc top_shell_layers lên ${Math.ceil(tt/lh)+1}. Cả hai đều tốn thêm thời gian.`});
+
+  /* Tầng 4 — overhang & bridge */
+  if(F.ohBins['75-90']>2){
+    put(dP,'enable_overhang_speed',1,4,`${F.ohBins['75-90'].toFixed(1)} cm² mặt 75–90° (bắc cầu)`,'—');
+    put(dF,'overhang_fan_speed',100,4,'thổi mát vùng đua/bắc cầu (là QUẠT, không bị override_process_overhang_speed gác)','Tab.cpp:4256');
+  }
+  if(F.down<=2){
+    put(dP,'enable_support',0,4,`overhang thật ${F.down.toFixed(2)}% (${F.down_cm2.toFixed(1)} cm²) → tự đỡ được`,'đo thật');
+  }else if(F.down<=8){
+    put(dP,'enable_support',1,4,`overhang thật ${F.down.toFixed(1)}%`,'đo thật');
+    put(dP,'support_type','tree(manual)',4,'ít overhang + đồ trang trí → chỉ đỡ chỗ sơn, không để sẹo','PrintConfig.cpp:5184');
+    warnings.push({key:'support_type',msg:"support_type '(manual)' KHÔNG sinh gì nếu chưa sơn enforcer. Prepare ▸ Support painting."});
+  }else{
+    put(dP,'enable_support',1,4,`overhang thật ${F.down.toFixed(1)}% → quá nhiều để sơn tay`,'đo thật');
+    put(dP,'support_type','tree(auto)',4,'overhang lớn, không có support là hỏng','PrintConfig.cpp:5184');
+  }
+
+  /* Tầng 4 — Variable layer height. Chỉ hạ layer ở vùng dốc 25–50°:
+     dưới 25° thì ngay ở sàn 0.08 bậc thang vẫn còn 0.33mm ⇒ hạ layer vô ích. */
+  const STEP_TARGET=0.20;
+  const wantVLH=F.bands.mid>3||F.bands.hi>20;
+  if(wantVLH){
+    const raw=F.zSlope.map(b=>{
+      let x;
+      if(b.area<=0||b.thetaP10<=0)x=layerMaxEff;
+      else if(b.thetaP10>=50)x=layerMaxEff;
+      else if(b.thetaP10>=25)x=Math.max(L.layerMin,Math.min(layerMaxEff,Math.round(STEP_TARGET*Math.tan(b.thetaP10*Math.PI/180)/0.02)*0.02));
+      else x=lh;
+      return {z0:b.z0,z1:b.z1,layer:+x.toFixed(2),theta:b.thetaP10};
+    });
+    for(const r of raw){
+      const last=vlh[vlh.length-1];
+      if(last&&Math.abs(last.layer-r.layer)<1e-9)last.z1=r.z1; else vlh.push(Object.assign({},r));
+    }
+    put(dP,'support_style','tree_hybrid',4,'gỡ blocker: organic support chặn VLH','BambuStudio.mo');
+    put(dP,'enable_prime_tower',0,4,'gỡ blocker: prime tower chặn VLH','BambuStudio.mo');
+  }
+
+  /* Tầng 5 — thời gian. CHỈ ba vùng khuất, đặt đúng floor(trần lưu lượng).
+     Đo preset stock trên máy (đã giải chuỗi inherits): ở 0.16 stock inner_wall=300 <
+     trần 305.6 và internal_solid=300 < trần 327.4 (bỏ lỡ 9.1%); ở 0.20 internal_solid=250
+     < trần 261.9 (bỏ lỡ 4.8%); ở 0.24 cả ba đã trên trần nên engine tự ghì về v_max.
+     floor(cap) cho flow = lh × w × floor(cap) ≤ maxvol ⇒ I1 không bao giờ bắn, số trong
+     preset đúng bằng số chạy thật, tệ nhất kém bản kế thừa 0.4%.
+     TUYỆT ĐỐI không chạm outer_wall (bề mặt) và top_surface (tầng 3 đã đặt). */
+  if(Lh.maxvol){
+    for(const k of ['inner_wall','sparse_infill','internal_solid_infill']){
+      const cap=Lh.vmax[k];
+      if(!isFinite(cap)||cap<=0)continue;
+      put(dP,k+'_speed',Math.max(1,Math.floor(cap)),5,`đúng trần lưu lượng ${cap.toFixed(1)} mm/s ở layer ${lh.toFixed(2)} (vùng khuất, không lộ bề mặt)`,'wiki/volumetric');
+    }
+    notes.push({key:'*_speed',msg:`Ba tốc độ vùng khuất đặt đúng floor(trần) tại maxvol ${Lh.maxvol} mm³/s và layer ${lh.toFixed(2)}. Đổi sang nhựa có maxvol khác thì bộ giới hạn tự ghì — không hỏng, chỉ chậm lại. Outer wall và Top surface giữ nguyên vì chúng quyết định bề mặt.`});
+  }
+  if(!wantVLH)put(dP,'enable_prime_tower',0,5,'in 1 màu không cần prime tower','—');
+  put(dP,'sparse_infill_pattern','adaptivecubic',5,'tiết kiệm nhựa','—'); // bị tầng 2/3b chặn nếu đế lớn / cơ khí
+
+  /* Derive → Validate → sửa → lặp. Tối đa 3 vòng. */
+  let violations=[];
+  for(let pass=0;pass<3;pass++){
+    const merged=Object.assign({},ps,dP,dF);
+    const owned=new Set([...Object.keys(dP),...Object.keys(dF)]);
+    violations=checkInvariants(merged,Lh,derive(merged,Lh),wantVLH,owned);
+    if(!violations.length)break;
+    let fixed=false;
+    for(const v of violations){
+      if(v.id==='I1'&&dP[v.key]!==undefined){
+        /* XOÁ chứ không hạ: hạ xuống dưới trần là tự hãm; xoá thì kế thừa stock,
+           và stock nằm trên trần nên bộ giới hạn chạy đúng v_max. */
+        delete dP[v.key];
+        reasons.push({key:v.key,value:'(kế thừa)',tier:5,why:'fixpoint I1: xoá override, để bộ giới hạn chạy đúng v_max',src:'wiki/volumetric'});
+        fixed=true;
+      }else if(v.id==='I2'&&tt>0){
+        dP.top_shell_layers=Math.ceil(tt/derive(merged,Lh).layerHeight);
+        reasons.push({key:'top_shell_layers',value:dP.top_shell_layers,tier:5,why:`fixpoint I2: cần ≥ ${tt}mm bề dày`,src:'PrintConfig top_shell_thickness'});
+        fixed=true;
+      }else if(v.id==='I4'){
+        dF.filament_scarf_seam_type=String(f(dP.seam_slope_type)||f(ps.seam_slope_type)||'all');
+        reasons.push({key:'filament_scarf_seam_type',value:dF.filament_scarf_seam_type,tier:5,why:'fixpoint I4: filament luôn đè process, phải khớp',src:'Tab.cpp:4426'});
+        fixed=true;
+      }else if(v.id==='I5'){
+        dP.support_style='tree_hybrid'; dP.enable_prime_tower=0; fixed=true;
+      }else if(v.id==='I6'){
+        dP.brim_object_gap=0; fixed=true;
+      }else if(v.id==='I7'){
+        /* Phải bật CẢ HAI, nếu không 5 ô phần trăm vẫn khoá → không hội tụ (Tab.cpp:4269) */
+        dF.override_process_overhang_speed=1; dF.filament_enable_overhang_speed=1;
+        reasons.push({key:'override_process_overhang_speed',value:1,tier:5,why:'fixpoint I7: mở cổng cho giá trị filament overhang có hiệu lực',src:'Tab.cpp:4256'});
+        fixed=true;
+      }
+    }
+    if(!fixed)break;
+  }
+
+  return {mode,modeName:M.name,deltaProcess:dP,deltaFilament:dF,vlhRanges:vlh,
+          reasons,conflicts,calibration,warnings,notes,violations,
+          limits:Object.assign({},Lh,{layerMaxEff}),
+          _ctx:{isPLA,isMatte,functional,bigBase,tinyContact,tallThin,wantVLH}};
+}
 /* PURE:END */
 
 /* audit */
