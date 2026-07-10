@@ -783,7 +783,84 @@
       <div class="gd" style="margin-top:10px"><b>Bài học đắt:</b> nhánh <code>master</code> trên GitHub <b>≠</b> bản đang cài. Đã có lần tra theo master rồi kết luận sai. Luôn ưu tiên file trên máy.</div>
     </div>
 
-    <div class="sectitle">5. Bốn cạm bẫy đã trả giá để biết</div>
+    <div class="sectitle">5. Bảng tra: tên trong Bambu Studio ↔ key máy</div>
+    <div class="card bar-q">
+      <div class="gd" style="margin-bottom:10px">
+        Mỗi thiết lập đều thuộc <b>một trong bốn mục</b> của Bambu Studio, và có <b>tên hiển thị</b> riêng khác với tên key.
+        Bảng dưới trích thẳng từ <code>Tab.cpp</code> (bố cục UI) + <code>PrintConfig.cpp</code> (nhãn &amp; chế độ) của <b>bản cài trên máy</b> — không gõ tay, không đoán.
+        Cột <b>Chế độ</b> cho biết phải bật <i>Advanced</i> hay <i>Develop</i> mới thấy ô đó.
+      </div>
+      <div class="callout c-amber"><svg class="icn"><use href="#i-alert"/></svg><div>
+        Chú ý hai dòng <b>“Scarf seam type”</b>: cùng một tên hiển thị, nhưng một cái nằm ở <b>Process ▸ Quality ▸ Seam</b> (<code>seam_slope_type</code>) và một cái ở <b>Filament ▸ Filament</b> (<code>filament_scarf_seam_type</code>). Cái ở Filament <b>không có checkbox override</b> nên luôn thắng. Đây chính là cách scarf bị tắt âm thầm.
+      </div></div>
+      <div style="overflow-x:auto">
+      <table>
+        <tr><th>Trang</th><th>Nhóm</th><th>Tên hiển thị trong Bambu Studio</th><th>Key máy</th><th>Chế độ</th></tr>
+<tr><td colspan="5" style="font-weight:800;background:rgba(127,127,127,.10)">① Printer</td></tr>
+<tr><td class="gd">Single extruder MM setup</td><td class="gd">Basic information</td><td><b>Nozzle diameter</b></td><td><code>nozzle_diameter</code></td><td class="gd">Advanced</td></tr>
+<tr><td class="gd">Single extruder MM setup</td><td class="gd">Layer height limits</td><td><b>Max</b></td><td><code>max_layer_height</code></td><td class="gd">Advanced</td></tr>
+<tr><td class="gd">Single extruder MM setup</td><td class="gd">Layer height limits</td><td><b>Min</b></td><td><code>min_layer_height</code></td><td class="gd">Advanced</td></tr>
+<tr><td colspan="5" style="font-weight:800;background:rgba(127,127,127,.10)">② Filament</td></tr>
+<tr><td class="gd">Cooling</td><td class="gd">Part cooling fan</td><td><b>Fan speed for overhang</b></td><td><code>overhang_fan_speed</code></td><td class="gd">Advanced</td></tr>
+<tr><td class="gd">Filament</td><td class="gd">Basic information</td><td><b>Enable pressure advance</b></td><td><code>enable_pressure_advance</code></td><td class="gd">Simple</td></tr>
+<tr><td class="gd">Filament</td><td class="gd">Basic information</td><td><b>Flow ratio</b></td><td><code>filament_flow_ratio</code></td><td class="gd">Advanced</td></tr>
+<tr><td class="gd">Filament</td><td class="gd">Basic information</td><td><b>Pressure advance</b></td><td><code>pressure_advance</code></td><td class="gd">Advanced</td></tr>
+<tr><td class="gd">Filament</td><td class="gd">Filament scarf seam settings</td><td><b>Scarf seam type</b></td><td><code>filament_scarf_seam_type</code></td><td class="gd">Advanced</td></tr>
+<tr><td class="gd">Filament</td><td class="gd">Volumetric speed limitation</td><td><b>Max volumetric speed</b></td><td><code>filament_max_volumetric_speed</code></td><td class="gd">Advanced</td></tr>
+<tr><td class="gd">Setting Overrides</td><td class="gd">Speed</td><td><b>Override overhang speed</b></td><td><code>override_process_overhang_speed</code></td><td class="gd">Advanced</td></tr>
+<tr><td class="gd">—</td><td class="gd">—</td><td><b>Fan speed</b></td><td><code>fan_min_speed</code></td><td class="gd">Simple</td></tr>
+<tr><td class="gd">—</td><td class="gd">—</td><td><b>Fan speed</b></td><td><code>fan_max_speed</code></td><td class="gd">Simple</td></tr>
+<tr><td class="gd">—</td><td class="gd">—</td><td><b>For the first</b></td><td><code>close_fan_the_first_x_layers</code></td><td class="gd">Simple</td></tr>
+<tr><td class="gd">—</td><td class="gd">—</td><td><b>Other layers</b></td><td><code>textured_plate_temp</code></td><td class="gd">Simple</td></tr>
+<tr><td class="gd">—</td><td class="gd">—</td><td><b>Other layers</b></td><td><code>nozzle_temperature</code></td><td class="gd">Simple</td></tr>
+<tr><td colspan="5" style="font-weight:800;background:rgba(127,127,127,.10)">③ Process</td></tr>
+<tr><td class="gd">Others</td><td class="gd">Prime tower</td><td><b>Enable</b></td><td><code>enable_prime_tower</code></td><td class="gd">Simple</td></tr>
+<tr><td class="gd">Quality</td><td class="gd">Advanced</td><td><b>Order of walls</b></td><td><code>wall_sequence</code></td><td class="gd">Advanced</td></tr>
+<tr><td class="gd">Quality</td><td class="gd">Ironing</td><td><b>Ironing Type</b></td><td><code>ironing_type</code></td><td class="gd">Advanced</td></tr>
+<tr><td class="gd">Quality</td><td class="gd">Layer height</td><td><b>Initial layer height</b></td><td><code>initial_layer_print_height</code></td><td class="gd">Simple</td></tr>
+<tr><td class="gd">Quality</td><td class="gd">Layer height</td><td><b>Layer height</b></td><td><code>layer_height</code></td><td class="gd">Simple</td></tr>
+<tr><td class="gd">Quality</td><td class="gd">Precision</td><td><b>Elephant foot compensation</b></td><td><code>elefant_foot_compensation</code></td><td class="gd">Advanced</td></tr>
+<tr><td class="gd">Quality</td><td class="gd">Seam</td><td><b>Scarf seam type</b></td><td><code>seam_slope_type</code></td><td class="gd">Advanced</td></tr>
+<tr><td class="gd">Quality</td><td class="gd">Seam</td><td><b>Seam position</b></td><td><code>seam_position</code></td><td class="gd">Simple</td></tr>
+<tr><td class="gd">Quality</td><td class="gd">Wall generator</td><td><b>Wall generator</b></td><td><code>wall_generator</code></td><td class="gd">Advanced</td></tr>
+<tr><td class="gd">Speed</td><td class="gd">Acceleration</td><td><b>Normal printing</b></td><td><code>default_acceleration</code></td><td class="gd">Advanced</td></tr>
+<tr><td class="gd">Speed</td><td class="gd">Acceleration</td><td><b>Outer wall</b></td><td><code>outer_wall_acceleration</code></td><td class="gd">Advanced</td></tr>
+<tr><td class="gd">Speed</td><td class="gd">Initial layer speed</td><td><b>Initial layer</b></td><td><code>initial_layer_speed</code></td><td class="gd">Advanced</td></tr>
+<tr><td class="gd">Speed</td><td class="gd">Other layers speed</td><td><b>Bridge</b></td><td><code>bridge_speed</code></td><td class="gd">Advanced</td></tr>
+<tr><td class="gd">Speed</td><td class="gd">Other layers speed</td><td><b>Inner wall</b></td><td><code>inner_wall_speed</code></td><td class="gd">Advanced</td></tr>
+<tr><td class="gd">Speed</td><td class="gd">Other layers speed</td><td><b>Internal solid infill</b></td><td><code>internal_solid_infill_speed</code></td><td class="gd">Advanced</td></tr>
+<tr><td class="gd">Speed</td><td class="gd">Other layers speed</td><td><b>Outer wall</b></td><td><code>outer_wall_speed</code></td><td class="gd">Advanced</td></tr>
+<tr><td class="gd">Speed</td><td class="gd">Other layers speed</td><td><b>Slow down for overhang</b></td><td><code>enable_overhang_speed</code></td><td class="gd">Advanced</td></tr>
+<tr><td class="gd">Speed</td><td class="gd">Other layers speed</td><td><b>Sparse infill</b></td><td><code>sparse_infill_speed</code></td><td class="gd">Advanced</td></tr>
+<tr><td class="gd">Speed</td><td class="gd">Other layers speed</td><td><b>Top surface</b></td><td><code>top_surface_speed</code></td><td class="gd">Advanced</td></tr>
+<tr><td class="gd">Strength</td><td class="gd">Advanced</td><td><b>Infill/Wall overlap</b></td><td><code>infill_wall_overlap</code></td><td class="gd">Advanced</td></tr>
+<tr><td class="gd">Strength</td><td class="gd">Sparse infill</td><td><b>Sparse infill density</b></td><td><code>sparse_infill_density</code></td><td class="gd">Simple</td></tr>
+<tr><td class="gd">Strength</td><td class="gd">Sparse infill</td><td><b>Sparse infill pattern</b></td><td><code>sparse_infill_pattern</code></td><td class="gd">Simple</td></tr>
+<tr><td class="gd">Strength</td><td class="gd">Top/bottom shells</td><td><b>Bottom shell layers</b></td><td><code>bottom_shell_layers</code></td><td class="gd">Simple</td></tr>
+<tr><td class="gd">Strength</td><td class="gd">Top/bottom shells</td><td><b>Top shell layers</b></td><td><code>top_shell_layers</code></td><td class="gd">Simple</td></tr>
+<tr><td class="gd">Strength</td><td class="gd">Top/bottom shells</td><td><b>Top shell thickness</b></td><td><code>top_shell_thickness</code></td><td class="gd">Simple</td></tr>
+<tr><td class="gd">Strength</td><td class="gd">Top/bottom shells</td><td><b>Top surface pattern</b></td><td><code>top_surface_pattern</code></td><td class="gd">Simple</td></tr>
+<tr><td class="gd">Strength</td><td class="gd">Walls</td><td><b>Wall loops</b></td><td><code>wall_loops</code></td><td class="gd">Simple</td></tr>
+<tr><td class="gd">Support</td><td class="gd">Advanced</td><td><b>Top Z distance</b></td><td><code>support_top_z_distance</code></td><td class="gd">Advanced</td></tr>
+<tr><td class="gd">Support</td><td class="gd">Support</td><td><b>Enable support</b></td><td><code>enable_support</code></td><td class="gd">Simple</td></tr>
+<tr><td class="gd">Support</td><td class="gd">Support</td><td><b>On build plate only</b></td><td><code>support_on_build_plate_only</code></td><td class="gd">Simple</td></tr>
+<tr><td class="gd">Support</td><td class="gd">Support</td><td><b>Style</b></td><td><code>support_style</code></td><td class="gd">Simple</td></tr>
+<tr><td class="gd">Support</td><td class="gd">Support</td><td><b>Threshold angle</b></td><td><code>support_threshold_angle</code></td><td class="gd">Simple</td></tr>
+<tr><td class="gd">Support</td><td class="gd">Support</td><td><b>Type</b></td><td><code>support_type</code></td><td class="gd">Simple</td></tr>
+<tr><td colspan="5" style="font-weight:800;background:rgba(127,127,127,.10)">④ Objects (đặt riêng từng vật)</td></tr>
+<tr><td class="gd">Others</td><td class="gd">Bed adhension</td><td><b>Brim type</b></td><td><code>brim_type</code></td><td class="gd">Simple</td></tr>
+<tr><td class="gd">Others</td><td class="gd">Bed adhension</td><td><b>Brim width</b></td><td><code>brim_width</code></td><td class="gd">Simple</td></tr>
+<tr><td class="gd">Others</td><td class="gd">Bed adhension</td><td><b>Brim-object gap</b></td><td><code>brim_object_gap</code></td><td class="gd">Advanced</td></tr>
+<tr><td class="gd">Plate Settings</td><td class="gd">—</td><td><b>Bed type</b></td><td><code>curr_bed_type</code></td><td class="gd">Simple</td></tr>
+      </table>
+      </div>
+      <div class="gd" style="margin-top:10px">
+        <b>④ Objects</b> = đặt riêng cho từng vật (chuột phải vật trong Prepare), không phải preset toàn cục. Wiki Bambu ghi rõ brim là <i>per-object parameter</i>.
+        <code>—</code> nghĩa là ô đó không nằm trong trang thiết lập thường (vd đặt qua công cụ Height range Modifier hoặc Support painting).
+      </div>
+    </div>
+
+    <div class="sectitle">6. Bốn cạm bẫy đã trả giá để biết</div>
     <div class="grid g2">
       <div class="card bar-fl">
         <h3><svg class="icn" style="color:var(--pink)"><use href="#i-alert"/></svg> Scarf seam có hai công tắc</h3>
