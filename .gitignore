@@ -5,6 +5,12 @@ printer.local.json
 # Secret dạng .env (cùng mức bảo vệ: plaintext, chỉ tránh commit nhầm).
 .env
 
+# Dữ liệu cục bộ theo người dùng — KHÔNG commit (comment phải ở dòng riêng)
+# gam nhựa từng cuộn (theo tag_uid RFID)
+filament.local.json
+# cache ảnh model + gam + thông số từng file in tải qua FTP
+job_cache/
+
 # KHÔNG BAO GIỜ tạo lại file này: Claude Code tự nạp project-scoped MCP server từ .mcp.json,
 # tức là trao quyền điều khiển máy in (in / huỷ / chỉnh nhiệt / xoá file) cho AI.
 # Mọi điều khiển phải do người dùng bấm trên web dashboard. Xem README mục "Bảo mật".
