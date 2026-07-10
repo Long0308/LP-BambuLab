@@ -1049,6 +1049,14 @@ git commit -m "feat: optimize() tầng 4 - support 3 khoảng rạch ròi, bridg
 - Modify: `BambuLab-A1-Hub.html`
 - Modify: `tests/optimize.test.js`
 
+> ⚠ **Đoạn code Step 3 dưới đây MÂU THUẪN với chính test Step 1 — đã ghi nhận 2026-07-10, chưa sửa.** Ba điểm phải giải quyết khi làm Task 10:
+>
+> 1. Vòng `for(const k of ['inner_wall','sparse_infill','internal_solid_infill'])` đặt cả ba tốc độ, nhưng test đòi `inner_wall_speed` và `sparse_infill_speed` phải `undefined` (stock đã 300/270, trên trần 244.4). **Test đúng, code sai.** Chỉ giữ `internal_solid_infill`.
+> 2. Công thức `Math.floor(cap*0.98/5)*5` với `cap=261.9` cho ra **255**, không phải **260** như test đòi. Muốn 260 thì biên phải ~0.5% chứ không phải 2%. Phải chốt một trong hai.
+> 3. Nhánh `if(v.id==='I1')` trong vòng lặp phải truyền `owned` vào `checkInvariants` (xem spec §4b). Không có nó, vòng lặp sẽ ghi `inner_wall_speed=235` đè lên tốc độ stock 244.4 → **hãm bản in chậm 3.9%**. `checkInvariants(merged,L,derive(merged,L),wantVLH)` → `checkInvariants(merged,L,derive(merged,L),wantVLH,new Set([...Object.keys(dP),...Object.keys(dF)]))`.
+>
+> Nhánh `I7` cũng phải bật **cả** `override_process_overhang_speed` **lẫn** `filament_enable_overhang_speed` nếu có key phần trăm, nếu không vòng lặp không hội tụ.
+
 - [ ] **Step 1: Bật lại test đã skip + thêm test fixpoint**
 
 Đổi `test.skip('Tầng 2 ghi đè tầng 5'...)` về `test(...)`. Thêm:

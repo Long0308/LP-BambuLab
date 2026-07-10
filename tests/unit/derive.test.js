@@ -33,6 +33,37 @@ test('I1: không báo oan ở layer 0.20', () => {
   assert.ok(!v.some(x => x.id === 'I1'));
 });
 
+/* Stock '0.20mm Standard @BBL A1' CỐ Ý đặt inner_wall=300 / sparse_infill=270, trên trần
+   244.4, để bộ giới hạn lưu lượng tự ghì theo nhựa đang nạp. Đó là tính năng.
+   I1 chỉ là lỗi khi optimizer tự ghi một con số rồi tưởng nó được tôn trọng — nên khi
+   optimize() truyền `owned`, I1 chỉ soi đúng những key đó. Không có `owned` (audit preset
+   rời) thì soi toàn bộ, vì lúc đó mọi key trong file đều là do người dùng chịu trách nhiệm. */
+const STOCK_OVER_CAP = { ...BASE, inner_wall_speed: ['300'], sparse_infill_speed: ['270'] };
+
+test('I1: có `owned` → bỏ qua tốc độ stock kế thừa, không ghi đè chúng', () => {
+  const L = printerLimits(STOCK_OVER_CAP);
+  const d = derive(STOCK_OVER_CAP, L);
+  const owned = new Set(['internal_solid_infill_speed']);
+  const v = checkInvariants(STOCK_OVER_CAP, L, d, false, owned);
+  assert.deepEqual(v.filter(x => x.id === 'I1').map(x => x.key), [],
+    'stock 300/270 trên trần là chủ ý của Bambu, optimizer không sở hữu → không đụng');
+});
+
+test('I1: có `owned` → vẫn bắt key optimizer tự ghi mà vượt trần', () => {
+  const ps = { ...STOCK_OVER_CAP, layer_height: '0.24' };
+  const L = printerLimits(ps);
+  const v = checkInvariants(ps, L, derive(ps, L), false, new Set(['internal_solid_infill_speed']));
+  assert.deepEqual(v.filter(x => x.id === 'I1').map(x => x.key), ['internal_solid_infill_speed'],
+    'chỉ key sở hữu bị bắt, inner_wall/sparse_infill kế thừa thì không');
+});
+
+test('I1: không truyền `owned` → soi toàn bộ (audit preset rời)', () => {
+  const L = printerLimits(STOCK_OVER_CAP);
+  const v = checkInvariants(STOCK_OVER_CAP, L, derive(STOCK_OVER_CAP, L));
+  assert.deepEqual(v.filter(x => x.id === 'I1').map(x => x.key),
+    ['inner_wall_speed', 'sparse_infill_speed']);
+});
+
 test('I2: top_shell_layers=4 @0.20 với thickness 1.0 → engine tự tăng', () => {
   const ps = { ...BASE, top_shell_layers: '4' };
   const L = printerLimits(ps);

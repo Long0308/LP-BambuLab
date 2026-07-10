@@ -2072,14 +2072,21 @@ const OVERHANG_NEED_OVERRIDE=['filament_enable_overhang_speed','filament_bridge_
 const OVERHANG_NEED_BOTH=['filament_overhang_1_4_speed','filament_overhang_2_4_speed',
   'filament_overhang_3_4_speed','filament_overhang_4_4_speed','filament_overhang_totally_speed'];
 
-/* Trả mảng vi phạm. `vlhWanted` = optimizer định xuất vlhRanges. */
-function checkInvariants(cfg,L,d,vlhWanted){
+/* Trả mảng vi phạm. `vlhWanted` = optimizer định xuất vlhRanges.
+   `owned` = tập key optimizer TỰ GHI. Khi có, I1 chỉ soi những key đó.
+   Lý do: stock '0.20mm Standard @BBL A1' cố ý đặt inner_wall=300 / sparse_infill=270 trên
+   trần 244.4 để bộ giới hạn lưu lượng tự ghì theo nhựa đang nạp — đó là tính năng, không
+   phải lỗi. Coi nó là vi phạm rồi "sửa" sẽ ghi 235 vào preset, hãm bản in chậm 3.9%.
+   Bỏ `owned` (audit một preset rời) thì soi toàn bộ, vì khi đó mọi key đều do người dùng đặt. */
+function checkInvariants(cfg,L,d,vlhWanted,owned){
   const f=v=>Array.isArray(v)?v[0]:v;
   const S=k=>String(f(cfg[k])??'').toLowerCase();
   const N=k=>parseFloat(f(cfg[k]));
   const set=k=>{const x=f(cfg[k]); return x!==undefined&&x!==null&&x!==''&&String(x).toLowerCase()!=='nil';};
+  const own=owned?(owned instanceof Set?owned:new Set(owned)):null;
   const V=[];
   for(const k in d.flow){
+    if(own&&!own.has(k+'_speed'))continue;
     if(L.maxvol&&d.flow[k]>L.maxvol+1e-6)
       V.push({id:'I1',key:k+'_speed',msg:`flow ${d.flow[k].toFixed(2)} > maxvol ${L.maxvol} → engine tự hạ tốc về ${L.vmax[k].toFixed(0)} mm/s, số bạn đặt vô nghĩa`});
   }

@@ -77,15 +77,21 @@ firstFlow       = initial_layer_print_height × initial_layer_line_width × init
 
 | # | Bất biến | Nếu vỡ thì engine làm gì |
 |---|---|---|
-| I1 | `flow_f ≤ filament_max_volumetric_speed` | **tự hạ tốc độ**, số bạn đặt vô nghĩa |
-| I2 | `top_shell_layers × layer_height ≥ top_shell_thickness` | **tự tăng số lớp đặc** |
+| I1 | `flow_f ≤ filament_max_volumetric_speed`, **chỉ trên key optimizer tự ghi** | **tự hạ tốc độ**, số bạn đặt vô nghĩa |
+| I2 | `top_shell_layers × layer_height ≥ top_shell_thickness`, **trừ khi `spiral_mode`** | **tự tăng số lớp đặc** |
 | I3 | `layer ∈ [min_layer_height, max_layer_height] ∩ [LH_MIN, LH_MAX]` | kẹp |
 | I4 | `filament_scarf_seam_type == seam_slope_type` | scarf **tắt âm thầm** |
 | I5 | `vlhRanges ≠ ∅ ⇒ support_style ≠ organic ∧ enable_prime_tower = 0` | từ chối VLH |
 | I6 | `elefant_foot_compensation > 0 ⇒ brim_object_gap = 0` | brim tách rời vật |
-| I7 | muốn dùng `filament_*` overhang ⇒ `override_process_overhang_speed = 1` | giá trị filament **bị bỏ qua** |
+| I7 | 2 key (`filament_enable_overhang_speed`, `filament_bridge_speed`) ⇒ `override_process_overhang_speed = 1`; 5 key `filament_overhang_*_speed` ⇒ **override AND `filament_enable_overhang_speed`** | Tab.cpp khoá ô, giá trị **không có hiệu lực** |
 
-**Vòng lặp tới điểm bất động.** Sau khi các tầng ghi xong: `derive` → kiểm bất biến → tầng sở hữu key vi phạm sửa lại → `derive` lại. Tối đa **3 vòng**; còn vi phạm thì đẩy vào `conflicts[]` và **không** xuất preset cho key đó.
+> **I1 chỉ soi key optimizer sở hữu** (chốt 2026-07-10, sau code review). Stock `0.20mm Standard @BBL A1` **cố ý** đặt `inner_wall_speed=300` và `sparse_infill_speed=270`, cao hơn trần 244.4, để bộ giới hạn lưu lượng tự ghì theo nhựa đang nạp. Đó là tính năng. Coi nó là vi phạm rồi cho vòng lặp "sửa" sẽ ghi `235` vào preset xuất ra — **hãm bản in chậm 3.9%**, đúng lỗi đã loại bỏ ở phiên trước, chỉ khác là nay được tự động hoá. Chữ ký: `checkInvariants(cfg, L, d, vlhWanted, owned)`. Có `owned` thì I1 chỉ soi các key trong đó; bỏ `owned` (audit một preset rời) thì soi toàn bộ, vì khi ấy mọi key đều do người dùng chịu trách nhiệm. Các bất biến khác vẫn toàn cục — ghi rõ `top_shell_layers=5` chỉ là nói thẳng điều engine vốn làm, không hãm gì.
+
+> **I2 và `spiral_mode`.** `PrintConfig.cpp:7423-7437` ép `wall_loops=1`, `top_shell_layers=0`, `sparse_infill_density=0` khi bật vase mode. `derive()` trả `effTopLayers=0` trong trường hợp này, nếu không sẽ báo oan mọi preset vase có `top_shell_thickness` kế thừa.
+
+> **I7 có hai điều kiện, không phải một.** `PrintConfig.cpp:93-101` liệt kê đúng 7 key `filament_overhang_override_keys`, nhưng `Tab.cpp:4256-4269` gác chúng khác nhau: 2 key chỉ cần `override_process_overhang_speed`, còn 5 key phần trăm cần **cả** nó **lẫn** `filament_enable_overhang_speed`. Sửa I7 bằng cách chỉ bật `override` sẽ khiến vòng lặp báo "hết vi phạm" trong khi 5 ô kia vẫn bị khoá — bẫy không hội tụ. Chú ý `overhang_fan_speed` **không** nằm trong danh sách (nó là quạt); tầng 4 được tự do đặt nó.
+
+**Vòng lặp tới điểm bất động.** Sau khi các tầng ghi xong: `derive` → kiểm bất biến (truyền `owned` = tập key optimizer đã ghi) → tầng sở hữu key vi phạm sửa lại → `derive` lại. Tối đa **3 vòng**; còn vi phạm thì đẩy vào `conflicts[]` và **không** xuất preset cho key đó.
 
 > **Ví dụ thật.** `Body14-PLAMatte-Decor-BALANCED-0.2` đặt `top_shell_layers = 4` nhưng kế thừa `top_shell_thickness = 1.0`. Bề dày thực `4 × 0.20 = 0.80mm < 1.0` ⇒ **I2 vỡ** ⇒ engine âm thầm nâng lại **5 lớp**. Khoản tiết kiệm "top 4" chưa bao giờ tồn tại. Bản `FAST 0.24` cũng vậy (`0.96mm < 1.0`). Một thang gán tuyến tính sẽ không bao giờ phát hiện ra.
 
