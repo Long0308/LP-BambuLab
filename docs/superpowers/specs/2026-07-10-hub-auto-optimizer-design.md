@@ -58,6 +58,37 @@ Ranh giới bắt buộc:
 - `geoFeatures` không tham chiếu khái niệm nào của Bambu → test bằng mesh tự dựng biết trước đáp án.
 - `optimize` là **hàm thuần**: `(F, L, mat, goal) → plan`. Không đụng DOM → test bằng `node`, không cần puppeteer.
 
+### 4b. `optimize()` là một dataflow, không phải danh sách gán key
+
+Không key nào đứng một mình. Engine tự suy ra các đại lượng dẫn xuất, và **tự sửa lại** thiết lập của bạn nếu ràng buộc không thoả — im lặng. Vì vậy `optimize()` phải là vòng **Extract → Transform → Derive → Validate → (lặp) → Load**, chứ không phải một thang gán tuyến tính.
+
+**Đại lượng dẫn xuất** (`derive(cfg, L)`):
+
+```
+flow_f          = layer_height × line_width_f × speed_f            (f = mỗi loại đường in)
+v_max_f         = filament_max_volumetric_speed / (layer_height × line_width_f)
+effTopLayers    = max(top_shell_layers, ceil(top_shell_thickness / layer_height))
+effBottomLayers = max(bottom_shell_layers, ceil(bottom_shell_thickness / layer_height))
+stair(z)        = layer(z) / tan θ(z)
+firstFlow       = initial_layer_print_height × initial_layer_line_width × initial_layer_speed
+```
+
+**Bất biến** — kiểm sau mỗi lần một tầng ghi key:
+
+| # | Bất biến | Nếu vỡ thì engine làm gì |
+|---|---|---|
+| I1 | `flow_f ≤ filament_max_volumetric_speed` | **tự hạ tốc độ**, số bạn đặt vô nghĩa |
+| I2 | `top_shell_layers × layer_height ≥ top_shell_thickness` | **tự tăng số lớp đặc** |
+| I3 | `layer ∈ [min_layer_height, max_layer_height] ∩ [LH_MIN, LH_MAX]` | kẹp |
+| I4 | `filament_scarf_seam_type == seam_slope_type` | scarf **tắt âm thầm** |
+| I5 | `vlhRanges ≠ ∅ ⇒ support_style ≠ organic ∧ enable_prime_tower = 0` | từ chối VLH |
+| I6 | `elefant_foot_compensation > 0 ⇒ brim_object_gap = 0` | brim tách rời vật |
+| I7 | muốn dùng `filament_*` overhang ⇒ `override_process_overhang_speed = 1` | giá trị filament **bị bỏ qua** |
+
+**Vòng lặp tới điểm bất động.** Sau khi các tầng ghi xong: `derive` → kiểm bất biến → tầng sở hữu key vi phạm sửa lại → `derive` lại. Tối đa **3 vòng**; còn vi phạm thì đẩy vào `conflicts[]` và **không** xuất preset cho key đó.
+
+> **Ví dụ thật.** `Body14-PLAMatte-Decor-BALANCED-0.2` đặt `top_shell_layers = 4` nhưng kế thừa `top_shell_thickness = 1.0`. Bề dày thực `4 × 0.20 = 0.80mm < 1.0` ⇒ **I2 vỡ** ⇒ engine âm thầm nâng lại **5 lớp**. Khoản tiết kiệm "top 4" chưa bao giờ tồn tại. Bản `FAST 0.24` cũng vậy (`0.96mm < 1.0`). Một thang gán tuyến tính sẽ không bao giờ phát hiện ra.
+
 ## 5. `geoFeatures`
 
 Giữ 14 số cũ, thêm:
@@ -274,6 +305,39 @@ Xếp theo "trả giá bằng gì". Chỉ nhóm đầu được tầng 5 dùng t
 | ↓ `outer_wall_speed` / accel | **âm** — làm CHẬM đi | đo thật: 10h37m → 31h54m |
 
 Ba dòng cuối là đánh đổi, không phải tối ưu. Hub được phép **đề xuất** chúng kèm số, nhưng không tự áp dụng.
+
+## 12b. Cặp tăng–giảm hợp lý
+
+`optimize()` không chỉ đặt từng key độc lập; nhiều key chỉ có nghĩa **theo cặp**. Tất cả key dưới đây đã xác minh tồn tại trong `PrintConfig.cpp`.
+
+| # | Tăng | Giảm | Được | Mất | Nguồn |
+|---|---|---|---|---|---|
+| 1 | `wall_loops` | `sparse_infill_density` | bền hơn cùng khối lượng | — | UltiMaker |
+| 2 | `top_shell_layers` | `sparse_infill_density` | hết võng mặt trên, không nhồi infill toàn thân | lớp đặc in chậm | UltiMaker |
+| 3 | `layer_height` | `top_shell_layers` | giữ `top_shell_thickness` (mm) với ít lớp hơn | liên kết liên lớp yếu | suy từ 2 key |
+| 4 | `inner_wall_speed`, `sparse_infill_speed` | `layer_height` | Z mịn hơn, thời gian vùng khuất không đổi | không áp cho tường ngoài | wiki Volumetric |
+| 5 | `overhang_fan_speed` | `fan_min_speed` | mát đúng chỗ đua, không thổi lạnh toàn thân | — | wiki Warping |
+| 6 | `textured_plate_temp` | `brim_width` | bám bàn tương đương, đỡ cắt brim | bàn nóng dễ phồng chân | wiki Warping |
+| 7 | `nozzle_temperature` +5–10°C | — | thêm dư địa lưu lượng | stringing, rủ overhang, đổi màu | wiki Volumetric |
+| 8 | `sparse_infill_pattern` → gyroid/cubic | `sparse_infill_density` | pattern hiệu quả cho phép hạ mật độ | gyroid in lâu hơn grid | UltiMaker |
+
+Cặp 7 là **giải pháp cuối**, không phải nước đi đầu: *"Temperature should never be your first adjustment."*
+
+Hai ràng buộc **bắt buộc đi cùng**, không phải lựa chọn:
+
+- `elefant_foot_compensation ↑` ⇒ `brim_object_gap ↓`, nếu không brim tách khỏi vật.
+- `seam_slope_type = all` thay được `seam_position = random` — giấu seam mà không làm bề mặt lấm tấm.
+
+### Đính chính: "thời gian tường ∝ số lớp" chỉ đúng khi giữ nguyên tốc độ
+
+Công thức Bambu: `lưu lượng = layer_height × line_width × print_speed`.
+
+Hạ `layer_height` một nửa ⇒ lưu lượng giảm một nửa ⇒ được phép **tăng gấp đôi tốc độ** mà vẫn dưới trần ⇒ thời gian **không đổi**. Thực tế lớp mỏng vẫn lâu vì **tường ngoài bị khoá tốc độ để giữ bề mặt**. Do đó:
+
+- **Tường ngoài** — tốc độ cố định ⇒ thời gian **thật sự** ∝ số lớp.
+- **Tường trong + infill** — tốc độ thả tới trần ⇒ thời gian do **lưu lượng** quyết định, gần như độc lập với layer height.
+
+Đây chính là lý do đòn bẩy duy nhất thật sự miễn phí là đẩy tốc độ **vùng khuất** lên sát trần.
 
 ## 13. Nguồn
 
