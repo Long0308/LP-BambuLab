@@ -63,3 +63,20 @@ test('topPlateaus: hộp có đúng 1 mảng phẳng trên', () => {
   assert.ok(Math.abs(F.topPlateaus[0].z - 50) < 0.6);
   assert.ok(Math.abs(F.topPlateaus[0].area_cm2 - 100) < 0.5);
 });
+
+/* Ca biên phát hiện khi làm Task 4: cầu lý tưởng chạm khay tại MỘT ĐIỂM
+   (bán kính = 0 ở cực đáy) nên không tam giác nào có cả 3 đỉnh ≤ zmin+0.05
+   ⇒ không ô lưới nào được rasterize ⇒ islands = 0, KHÔNG phải 1.
+   Đây là hệ quả đúng của thuật toán, không phải bug. Khoá lại để Tầng 2
+   (tinyContact → brim) không dựa nhầm vào `islands >= 1`. */
+test('CA BIÊN: cầu chạm khay 1 điểm → islands=0 và firstArea=0', () => {
+  const F = geoFeatures(sphere(40));
+  assert.equal(F.islands, 0, 'tiếp xúc điểm: không có ô lưới nào');
+  assert.equal(F.firstArea_cm2, 0);
+  assert.equal(F.baseDiag_mm, 0);
+});
+
+test('bridge 2 chân: islands=2 (hai đảo rời trên khay)', () => {
+  const F = geoFeatures(bridge());
+  assert.equal(F.islands, 2);
+});

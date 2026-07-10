@@ -7,8 +7,9 @@
     "doc": "docs"
   },
   "scripts": {
-    "test": "node --test tests/unit/",
-    "e2e": "node tests/e2e/run-all.js"
+    "test": "node --test \"tests/unit/**/*.test.js\"",
+    "e2e": "node tests/e2e/run-all.js",
+    "verify": "npm test && npm run e2e"
   },
   "repository": {
     "type": "git",
