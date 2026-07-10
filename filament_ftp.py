@@ -130,6 +130,42 @@ def parse_weight(zip_bytes_or_path) -> float | None:
     return None
 
 
+def list_files(host: str, code: str) -> list:
+    """Liet ke cac file .3mf tren may (root + /cache). Chi doc, khong tai."""
+    ftp = None
+    out = []
+    seen = set()
+    try:
+        ftp = _connect(host, code)
+        for d in ("/", "/cache", "/model"):
+            try:
+                names = ftp.nlst(d)
+            except ftplib.error_perm:
+                continue
+            except Exception:
+                continue
+            for n in names:
+                base = os.path.basename(n.rstrip("/"))
+                if not base.lower().endswith(".3mf") or base in seen:
+                    continue
+                seen.add(base)
+                path = n if n.startswith("/") else (d.rstrip("/") + "/" + base)
+                size = None
+                try:
+                    size = ftp.size(path)
+                except Exception:
+                    pass
+                out.append({"name": base, "path": path, "size": size})
+        out.sort(key=lambda x: x["name"].lower())
+        return out
+    finally:
+        if ftp:
+            try:
+                ftp.quit()
+            except Exception:
+                pass
+
+
 def parse_thumbnail(zip_path) -> bytes | None:
     """Lay anh preview model (PNG) — uu tien plate_*.png (giong man hinh may)."""
     try:
@@ -236,6 +272,41 @@ def fetch_job(host: str, code: str, gcode_file: str) -> dict:
 
 def job_weight(host: str, code: str, gcode_file: str) -> float | None:
     return fetch_job(host, code, gcode_file).get("weight")
+
+
+def _download_exact(host: str, code: str, path: str) -> bytes | None:
+    """Tai dung 1 duong dan file (khong doan candidate)."""
+    ftp = None
+    try:
+        ftp = _connect(host, code)
+        buf = io.BytesIO()
+        ftp.retrbinary("RETR " + path, buf.write)
+        return buf.getvalue()
+    except Exception:
+        return None
+    finally:
+        if ftp:
+            try:
+                ftp.quit()
+            except Exception:
+                pass
+
+
+def fetch_thumb_for(host: str, code: str, path: str) -> bytes | None:
+    """Tai file tai `path` -> tra anh preview (PNG). Dung cho danh sach file."""
+    data = _download_exact(host, code, path)
+    if not data:
+        return None
+    tmp = os.path.join(tempfile.gettempdir(), "bambu_thumb.3mf")
+    try:
+        with open(tmp, "wb") as f:
+            f.write(data)
+        return parse_thumbnail(tmp)
+    finally:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
 
 
 def _main():

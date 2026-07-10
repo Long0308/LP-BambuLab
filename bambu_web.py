@@ -132,6 +132,50 @@ def cmd_print(command):
     return _send({"print": {"sequence_id": str(MQTT["seq"]), "command": command, "param": ""}})
 
 
+def cmd_project_file(name, path):
+    """Ra lenh in 1 file .gcode.3mf da co san tren may (NGUOI DUNG bam)."""
+    p = (path or ("/" + name)).lstrip("/")
+    payload = {"print": {
+        "sequence_id": str(MQTT["seq"]),
+        "command": "project_file",
+        "param": "Metadata/plate_1.gcode",
+        "subtask_name": name.replace(".gcode.3mf", "").replace(".3mf", ""),
+        "url": "file:///sdcard/" + p,
+        "bed_type": "auto",
+        "timelapse": False, "bed_leveling": True, "flow_cali": False,
+        "vibration_cali": True, "layer_inspect": False, "use_ams": False,
+        "profile_id": "0", "project_id": "0", "subtask_id": "0", "task_id": "0",
+    }}
+    return _send(payload)
+
+
+FILES_CACHE = {"ts": 0, "data": []}
+THUMB_LOCK = threading.Lock()  # tai thumbnail tuan tu (Bambu FTP gioi han ket noi)
+
+
+def get_files():
+    """Danh sach file tren may, cache 25s de khong lam phien FTP."""
+    now = time.time()
+    with JOB_LOCK:
+        if now - FILES_CACHE["ts"] < 25 and FILES_CACHE["data"]:
+            return FILES_CACHE["data"]
+    try:
+        data = filament_ftp.list_files(IP, CODE)
+    except Exception as e:
+        print("[FTP] loi liet ke file:", e)
+        return FILES_CACHE["data"]
+    with JOB_LOCK:
+        FILES_CACHE["ts"] = now
+        FILES_CACHE["data"] = data
+    return data
+
+
+def is_busy():
+    with LOCK:
+        gc = STATE["data"].get("gcode_state")
+    return gc in ("RUNNING", "PAUSE", "PREPARE")
+
+
 def on_connect(c, u, f, rc, *a):
     with LOCK:
         STATE["rc"] = rc
@@ -422,10 +466,11 @@ PAGE = r"""<!doctype html><html lang="vi"><head>
  .b-pause{background:linear-gradient(160deg,#fbbf24,#d97706)}
  .b-resume{background:linear-gradient(160deg,#34d399,#16a34a)}
  .b-stop{background:linear-gradient(160deg,#f87171,#dc2626)}
- .infolink{display:flex;align-items:center;justify-content:center;gap:8px;margin:2px 0 12px;
-   min-height:50px;padding:12px;border-radius:14px;background:linear-gradient(160deg,var(--card2),var(--card1));
-   color:var(--cyan);font-weight:700;font-size:14px;text-decoration:none;box-shadow:var(--sh),var(--hl)}
- .infolink svg{width:18px;height:18px;fill:currentColor}
+ .linkrow{display:grid;grid-template-columns:1fr 1fr;gap:11px;margin:2px 0 12px}
+ .infolink{display:flex;align-items:center;justify-content:center;gap:7px;text-align:center;
+   min-height:52px;padding:10px;border-radius:14px;background:linear-gradient(160deg,var(--card2),var(--card1));
+   color:var(--cyan);font-weight:700;font-size:13px;text-decoration:none;box-shadow:var(--sh),var(--hl)}
+ .infolink svg{width:18px;height:18px;fill:currentColor;flex:0 0 auto}
  .infolink:active{transform:translateY(1px)}
 
  /* STAT TILES (number card 3D) */
@@ -536,7 +581,10 @@ PAGE = r"""<!doctype html><html lang="vi"><head>
     <svg viewBox="0 0 24 24"><path d="M6 6h12v12H6z"/></svg>DỪNG</button>
 </div>
 
-<a class="infolink" href="/info"><svg viewBox="0 0 24 24"><path d="M11 7h2v2h-2zM11 11h2v6h-2zM12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16z"/></svg> Thông tin & phân tích lệnh G-code</a>
+<div class="linkrow">
+  <a class="infolink" href="/info"><svg viewBox="0 0 24 24"><path d="M11 7h2v2h-2zM11 11h2v6h-2zM12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16z"/></svg> Thông tin G-code</a>
+  <a class="infolink" href="/files"><svg viewBox="0 0 24 24"><path d="M10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2z"/></svg> File trên máy · chọn in</a>
+</div>
 
 <div class="grid">
   <div class="tile">
@@ -825,6 +873,88 @@ load();
 </script></body></html>"""
 
 
+FILES_PAGE = r"""<!doctype html><html lang="vi"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>File trên máy — Bambu A1</title>
+<style>
+ :root{--bg0:#080b10;--bg1:#0e131b;--card1:#171d28;--card2:#1e2635;--line:#28324a;
+   --txt:#eef3fb;--mut:#8ea0b8;--acc:#22c55e;--cyan:#38bdf8;--amb:#f59e0b;--red:#ef4444;
+   --sh:0 16px 30px -16px rgba(0,0,0,.85);--hl:inset 0 1px 0 rgba(255,255,255,.06)}
+ *{box-sizing:border-box}
+ body{margin:0;background:linear-gradient(180deg,var(--bg1),var(--bg0));color:var(--txt);
+   font-family:-apple-system,"Segoe UI",Roboto,sans-serif;padding:14px 14px 40px;max-width:620px;margin:auto}
+ a.back{color:var(--cyan);text-decoration:none;font-weight:700;font-size:14px;display:inline-flex;align-items:center;gap:6px;margin-bottom:10px}
+ h2{font-size:18px;margin:12px 2px 6px}
+ .busy{background:linear-gradient(160deg,#f59e0b,#b45309);color:#fff;padding:12px;border-radius:12px;font-weight:800;font-size:14px;margin:8px 0}
+ .search{width:100%;padding:12px 14px;border-radius:12px;border:1px solid var(--line);background:#0c111a;color:var(--txt);font-size:15px;margin:6px 0 10px}
+ .file{display:flex;gap:11px;align-items:center;padding:12px;border-radius:14px;background:linear-gradient(160deg,var(--card2),var(--card1));box-shadow:var(--sh),var(--hl);margin:9px 0}
+ .fthumb{flex:0 0 auto;width:58px;height:58px;border-radius:10px;object-fit:contain;background:#0c111a;border:1px solid var(--line)}
+ .fmeta{flex:1;min-width:0}
+ .fname{font-weight:700;font-size:14px;word-break:break-word}
+ .fsub{font-size:11.5px;color:var(--mut);margin-top:3px}
+ .tag{display:inline-block;background:#0c111a;border:1px solid var(--line);border-radius:6px;padding:1px 6px;font-size:10.5px;margin-right:5px}
+ .pbtn{flex:0 0 auto;background:linear-gradient(160deg,#34d399,#16a34a);color:#fff;border:none;border-radius:12px;
+   padding:12px 15px;font-weight:800;font-size:14px;cursor:pointer;display:flex;align-items:center;gap:6px;min-height:46px}
+ .pbtn:disabled{opacity:.4;cursor:not-allowed;background:#334155}
+ .pbtn svg{width:16px;height:16px;fill:currentColor}
+ .loading{color:var(--mut);text-align:center;padding:30px}
+ #toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#0b1220;border:1px solid var(--line);
+   color:#fff;padding:11px 18px;border-radius:12px;opacity:0;transition:opacity .25s;font-size:14px;box-shadow:var(--sh);z-index:50;max-width:90%}
+ #toast.show{opacity:1}
+ .foot{color:var(--mut);font-size:11.5px;text-align:center;margin-top:16px}
+</style></head><body>
+<a class="back" href="/"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M15 6l-6 6 6 6z"/></svg> Về dashboard</a>
+<h2>File in trên máy <span id="count" style="color:var(--mut);font-size:13px"></span></h2>
+<div id="busy"></div>
+<input class="search" id="q" placeholder="Tìm file…" oninput="render()">
+<div id="root"><div class="loading">Đang tải danh sách từ máy…</div></div>
+<div class="foot">Nút "In" chỉ hoạt động khi máy RẢNH. Đây là lệnh điều khiển do BẠN bấm.</div>
+<div id="toast"></div>
+<script>
+let FILES=[], BUSY=true;
+function toast(m){const t=document.getElementById("toast");t.textContent=m;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),3000);}
+function fsize(b){ if(!b) return "?"; const m=b/1048576; return m>=1?(m.toFixed(1)+" MB"):((b/1024).toFixed(0)+" KB"); }
+function folder(p){ if(p.startsWith("/cache")) return "cache"; if(p.startsWith("/model")) return "model"; return "máy"; }
+async function printFile(name,path){
+  if(BUSY){ toast("Máy đang bận — chờ in xong mới in file mới"); return; }
+  if(!confirm('IN file này?\n\n'+name+'\n\nMáy sẽ bắt đầu in ngay.')) return;
+  try{
+    const r=await fetch("/api/print",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:name,path:path})});
+    const j=await r.json();
+    toast(j.ok?("Đã gửi lệnh in: "+name):("Lỗi: "+(j.msg||"")));
+    setTimeout(()=>location.href="/",1500);
+  }catch(e){ toast("Lỗi gửi lệnh: "+e); }
+}
+function render(){
+  const q=(document.getElementById("q").value||"").toLowerCase();
+  const list=FILES.filter(f=>f.name.toLowerCase().includes(q));
+  document.getElementById("count").textContent="("+FILES.length+")";
+  const root=document.getElementById("root");
+  if(!list.length){ root.innerHTML='<div class="loading">Không có file khớp.</div>'; return; }
+  let html="";
+  for(const f of list){
+    const printable=f.name.toLowerCase().endsWith(".gcode.3mf");
+    const thumb=printable?'<img class="fthumb" loading="lazy" src="/api/filethumb?path='+encodeURIComponent(f.path)+'" onerror="this.style.display=\'none\'">':'';
+    html+='<div class="file">'+thumb+'<div class="fmeta"><div class="fname">'+f.name+'</div>'
+      +'<div class="fsub"><span class="tag">'+folder(f.path)+'</span>'+fsize(f.size)
+      +(printable?'':' · <span style="color:var(--amb)">file dự án (cần slice)</span>')+'</div></div>'
+      +'<button class="pbtn" '+((BUSY||!printable)?'disabled':'')+' onclick="printFile('+JSON.stringify(f.name)+','+JSON.stringify(f.path)+')">'
+      +'<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>In</button></div>';
+  }
+  root.innerHTML=html;
+}
+async function load(){
+  try{
+    const j=await (await fetch("/api/files",{cache:"no-store"})).json();
+    FILES=j.files||[]; BUSY=!!j.busy;
+    document.getElementById("busy").innerHTML=BUSY?'<div class="busy">Máy đang IN — nút "In" tạm khoá. Xong bản in mới chọn được file mới.</div>':'';
+    render();
+  }catch(e){ document.getElementById("root").innerHTML='<div class="loading">Lỗi tải danh sách: '+e+'</div>'; }
+}
+load();
+</script></body></html>"""
+
+
 class H(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
@@ -858,6 +988,44 @@ class H(BaseHTTPRequestHandler):
             self._send(200, json.dumps(payload), "application/json; charset=utf-8")
         elif path.startswith("/api/gcodedict"):
             self._send(200, json.dumps(GCODE_DICT), "application/json; charset=utf-8")
+        elif path.startswith("/api/files"):
+            self._send(200, json.dumps({"files": get_files(), "busy": is_busy()}), "application/json; charset=utf-8")
+        elif path.startswith("/api/filethumb"):
+            from urllib.parse import urlparse, parse_qs, unquote
+            fpath = unquote((parse_qs(urlparse(self.path).query).get("path", [""])[0]))
+            if not fpath:
+                self._send(400, "no path", "text/plain")
+                return
+            key = _cache_key(os.path.basename(fpath))
+            png = os.path.join(CACHE_DIR, key + ".png")
+            thumb = None
+            if os.path.isfile(png):
+                try:
+                    with open(png, "rb") as f:
+                        thumb = f.read()
+                except OSError:
+                    thumb = None
+            else:
+                with THUMB_LOCK:
+                    if os.path.isfile(png):            # cuon khac vua tai xong
+                        with open(png, "rb") as f:
+                            thumb = f.read()
+                    else:
+                        try:
+                            thumb = filament_ftp.fetch_thumb_for(IP, CODE, fpath)
+                        except Exception as e:
+                            print("[thumb] loi:", e)
+                        if thumb:
+                            try:
+                                os.makedirs(CACHE_DIR, exist_ok=True)
+                                with open(png, "wb") as f:
+                                    f.write(thumb)
+                            except OSError:
+                                pass
+            if thumb:
+                self._send(200, thumb, "image/png")
+            else:
+                self._send(404, "no thumb", "text/plain")
         elif path == "/a1.jpg":
             if A1_IMG:
                 self._send(200, A1_IMG, "image/jpeg")
@@ -879,6 +1047,8 @@ class H(BaseHTTPRequestHandler):
             self._send(200, PAGE, "text/html; charset=utf-8")
         elif path == "/info":
             self._send(200, INFO_PAGE, "text/html; charset=utf-8")
+        elif path == "/files":
+            self._send(200, FILES_PAGE, "text/html; charset=utf-8")
         elif path == "/healthz":
             self._send(200, "ok", "text/plain")
         else:
@@ -898,6 +1068,19 @@ class H(BaseHTTPRequestHandler):
             ok, msg = cmd_print("resume")
         elif self.path == "/api/cmd/stop":
             ok, msg = cmd_print("stop")
+        elif self.path == "/api/print":
+            body = self._read_json()
+            name = (body.get("name") or "").strip()
+            fpath = (body.get("path") or "").strip()
+            if not name:
+                self._send(400, json.dumps({"ok": False, "msg": "thieu ten file"}), "application/json")
+                return
+            if is_busy():
+                self._send(409, json.dumps({"ok": False, "msg": "Máy đang bận (đang in) — không thể in file mới"}), "application/json; charset=utf-8")
+                return
+            ok, msg = cmd_project_file(name, fpath)
+            self._send(200, json.dumps({"ok": ok, "msg": msg}), "application/json; charset=utf-8")
+            return
         elif self.path == "/api/filament":
             body = self._read_json()
             tag = (body.get("tag_uid") or "").strip()
