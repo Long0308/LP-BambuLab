@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """One-shot: connect MQTT, xin pushall, in 1 snapshot roi thoat. Xac nhan credential."""
-import sys, os, ssl, json, time, threading
+import sys, ssl, json, threading
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")
@@ -10,9 +10,9 @@ except Exception:
 
 import paho.mqtt.client as mqtt
 
-p = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".mcp.json")
-env = json.load(open(p, encoding="utf-8"))["mcpServers"]["bambu-printer"]["env"]
-IP, SERIAL, CODE = env["PRINTER_HOST"], env["BAMBU_SERIAL"], env["BAMBU_TOKEN"]
+import printer_config
+
+IP, SERIAL, CODE = printer_config.load([])
 REPORT = f"device/{SERIAL}/report"
 REQUEST = f"device/{SERIAL}/request"
 

@@ -16,7 +16,9 @@ trí nhớ hay từ nhánh `master` trên GitHub (xem [NOTICE](NOTICE) — mục
 | `BambuLab-A1-Form-Mau-ThongSo.html` | Form mẫu điền thông số. |
 | `analyze_print.py` | Phân tích file in. |
 | `bambu_status.py` | Đọc trạng thái máy qua MQTT LAN (cổng 8883). |
-| `bambu_connect.py` | Sinh `.mcp.json` từ IP / Serial / Access Code. |
+| `bambu_connect.py` | Sinh `printer.local.json` từ IP / Serial / Access Code. |
+| `bambu_web.py` | Web dashboard theo dõi + bảng điều khiển qua LAN (bạn bấm, không phải AI). |
+| `printer_config.py` | Đọc/ghi `printer.local.json` dùng chung cho các script. |
 | `boxson-PLAMatte-Decor-*.json` | Preset mẫu (process + filament) — import được. |
 | `*.cpp` | Mã nguồn Bambu Studio, dùng làm ground truth. AGPL-3.0 — xem [NOTICE](NOTICE). |
 
@@ -25,11 +27,25 @@ trí nhớ hay từ nhánh `master` trên GitHub (xem [NOTICE](NOTICE) — mục
 Trên máy in bật **LAN Only Mode** + **Developer Mode**, lấy IP / Serial / Access Code, rồi:
 
 ```bash
-python bambu_connect.py <IP> <SERIAL> <ACCESS_CODE>   # sinh .mcp.json
+python bambu_connect.py <IP> <SERIAL> <ACCESS_CODE>   # sinh printer.local.json
 python bambu_status.py                                # đọc trạng thái
+python bambu_web.py 8787                              # dashboard: http://<IP-PC>:8787
 ```
 
-`.mcp.json` **không được commit** (nó chứa access code). Khuôn mẫu nằm ở `.mcp.example.json`.
+`printer.local.json` **không được commit** (nó chứa access code). Khuôn mẫu ở `printer.local.example.json`.
+
+## Bảo mật
+
+**Không bao giờ đặt cấu hình máy in vào `.mcp.json`.** Claude Code tự động nạp
+project-scoped MCP server từ `.mcp.json` ở thư mục gốc. Nếu cấu hình nằm ở đó,
+AI sẽ được trao toàn quyền điều khiển máy in — `start_print_job`, `cancel_print`,
+`set_temperature`, `delete_printer_file`, `upload_gcode`, `set_ams_drying`…
+
+Nguyên tắc của dự án: **mọi lệnh điều khiển do người dùng bấm trên web dashboard;
+AI chỉ đọc và phân tích.** Hai lớp bảo vệ đang bật:
+
+1. Cấu hình nằm ở `printer.local.json` (không phải `.mcp.json`), và `.mcp.json` bị gitignore.
+2. `.claude/settings.json` đặt `"disabledMcpjsonServers": ["bambu-printer"]`.
 
 ## Ba cái bẫy đã tốn thời gian để tìm ra
 

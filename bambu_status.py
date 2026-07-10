@@ -6,7 +6,7 @@ Khong phu thuoc OrcaSlicer/Bambu Studio dang mo — doc thang tu may.
 
 Dung:
   python bambu_status.py <IP> <SERIAL> <ACCESS_CODE>
-  (hoac keo-tha khong tham so -> doc tu .mcp.json cung thu muc)
+  (hoac keo-tha khong tham so -> doc tu printer.local.json cung thu muc)
 
 Yeu cau tren MAY: bat "LAN Only Mode" + "Developer Mode", lay Access Code + Serial + IP.
 Cai lib (1 lan): python -m pip install --user paho-mqtt
@@ -25,26 +25,9 @@ except ImportError:
     sys.exit(1)
 
 
-def load_cfg():
-    """Doc IP/serial/code tu tham so, hoac tu .mcp.json."""
-    if len(sys.argv) >= 4:
-        return sys.argv[1], sys.argv[2], sys.argv[3]
-    p = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".mcp.json")
-    if os.path.isfile(p):
-        try:
-            env = json.load(open(p, encoding="utf-8"))["mcpServers"]["bambu-printer"]["env"]
-            ip, sn, tok = env.get("PRINTER_HOST"), env.get("BAMBU_SERIAL"), env.get("BAMBU_TOKEN")
-            if ip and "REPLACE" not in str(ip):
-                return ip, sn, tok
-        except Exception:
-            pass
-    print("Chua co thong tin may. Cach dung:")
-    print("  python bambu_status.py <IP> <SERIAL> <ACCESS_CODE>")
-    print("  hoac dien IP/serial/code that vao .mcp.json roi chay lai.")
-    sys.exit(1)
+import printer_config
 
-
-IP, SERIAL, CODE = load_cfg()
+IP, SERIAL, CODE = printer_config.load()
 REPORT = f"device/{SERIAL}/report"
 REQUEST = f"device/{SERIAL}/request"
 state = {"data": None, "ts": 0, "connected": False}

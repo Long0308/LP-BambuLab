@@ -1,5 +1,13 @@
-# Cấu hình máy in THẬT — chứa PRINTER_HOST / BAMBU_SERIAL / BAMBU_TOKEN (LAN access code).
-# Dùng .mcp.example.json làm khuôn; chạy `python bambu_connect.py` để sinh file này.
+# Cấu hình máy in THẬT — chứa host / serial / access_code (LAN access code).
+# Dùng printer.local.example.json làm khuôn; chạy `python bambu_connect.py` để sinh file này.
+printer.local.json
+
+# Secret dạng .env (cùng mức bảo vệ: plaintext, chỉ tránh commit nhầm).
+.env
+
+# KHÔNG BAO GIỜ tạo lại file này: Claude Code tự nạp project-scoped MCP server từ .mcp.json,
+# tức là trao quyền điều khiển máy in (in / huỷ / chỉnh nhiệt / xoá file) cho AI.
+# Mọi điều khiển phải do người dùng bấm trên web dashboard. Xem README mục "Bảo mật".
 .mcp.json
 
 # Local tooling

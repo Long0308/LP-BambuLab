@@ -1,63 +1,55 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-bambu_connect.py - Tro ly ket noi may Bambu Lab qua MCP (LAN mode).
+bambu_connect.py - Tro ly ket noi may Bambu Lab qua LAN.
 
 Lam 3 viec:
   1) Kiem tra may A1 co tiep can duoc tren mang LAN khong (port MQTTS 8883 + FTPS 990).
-  2) Ghi cau hinh vao .mcp.json de Claude/Cursor nap server bambu-printer-mcp.
+  2) Ghi cau hinh vao printer.local.json cho cac script cuc bo (bambu_web / bambu_status).
   3) In huong dan bat Developer Mode / LAN Only va lay Access Code.
+
+BAO MAT: file cau hinh CO Y KHONG dat ten `.mcp.json`. Claude Code tu dong nap
+project-scoped MCP server tu `.mcp.json`, se trao quyen dieu khien may in cho AI
+(in / huy / chinh nhiet / xoa file). Moi dieu khien phai do NGUOI DUNG bam tren
+web dashboard (bambu_web.py). Xem README muc "Bao mat".
 
 Dung:
   python bambu_connect.py                         -> hoi tung thong tin
   python bambu_connect.py 192.168.1.50 01P00A.. CODE
 Chi dung thu vien chuan - khong can cai them.
 """
-import sys, os, json, socket
+import sys, socket
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")
 except Exception:
     pass
 
-MCP_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".mcp.json")
+import printer_config
+
 PORTS = [(8883, "MQTTS (lenh in / trang thai)"), (990, "FTPS (upload file)")]
 
-def test_port(ip, port, timeout=3.0):
+
+def test_port(ip: str, port: int, timeout: float = 3.0) -> bool:
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.settimeout(timeout)
     try:
         s.connect((ip, port))
         return True
-    except Exception:
+    except OSError:
         return False
     finally:
         s.close()
 
-def ask(label, default=""):
-    v = input(f"  {label}{(' ['+default+']') if default else ''}: ").strip()
+
+def ask(label: str, default: str = "") -> str:
+    v = input(f"  {label}{(' [' + default + ']') if default else ''}: ").strip()
     return v or default
 
-def write_mcp(ip, serial, code):
-    cfg = {
-        "mcpServers": {
-            "bambu-printer": {
-                "command": "npx",
-                "args": ["-y", "@rowbotik/bambu-printer-mcp"],
-                "env": {
-                    "PRINTER_HOST": ip,
-                    "BAMBU_SERIAL": serial,
-                    "BAMBU_TOKEN": code,
-                },
-            }
-        }
-    }
-    json.dump(cfg, open(MCP_PATH, "w", encoding="utf-8"), indent=2)
-    return MCP_PATH
 
-def main():
+def main() -> None:
     print("=" * 58)
-    print(" KET NOI BAMBU LAB A1 QUA MCP (LAN mode)")
+    print(" KET NOI BAMBU LAB A1 QUA LAN")
     print("=" * 58)
     args = sys.argv[1:]
     if len(args) >= 1:
@@ -71,7 +63,8 @@ def main():
         code = ask("Access Code (LAN, 8 ky tu)")
 
     if not ip:
-        print("Thieu IP. Dung lai."); return
+        print("Thieu IP. Dung lai.")
+        return
 
     print("\n[1] Kiem tra ket noi mang toi", ip, "...")
     ok_all = True
@@ -84,18 +77,20 @@ def main():
         print("       va 'Developer Mode' tren may; tat firewall chan port.")
 
     if serial and code:
-        print("\n[2] Ghi cau hinh MCP ...")
-        p = write_mcp(ip, serial, code)
-        print("    Da ghi:", p)
+        print("\n[2] Ghi cau hinh cuc bo ...")
+        path = printer_config.save(ip, serial, code)
+        print("    Da ghi:", path)
+        print("    (File nay bi gitignore — KHONG day len GitHub vi chua access code.)")
     else:
-        print("\n[2] Chua du Serial/Access Code -> bo qua ghi .mcp.json.")
-        print("    Dien tay vao .mcp.json (PRINTER_HOST / BAMBU_SERIAL / BAMBU_TOKEN).")
+        print(f"\n[2] Chua du Serial/Access Code -> bo qua ghi {printer_config.CONFIG_NAME}.")
+        print(f"    Chep printer.local.example.json -> {printer_config.CONFIG_NAME} roi dien tay.")
 
-    print("\n[3] Buoc cuoi de Claude nap server:")
-    print("    - Cai Node.js (de chay 'npx') neu chua co: https://nodejs.org")
-    print("    - Mo lai Claude/Cursor -> chap nhan server 'bambu-printer'.")
-    print("    - Khi nap xong se co cac tool: mcp__bambu-printer__* (get_status, print_3mf, ...).")
+    print("\n[3] Buoc cuoi:")
+    print("    - Chay dashboard:  python bambu_web.py 8787")
+    print("    - Dien thoai/PC cung LAN mo:  http://<IP-PC>:8787")
+    print("    - Moi lenh in/dung do BAN bam tren web. AI khong co quyen ra lenh.")
     print("=" * 58)
+
 
 if __name__ == "__main__":
     main()

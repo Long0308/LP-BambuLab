@@ -12,11 +12,11 @@ Tinh nang:
     hoac dang IN bong mat ket noi) -> banner do + tieng beep + thong bao trinh duyet.
 
 Dung:
-  python bambu_web.py                 -> doc IP/serial/code tu .mcp.json, cong 8787
+  python bambu_web.py                 -> doc IP/serial/code tu printer.local.json, cong 8787
   python bambu_web.py 8080
 Yeu cau: pip install --user paho-mqtt ; may bat LAN Only + (nen) Developer Mode.
 """
-import sys, os, ssl, json, time, threading
+import sys, ssl, json, time, threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 try:
@@ -26,18 +26,17 @@ except Exception:
 
 import paho.mqtt.client as mqtt
 
-HERE = os.path.dirname(os.path.abspath(__file__))
+import printer_config
 
 
 def load_cfg(argv):
+    """Tra ve (port, host, serial, access_code). Cong truyen o tham so dau tien."""
     port = 8787
     rest = argv[:]
     if rest and rest[0].isdigit():
         port = int(rest.pop(0))
-    if len(rest) >= 3:
-        return port, rest[0], rest[1], rest[2]
-    env = json.load(open(os.path.join(HERE, ".mcp.json"), encoding="utf-8"))["mcpServers"]["bambu-printer"]["env"]
-    return port, env["PRINTER_HOST"], env["BAMBU_SERIAL"], env["BAMBU_TOKEN"]
+    host, serial, code = printer_config.load(rest)
+    return port, host, serial, code
 
 
 PORT, IP, SERIAL, CODE = load_cfg(sys.argv[1:])
