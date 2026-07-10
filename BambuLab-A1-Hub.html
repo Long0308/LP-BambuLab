@@ -2019,7 +2019,28 @@ function countIslands(world,zmin){
   }
   return n;
 }
-function printerLimits(ps){ return null; }
+function printerLimits(ps){
+  const f=v=>Array.isArray(v)?v[0]:v;
+  const num=k=>parseFloat(f(ps[k]));
+  const nozzle=num('nozzle_diameter')||0.4;
+  const maxvol=num('filament_max_volumetric_speed')||0;
+  const lh=num('layer_height')||0.2;
+  const W={};
+  for(const k of ['inner_wall','sparse_infill','internal_solid_infill','outer_wall','top_surface'])
+    W[k]=num(k+'_line_width')||nozzle*1.125;
+  const vmax={};
+  for(const k in W)vmax[k]=maxvol?maxvol/(lh*W[k]):Infinity;
+  /* Máy: min/max_layer_height. Quy tắc thực dụng: 25–75% đường kính nozzle (BigRep).
+     Lấy GIAO của hai khoảng. A1 0.4: máy [0.08,0.28] ∩ quy tắc [0.10,0.30] = [0.10,0.28]. */
+  const machMin=num('min_layer_height')||0.08, machMax=num('max_layer_height')||0.28;
+  return {
+    nozzle, maxvol, layerHeight:lh, width:W, vmax,
+    layerMin:Math.max(machMin, nozzle*0.25),
+    layerMax:Math.min(machMax, nozzle*0.75),
+    smallNozzle:nozzle<0.3,
+    printerId:String(f(ps.printer_settings_id)||''),
+  };
+}
 function derive(cfg,L){ return null; }
 function checkInvariants(cfg,L,d,vlhWanted){ return []; }
 function optimize(F,L,mat,goal,ps){ return null; }
