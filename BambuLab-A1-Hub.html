@@ -505,10 +505,14 @@
         <h3><svg class="icn" style="color:var(--q)"><use href="#i-check"/></svg> Miễn phí — hub tự áp dụng</h3>
         <table>
           <tr><th>Đòn bẩy</th><th>Trả giá bằng</th></tr>
-          <tr><td><b>↑ tốc độ vùng KHUẤT</b> tới sát trần lưu lượng<br><span class="gd">inner wall · sparse infill · solid trong</span></td><td class="gd"><b>không gì</b> — không nhìn thấy, không chịu lực chính</td></tr>
+          <tr><td><b>↑ <code>internal_solid_infill_speed</code></b> 250 → 260<br><span class="gd">vùng DUY NHẤT stock nằm dưới trần (261.9)</span></td><td class="gd"><b>không gì</b> — được <b>+4%</b> phần đó</td></tr>
           <tr><td><b>Tắt Prime tower</b> khi in 1 màu</td><td class="gd">không gì</td></tr>
           <tr><td><b>Bỏ support</b> khi overhang thật ≤ 2%</td><td class="gd">không gì</td></tr>
         </table>
+        <div class="callout c-amber" style="margin-top:10px"><svg class="icn"><use href="#i-alert"/></svg><div>
+          <b>ĐỪNG nâng <code>inner_wall_speed</code> / <code>sparse_infill_speed</code>.</b> Profile stock <code>0.20mm Standard @BBL A1</code> đã đặt <b>300</b> và <b>270</b> — <b>cao hơn trần</b> (244.4 với PLA Matte). Bambu cố tình đặt vượt trần rồi để bộ giới hạn lưu lượng ghì lại đúng <code>v_max</code>. Hai vùng đó <b>đã chạy hết tốc</b> rồi.
+          <br>Đặt <b>240</b> (dưới trần) sẽ <b>chậm hơn stock 1.8%</b> — tưởng tăng tốc, hoá ra hãm lại. Quy tắc đúng: <b>đừng set chúng</b>, để kế thừa stock.
+        </div></div>
       </div>
       <div class="card bar-s">
         <h3><svg class="icn" style="color:var(--s)"><use href="#i-alert"/></svg> Đánh đổi — phải tự quyết</h3>

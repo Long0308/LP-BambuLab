@@ -1054,11 +1054,16 @@ git commit -m "feat: optimize() tầng 4 - support 3 khoảng rạch ròi, bridg
 Đổi `test.skip('Tầng 2 ghi đè tầng 5'...)` về `test(...)`. Thêm:
 
 ```js
-test('Tầng 5: đẩy tốc độ vùng khuất tới sát trần, KHÔNG đụng outer wall', () => {
+/* Đo 2026-07-10: stock `0.20mm Standard @BBL A1` đặt inner_wall_speed=300 và
+   sparse_infill_speed=270 — CAO HƠN trần (244.4). Bộ giới hạn lưu lượng đã ghì
+   chúng về đúng v_max. Set 240 (dưới trần) là làm CHẬM đi 1.8%.
+   Chỉ internal_solid_infill_speed có dư địa thật (stock 250 < trần 261.9). */
+test('Tầng 5: KHÔNG set inner_wall/sparse_infill (stock đã trên trần)', () => {
   const F = geoFeatures(box(100,100,50));
   const P = optimize(F, printerLimits(PS), 'PLA Matte', 'Chi tiết trang trí', PS);
-  assert.ok(P.deltaProcess.inner_wall_speed >= 235 && P.deltaProcess.inner_wall_speed <= 244);
-  assert.ok(P.deltaProcess.internal_solid_infill_speed <= 262);
+  assert.equal(P.deltaProcess.inner_wall_speed, undefined, 'stock 300 > trần 244 → để kế thừa');
+  assert.equal(P.deltaProcess.sparse_infill_speed, undefined, 'stock 270 > trần 244 → để kế thừa');
+  assert.equal(P.deltaProcess.internal_solid_infill_speed, 260, 'stock 250 < trần 262 → nâng được');
   assert.equal(P.deltaProcess.outer_wall_speed, undefined, 'cấm chạm outer wall');
   assert.equal(P.deltaProcess.top_surface_speed, 150, 'top surface do tầng 3 đặt, tầng 5 không được nâng');
 });

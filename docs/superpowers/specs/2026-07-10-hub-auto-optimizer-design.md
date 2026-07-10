@@ -205,7 +205,12 @@ Nguồn: [UltiMaker — infill density](https://ultimaker.com/learn/3d-printing-
 
 ### Tầng 5 — Thời gian, chỉ đòn bẩy không hại chất lượng
 
-- `inner_wall_speed`, `sparse_infill_speed`, `internal_solid_infill_speed` → sát trần `v_max = maxvol / (layer_height × line_width)`, chừa ~2% biên. **Đây là đòn duy nhất thật sự miễn phí** — vùng khuất, không đụng bề mặt, không đụng độ bền.
+> **Đính chính (đo 2026-07-10).** Bản trước của spec bảo *"đẩy tốc độ vùng khuất lên sát trần — đòn duy nhất miễn phí"*. **Sai.** Profile stock `0.20mm Standard @BBL A1` đã đặt `inner_wall_speed = 300` và `sparse_infill_speed = 270`, **cao hơn trần** (244.4 với PLA Matte). Bambu cố tình đặt vượt trần rồi để bộ giới hạn lưu lượng ghì lại đúng `v_max`. Nghĩa là hai vùng đó **đã chạy ở tốc độ tối đa rồi** — không có gì để tăng. Preset LP đặt `240` (dưới trần) nên **chạy chậm hơn stock 1.8%**.
+
+Quy tắc đúng: **đừng bao giờ đặt tốc độ vùng khuất THẤP HƠN trần.** Cách an toàn nhất là **không set chúng** — để kế thừa stock, bộ giới hạn tự lo ở mọi layer height.
+
+- `internal_solid_infill_speed`: đây là vùng **duy nhất** stock nằm **dưới** trần (`250` so với `261.9`) ⇒ nâng lên `260` được **+4% thật**.
+- `inner_wall_speed`, `sparse_infill_speed`: **không set**. Stock đã ở trên trần.
 - Overhang thật `≤ 2%` → `enable_support = 0`.
 - `enable_prime_tower = 0` khi in một màu.
 - **Không được** đổi `sparse_infill_pattern` nếu tầng 2 đã khoá `gyroid`.
@@ -296,7 +301,8 @@ Xếp theo "trả giá bằng gì". Chỉ nhóm đầu được tầng 5 dùng t
 
 | Đòn bẩy | Cắt được | Trả giá bằng |
 |---|---|---|
-| ↑ tốc độ **vùng khuất** tới trần lưu lượng | ~5–15% phần đó | **không gì** — vùng không nhìn thấy, không chịu lực chính |
+| `internal_solid_infill_speed` 250 → 260 (stock dưới trần 261.9) | **+4%** phần đó | **không gì** |
+| ~~↑ `inner_wall_speed` / `sparse_infill_speed` tới trần~~ | **0** — stock đã ở trên trần (300/270 so với 244.4) | đặt dưới trần thì **chậm đi** |
 | Tắt prime tower (in 1 màu) | thời gian + nhựa purge | không gì |
 | Bỏ support khi overhang thật ≤ 2% | support time + nhựa | không gì |
 | ↓ `sparse_infill_density` | nhiều (time ∝ thể tích × mật độ) | **độ bền**, và **võng mặt trên** nếu < 12% |

@@ -13,11 +13,8 @@
     "initial_layer_speed": [
         "25"
     ],
-    "inner_wall_speed": [
-        "240"
-    ],
     "internal_solid_infill_speed": [
-        "255"
+        "260"
     ],
     "ironing_type": "no ironing",
     "layer_height": "0.2",
@@ -34,9 +31,6 @@
     "seam_slope_type": "all",
     "sparse_infill_density": "10%",
     "sparse_infill_pattern": "adaptivecubic",
-    "sparse_infill_speed": [
-        "240"
-    ],
     "support_interface_top_layers": "2",
     "support_on_build_plate_only": "1",
     "support_style": "tree_hybrid",
