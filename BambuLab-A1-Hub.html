@@ -191,6 +191,7 @@
   <button role="tab" aria-selected="false" class="tab" data-tab="quy-trinh"><svg class="icn"><use href="#i-check"/></svg> Quy trình in</button>
   <button role="tab" aria-selected="false" class="tab" data-tab="tu-van"><svg class="icn"><use href="#i-bulb"/></svg> Tư vấn</button>
   <button role="tab" aria-selected="false" class="tab" data-tab="cai-thien"><svg class="icn"><use href="#i-sliders"/></svg> Cải thiện (Orca)</button>
+  <button role="tab" aria-selected="false" class="tab" data-tab="ky-thuat"><svg class="icn"><use href="#i-grid"/></svg> Kỹ thuật (ETL · Dataflow)</button>
   <button role="tab" aria-selected="false" class="tab" data-tab="tai-nguyen"><svg class="icn"><use href="#i-link"/></svg> Tài nguyên</button>
 </div></nav>
 
@@ -498,6 +499,88 @@
       </div>
     </div>
 
+    <div class="sectitle">⚖️ Đòn bẩy giảm THỜI GIAN — cái nào miễn phí, cái nào phải trả giá</div>
+    <div class="grid g2">
+      <div class="card bar-q">
+        <h3><svg class="icn" style="color:var(--q)"><use href="#i-check"/></svg> Miễn phí — hub tự áp dụng</h3>
+        <table>
+          <tr><th>Đòn bẩy</th><th>Trả giá bằng</th></tr>
+          <tr><td><b>↑ tốc độ vùng KHUẤT</b> tới sát trần lưu lượng<br><span class="gd">inner wall · sparse infill · solid trong</span></td><td class="gd"><b>không gì</b> — không nhìn thấy, không chịu lực chính</td></tr>
+          <tr><td><b>Tắt Prime tower</b> khi in 1 màu</td><td class="gd">không gì</td></tr>
+          <tr><td><b>Bỏ support</b> khi overhang thật ≤ 2%</td><td class="gd">không gì</td></tr>
+        </table>
+      </div>
+      <div class="card bar-s">
+        <h3><svg class="icn" style="color:var(--s)"><use href="#i-alert"/></svg> Đánh đổi — phải tự quyết</h3>
+        <table>
+          <tr><th>Đòn bẩy</th><th>Trả giá bằng</th></tr>
+          <tr><td>↓ <code>sparse_infill_density</code></td><td class="gd">độ bền · <b>võng mặt trên</b> nếu &lt; 12%</td></tr>
+          <tr><td>↑ <code>layer_height</code></td><td class="gd">liên kết liên lớp: <b>52 → 48 MPa</b></td></tr>
+          <tr><td>↓ <code>wall_loops</code></td><td class="gd"><b>mất bền nhiều nhất</b> — thành là đường truyền lực</td></tr>
+          <tr><td>↓ <code>outer_wall_speed</code></td><td class="gd" style="color:var(--red)"><b>ÂM</b> — làm chậm đi. Đo thật: 10h37m → 31h54m</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="sectitle">🔗 Tám cặp tăng–giảm hợp lý (không thông số nào đứng một mình)</div>
+    <div class="card bar-sp">
+      <table>
+        <tr><th>Tăng</th><th>Giảm</th><th>Được</th><th>Mất</th></tr>
+        <tr><td><code>wall_loops</code></td><td><code>sparse_infill_density</code></td><td class="gd">bền hơn <b>cùng khối lượng</b></td><td class="gd">—</td></tr>
+        <tr><td><code>top_shell_layers</code></td><td><code>sparse_infill_density</code></td><td class="gd">hết võng mặt trên mà không nhồi infill toàn thân</td><td class="gd">lớp đặc in chậm</td></tr>
+        <tr><td><code>layer_height</code></td><td><code>top_shell_layers</code></td><td class="gd">giữ <code>top_shell_thickness</code> (mm) với ít lớp hơn</td><td class="gd">liên kết liên lớp yếu</td></tr>
+        <tr><td><code>inner_wall_speed</code>, <code>sparse_infill_speed</code></td><td><code>layer_height</code></td><td class="gd">Z mịn hơn, <b>thời gian vùng khuất không đổi</b></td><td class="gd">không áp được cho tường ngoài</td></tr>
+        <tr><td><code>overhang_fan_speed</code></td><td><code>fan_min_speed</code></td><td class="gd">mát đúng chỗ đua, không thổi lạnh toàn thân</td><td class="gd">—</td></tr>
+        <tr><td><code>textured_plate_temp</code></td><td><code>brim_width</code></td><td class="gd">bám bàn tương đương, đỡ phải cắt brim</td><td class="gd">bàn nóng dễ phồng chân</td></tr>
+        <tr><td><code>nozzle_temperature</code> +5–10°C</td><td class="gd">—</td><td class="gd">thêm dư địa lưu lượng</td><td class="gd">stringing · rủ overhang · đổi màu</td></tr>
+        <tr><td><code>sparse_infill_pattern</code> → gyroid/cubic</td><td><code>sparse_infill_density</code></td><td class="gd">pattern hiệu quả hơn cho phép hạ mật độ</td><td class="gd">gyroid in lâu hơn grid</td></tr>
+      </table>
+      <div class="gd" style="margin-top:10px">
+        Cặp <b>nozzle_temperature</b> là <b>giải pháp cuối</b>, không phải nước đi đầu — wiki Bambu: <i>"Temperature should never be your first adjustment."</i><br>
+        Hai ràng buộc <b>bắt buộc đi cùng</b>, không phải lựa chọn: <code>elefant_foot_compensation</code> &gt; 0 ⇒ <code>brim_object_gap</code> = 0 (nếu không brim tách khỏi vật) · <code>seam_slope_type = all</code> thay được <code>seam_position = random</code> (giấu seam mà không làm bề mặt lấm tấm).
+      </div>
+    </div>
+
+    <div class="sectitle">🕳️ Bảy chỗ engine ÂM THẦM sửa lại thiết lập của bạn</div>
+    <div class="card bar-fl">
+      <div class="gd" style="margin-bottom:10px">Các thông số không độc lập — chúng là một đồ thị phụ thuộc. Đặt sai một chỗ, Bambu tự sửa, <b>không báo gì</b>.</div>
+      <table>
+        <tr><th>Ràng buộc</th><th>Vỡ thì engine làm gì</th></tr>
+        <tr><td><code>layer × line_width × speed ≤ max_volumetric_speed</code></td><td class="gd"><b>Tự hạ tốc độ.</b> Số bạn nhập vô nghĩa.</td></tr>
+        <tr><td><code>top_shell_layers × layer_height ≥ top_shell_thickness</code></td><td class="gd"><b>Tự tăng số lớp đặc.</b> Khoản tiết kiệm không xảy ra.</td></tr>
+        <tr><td><code>layer</code> trong <code>[min_layer_height, max_layer_height]</code></td><td class="gd">Kẹp về biên.</td></tr>
+        <tr><td><code>filament_scarf_seam_type == seam_slope_type</code></td><td class="gd"><b>Scarf tắt âm thầm.</b> Ô filament không có checkbox override nên luôn thắng.</td></tr>
+        <tr><td>Variable layer height ⇒ support không organic, prime tower tắt</td><td class="gd">Từ chối VLH.</td></tr>
+        <tr><td><code>elefant_foot_compensation &gt; 0</code> ⇒ <code>brim_object_gap = 0</code></td><td class="gd">Brim tách rời khỏi vật.</td></tr>
+        <tr><td>Muốn dùng <code>filament_*</code> overhang ⇒ <code>override_process_overhang_speed = 1</code></td><td class="gd">Giá trị filament <b>bị bỏ qua</b>, process thắng.</td></tr>
+      </table>
+    </div>
+
+    <div class="sectitle">📐 Layer height: bền, nhanh, hay đẹp — chọn hai</div>
+    <div class="grid g2">
+      <div class="card bar-q">
+        <h3><svg class="icn" style="color:var(--q)"><use href="#i-cube"/></svg> Số đo (PLA, nozzle 0.4)</h3>
+        <table>
+          <tr><th>Layer</th><th>Tensile</th><th>Thời gian</th><th>Dùng cho</th></tr>
+          <tr><td class="val">0.10</td><td>56 MPa</td><td>80%</td><td class="gd">trưng bày, chi tiết nhỏ</td></tr>
+          <tr><td class="val">0.20</td><td>52 MPa</td><td>50%</td><td class="gd">cân bằng — mặc định</td></tr>
+          <tr><td class="val">0.30</td><td>48 MPa</td><td>35%</td><td class="gd">nháp, fit test</td></tr>
+        </table>
+        <div class="gd" style="margin-top:8px">Quy tắc: layer nằm trong <b>25–75% đường kính nozzle</b>. Nozzle 0.4 ⇒ 0.10–0.30mm. Giao với giới hạn máy A1 (0.08–0.28) ⇒ dùng <b>0.10–0.28</b>.</div>
+      </div>
+      <div class="card bar-su">
+        <h3><svg class="icn" style="color:var(--su)"><use href="#i-alert"/></svg> Hai câu người ta hay nói SAI</h3>
+        <div class="gd" style="margin-bottom:10px">
+          <b>"Variable layer height làm in nhanh hơn."</b> Sai với Adaptive mặc định. Đo thật trên vật cao 150mm: Adaptive cho <b>1155 lớp → 14h41m</b>, phẳng 0.20 chỉ <b>750 lớp → 10h44m</b>. <b>Chậm hơn 37%.</b>
+          Vì nó hạ layer ở cả vùng gần phẳng, nơi hạ layer <i>không cứu được gì</i>: ở dốc 13.5°, ngay tại sàn 0.08mm bậc thang vẫn còn <b>0.33mm</b>. Chỗ đó phải chữa bằng <b>ironing + top shell</b>.
+        </div>
+        <div class="gd">
+          <b>"Thời gian tường tỉ lệ với số lớp."</b> Chỉ đúng <b>khi giữ nguyên tốc độ</b>. Công thức Bambu: <code>lưu lượng = layer × line_width × speed</code>. Hạ layer một nửa ⇒ được phép tăng gấp đôi tốc độ mà vẫn dưới trần ⇒ thời gian không đổi.
+          Thực tế lớp mỏng vẫn lâu vì <b>tường ngoài bị khoá tốc độ để giữ bề mặt</b>. Nên: <b>tường ngoài</b> ∝ số lớp · <b>tường trong + infill</b> do lưu lượng quyết định.
+        </div>
+      </div>
+    </div>
+
     <div class="sectitle">Công thức SMOOTH theo từng vùng bề mặt</div>
     <div class="grid g2">
       <div class="card bar-q">
@@ -605,6 +688,122 @@
   </section>
 
   <!-- ===== TÀI NGUYÊN ===== -->
+  <!-- ===== KỸ THUẬT (ETL · DATAFLOW) ===== -->
+  <section role="tabpanel" tabindex="0" class="panel" id="ky-thuat">
+    <h2 class="sec">Kỹ thuật — hub phân tích file thế nào</h2>
+    <div class="lead">Thả một <code>.3mf</code> vào tab <b>Phân tích</b> → hub đọc lưới tam giác và 571 key config, chạy qua đường ống dưới đây, rồi xuất ra cấu hình import được. Mọi quyết định đều truy vết về một <b>con số đo được</b> và một <b>nguồn</b>.</div>
+
+    <div class="sectitle">1. Đường ống ETL</div>
+    <div class="card bar-q">
+      <pre style="overflow-x:auto;font-size:12.5px;line-height:1.6;margin:0"><code>.3mf ──unzip──┬─→ 571 key config  (ps)
+              └─→ lưới tam giác  (world)
+                      │
+   ┌── EXTRACT ───────┴──────────────────────────────────┐
+   │  geoFeatures(world) → F    thuần hình học            │
+   │  printerLimits(ps)  → L    nozzle · trần lưu lượng   │
+   └──────────────────────┬──────────────────────────────┘
+                          │
+   ┌── TRANSFORM ─────────┴──────────────────────────────┐
+   │  Tầng 0  hiệu chuẩn   (chỉ phát hiện, không bịa K)  │
+   │  Tầng 1  first layer  ← khoá, không ai ghi đè       │
+   │  Tầng 2  warping      ← khoá, ghi đè được tầng 5    │
+   │  Tầng 3  bề mặt   · 3b độ bền                       │
+   │  Tầng 4  overhang · bridge · Variable layer height  │
+   │  Tầng 4b võng mặt trên                              │
+   │  Tầng 5  thời gian    (chỉ đòn bẩy miễn phí)        │
+   └──────────────────────┬──────────────────────────────┘
+                          │
+   ┌── DERIVE ────────────┴──────────────────────────────┐
+   │  flow_f      = layer × line_width_f × speed_f       │
+   │  v_max_f     = maxvol / (layer × line_width_f)      │
+   │  effTopLayers= max(top_shell_layers,                │
+   │                    ⌈top_shell_thickness / layer⌉)   │
+   │  stair(z)    = layer(z) / tan θ(z)                  │
+   └──────────────────────┬──────────────────────────────┘
+                          │
+   ┌── VALIDATE ──────────┴──────────────────────────────┐
+   │  7 bất biến. Vỡ cái nào → tầng sở hữu sửa lại       │
+   │  ↺ lặp tối đa 3 vòng tới điểm bất động              │
+   │  còn vỡ → đẩy vào conflicts[], KHÔNG xuất key đó    │
+   └──────────────────────┬──────────────────────────────┘
+                          │
+   ┌── LOAD ──────────────┴──────────────────────────────┐
+   │  bảng quyết định (key · giá trị · tầng · vì sao)    │
+   │  2 preset .json import được                         │
+   │  bảng Z-range cho Height range Modifier             │
+   └─────────────────────────────────────────────────────┘</code></pre>
+    </div>
+
+    <div class="sectitle">2. Vì sao không cần "nhìn ảnh" biên dạng</div>
+    <div class="grid g2">
+      <div class="card bar-sp">
+        <h3><svg class="icn" style="color:var(--sp)"><use href="#i-cube"/></svg> Mesh &gt; ảnh</h3>
+        <div class="gd">Ảnh render <b>được sinh ra từ</b> lưới tam giác. Nó là phép chiếu 2D làm <b>mất</b> chiều sâu, mặt khuất và góc thật. Hub đọc thẳng lưới ⇒ có <b>nhiều</b> thông tin hơn ảnh, không phải ít hơn.
+        <br><br>Cái từng thiếu không phải "mắt", mà là <b>thông tin vị trí bị vứt đi</b>: bản cũ rút toàn bộ mesh xuống 14 số vô hướng — biết vật có 0.32% overhang nhưng không biết nó nằm ở <code>Z 130–150mm</code>.</div>
+      </div>
+      <div class="card bar-su">
+        <h3><svg class="icn" style="color:var(--su)"><use href="#i-grid"/></svg> Đặc trưng có toạ độ</h3>
+        <table>
+          <tr><th>Tiêu chí</th><th>Đo gì</th></tr>
+          <tr><td>First layer</td><td class="gd">diện tích tiếp xúc tại <code>z=zmin</code>, số đảo rời</td></tr>
+          <tr><td>Warping</td><td class="gd">diện tích + đường chéo đế, tỉ lệ cao/mảnh</td></tr>
+          <tr><td>Bo cong</td><td class="gd">histogram <code>Z × góc dốc</code>; bậc = <code>layer/tan θ</code></td></tr>
+          <tr><td>Mặt phẳng</td><td class="gd">các cao độ có mặt phẳng trên, diện tích từng mảng</td></tr>
+        </table>
+        <div class="gd" style="margin-top:8px">Ảnh chỉ hơn ở việc đoán <b>ý đồ</b> ("lọ hoa" hay "giá đỡ chịu lực") — thứ đó hỏi thẳng qua combobox <b>Mục tiêu</b>, chính xác hơn đoán.</div>
+      </div>
+    </div>
+
+    <div class="sectitle">3. Ba dải góc — vì sao Bambu Adaptive làm in CHẬM đi</div>
+    <div class="card bar-s">
+      <div class="gd" style="margin-bottom:10px">Bậc thang ngang <code>= layer_height / tan θ</code>, với θ = góc mặt so với phương ngang. Sàn/trần layer của A1 nozzle 0.4 là <code>[0.08, 0.28]</code>.</div>
+      <table>
+        <tr><th>θ</th><th>Bậc @0.28</th><th>Bậc @0.08 (sàn)</th><th>Kết luận</th></tr>
+        <tr><td class="val">13.5°</td><td>1.17mm</td><td><b>0.33mm</b></td><td class="gd">hạ layer <b>vô ích</b> → ironing + top shell</td></tr>
+        <tr><td class="val">19°</td><td>0.81mm</td><td>0.23mm</td><td class="gd">vô ích</td></tr>
+        <tr><td class="val">33.7°</td><td>0.42mm</td><td>0.12mm</td><td class="gd">hạ layer <b>có tác dụng</b></td></tr>
+        <tr><td class="val">45°</td><td>0.28mm</td><td>0.08mm</td><td class="gd">có tác dụng</td></tr>
+        <tr><td class="val">60°</td><td>0.16mm</td><td>0.05mm</td><td class="gd">gần đứng → <b>dày lên</b></td></tr>
+      </table>
+      <div class="gd" style="margin-top:10px">⇒ <code>θ &lt; 25°</code> gần phẳng · <code>25° ≤ θ &lt; 50°</code> cong thật · <code>θ ≥ 50°</code> gần đứng.<br>
+      Bambu Adaptive hạ layer ở <b>cả</b> vùng gần phẳng — nơi layer không cứu được gì. Đó là lý do nó cho <b>1155 lớp → 14h41m</b> trong khi phẳng 0.20 chỉ <b>750 lớp → 10h44m</b>.</div>
+    </div>
+
+    <div class="sectitle">4. Ground truth tra ở đâu (đừng đoán)</div>
+    <div class="card bar-ot">
+      <table>
+        <tr><th>Cần gì</th><th>Ở đâu</th></tr>
+        <tr><td>Số liệu preset thật</td><td class="gd"><code>C:\Program Files\Bambu Studio\resources\profiles\BBL\{process,filament,machine}\*.json</code> — đi theo chuỗi <code>inherits</code></td></tr>
+        <tr><td>Schema user preset</td><td class="gd"><code>%AppData%\BambuStudio\user\&lt;uid&gt;\{process,filament}\*.json</code></td></tr>
+        <tr><td>Mọi key + shape</td><td class="gd"><code>Metadata/project_settings.config</code> trong bất kỳ <code>.3mf</code> (571 key) — dùng làm shape-oracle</td></tr>
+        <tr><td>Enum · default · mode</td><td class="gd"><code>PrintConfig.cpp</code> (bản cài local, KHÔNG phải nhánh master trên GitHub)</td></tr>
+        <tr><td>Trang Setting Overrides</td><td class="gd"><code>Tab.cpp:4113</code> · scarf seam <code>Tab.cpp:4426</code></td></tr>
+        <tr><td>Chuỗi UI đã dịch</td><td class="gd"><code>resources\i18n\en\BambuStudio.mo</code></td></tr>
+      </table>
+      <div class="gd" style="margin-top:10px"><b>Bài học đắt:</b> nhánh <code>master</code> trên GitHub <b>≠</b> bản đang cài. Đã có lần tra theo master rồi kết luận sai. Luôn ưu tiên file trên máy.</div>
+    </div>
+
+    <div class="sectitle">5. Bốn cạm bẫy đã trả giá để biết</div>
+    <div class="grid g2">
+      <div class="card bar-fl">
+        <h3><svg class="icn" style="color:var(--pink)"><use href="#i-alert"/></svg> Scarf seam có hai công tắc</h3>
+        <div class="gd"><code>seam_slope_type</code> (Process) bật scarf, nhưng <code>filament_scarf_seam_type</code> (Filament) mặc định <code>none</code> và <b>không có checkbox override</b> ⇒ nó luôn đè Process. Scarf tắt mà không báo gì. Lòng chảo/lỗ là <i>hole</i> ⇒ phải đặt <code>all</code>, không phải <code>external</code>.</div>
+      </div>
+      <div class="card bar-fl">
+        <h3><svg class="icn" style="color:var(--pink)"><use href="#i-alert"/></svg> Preset "0.2 nozzle" đổi luôn máy in</h3>
+        <div class="gd">Chọn filament có đuôi <code>@BBL A1 0.2 nozzle</code> ⇒ Bambu đổi cả <code>printer_settings_id</code> lẫn process. <code>max_volumetric_speed</code> rơi <b>22 → 2</b>, line width <b>0.45 → 0.22</b>. Đo thật: lớp đầu tốn <b>78 phút</b>.</div>
+      </div>
+      <div class="card bar-fl">
+        <h3><svg class="icn" style="color:var(--pink)"><use href="#i-alert"/></svg> Bambu Studio 2.x không lưu kết quả slice</h3>
+        <div class="gd">Kiểm trên 16 file: client <code>1.10.x</code> có <code>&lt;plate&gt;</code> + <code>prediction</code> (3/3); client <code>2.x</code> chỉ có <code>&lt;header&gt;</code> (6/6). Trên 2.x, cách <b>duy nhất</b> để có Thời gian in là <code>File ▸ Export ▸ Export plate sliced file</code> → <code>.gcode.3mf</code>.</div>
+      </div>
+      <div class="card bar-fl">
+        <h3><svg class="icn" style="color:var(--pink)"><use href="#i-alert"/></svg> <code>(manual)</code> không sinh support nào</h3>
+        <div class="gd"><code>PrintConfig.cpp:5184</code>: <i>"If normal(manual) or tree(manual) is selected, only support enforcers are generated"</i>. Chưa sơn enforcer ⇒ Preview không có một cọng support nào. Đó là <b>đúng</b>, không phải lỗi.</div>
+      </div>
+    </div>
+  </section>
+
   <section role="tabpanel" tabindex="0" class="panel" id="tai-nguyen">
     <h2 class="sec">Tài nguyên (wiki · forum · MakerWorld · engine)</h2>
     <div class="grid g3" id="res-grid"></div>
