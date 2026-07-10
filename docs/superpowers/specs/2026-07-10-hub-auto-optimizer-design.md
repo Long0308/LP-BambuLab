@@ -152,12 +152,33 @@ Ba giá trị này **đo trên máy**, không suy ra được từ tam giác. Hu
 - Bo cong: `zSlope` → `vlhRanges[]` (mục 7). Kích hoạt khi `Σ area(25° ≤ θ < 50°) > 3 cm²` **hoặc** `Σ area(θ ≥ 50°) > 20 cm²` — vế sau là cơ hội **dày layer miễn phí** (vase côn loe có 449 cm² ở dải này).
 - Khi có `vlhRanges` → gỡ hai blocker: `support_style ≠ tree_organic` (đặt `tree_hybrid`), `enable_prime_tower = 0`.
 
-### Tầng 5 — Thời gian, chỉ đòn bẩy miễn phí
+### Tầng 3b — Độ bền (chỉ bật khi `goal` = chức năng / cơ khí)
 
-- `inner_wall_speed`, `sparse_infill_speed`, `internal_solid_infill_speed` → sát trần `v_max = maxvol / (layer_height × line_width)`, chừa ~2% biên.
+Nguồn: [UltiMaker — infill density](https://ultimaker.com/learn/3d-printing-infill-density-optimizing-strength-and-apeed/) và [BigRep — layer height](https://bigrep.com/posts/optimizing-layer-height-3d-printing/).
+
+- **Thành là đường truyền lực chính, infill chỉ là dự phòng.** *"Two extra perimeters often add more strength than raising infill from 20% → 30%."* ⇒ tăng `wall_loops` **trước**, đừng tăng `sparse_infill_density`.
+- `wall_loops = 3…4` · `sparse_infill_density` 20–30% (PLA) · `sparse_infill_pattern ∈ {gyroid, cubic}` · `infill_wall_overlap = 15%` (khuyến nghị 10–25%; dưới ngưỡng gây bong tách thành↔infill).
+- **`layer_height ≤ 0.25`.** Lớp dày làm yếu liên kết liên lớp.
+
+| `layer_height` | Tensile PLA (MPa) | Thời gian tương đối |
+|---|---|---|
+| 0.10 | 56 | 80% |
+| 0.20 | 52 | 50% |
+| 0.30 | 48 | 35% |
+
+- Sàn/trần layer thực dụng cho nozzle 0.4 là **25–75% đường kính** ⇒ `[0.10, 0.30]`. Giao với giới hạn máy `[0.08, 0.28]` ⇒ dùng **`[0.10, 0.28]`**; dưới 0.10 dễ mất ổn định đùn.
+
+### Tầng 4b — Võng mặt trên do infill quá thưa
+
+`topPlateaus` tổng > 15% diện tích **và** `sparse_infill_density < 12%` → mặt trên có nguy cơ **võng** (UltiMaker: *"Low percentages can cause visible surface imperfections, particularly on large flat surfaces where insufficient internal support allows the outer walls to sag"*). Xử lý: nâng `sparse_infill_density` lên 15% **hoặc** `top_shell_layers` lên 6. Ghi rõ đây là đánh đổi thời gian.
+
+### Tầng 5 — Thời gian, chỉ đòn bẩy không hại chất lượng
+
+- `inner_wall_speed`, `sparse_infill_speed`, `internal_solid_infill_speed` → sát trần `v_max = maxvol / (layer_height × line_width)`, chừa ~2% biên. **Đây là đòn duy nhất thật sự miễn phí** — vùng khuất, không đụng bề mặt, không đụng độ bền.
 - Overhang thật `≤ 2%` → `enable_support = 0`.
 - `enable_prime_tower = 0` khi in một màu.
 - **Không được** đổi `sparse_infill_pattern` nếu tầng 2 đã khoá `gyroid`.
+- **Không được** dày layer vượt `0.25` nếu tầng 3b đang bật.
 
 ## 7. Bảng Height range (VLH)
 
@@ -166,14 +187,19 @@ Ba giá trị này **đo trên máy**, không suy ra được từ tam giác. Hu
 Thuật toán, cho mỗi bin `Z`:
 
 ```
+LH_MAX = 0.25 nếu goal = chức năng/cơ khí,  ngược lại 0.28
+LH_MIN = 0.10                                (dưới mức này đùn mất ổn định)
+
 θ = thetaP10 của bin
-nếu θ ≥ 50°           → layer = max_layer_height          (0.28)   ← miễn phí
-nếu 25° ≤ θ < 50°     → layer = clamp(STEP_TARGET × tan θ, 0.08, 0.28)
-nếu θ < 25°           → layer = layer_height gốc           (không hạ)
-bin không có mặt nghiêng → layer = max_layer_height
+nếu θ ≥ 50°           → layer = LH_MAX          ← rẻ về BỀ MẶT, KHÔNG rẻ về ĐỘ BỀN
+nếu 25° ≤ θ < 50°     → layer = clamp(STEP_TARGET × tan θ, LH_MIN, LH_MAX)
+nếu θ < 25°           → layer = layer_height gốc   (không hạ — xem §5)
+bin không có mặt nghiêng → layer = LH_MAX
 ```
 
-Gộp các bin liền kề cùng `layer`. Kẹp trong `[min_layer_height, max_layer_height]` đọc từ machine profile.
+Gộp các bin liền kề cùng `layer`. Kẹp trong giao của `[min_layer_height, max_layer_height]` (machine profile) và `[LH_MIN, LH_MAX]`.
+
+> **Đính chính.** Bản đầu của spec này gọi việc dày layer ở thành đứng là *"miễn phí"*. **Sai.** Nó miễn phí về **bề mặt** (thành đứng không có bậc thang), nhưng lớp dày làm **yếu liên kết liên lớp**: PLA nozzle 0.4 rơi từ `52 MPa @0.20` xuống `48 MPa @0.30` (BigRep). Với vật trang trí thì không sao; với vật chịu lực thì phải kẹp `LH_MAX = 0.25`. Đòn **thật sự** miễn phí duy nhất là đẩy tốc độ **vùng khuất** lên sát trần lưu lượng.
 
 Đường đánh đổi đã **đo trên `Body 14`** (phẳng 0.20 = 750 lớp):
 
@@ -233,7 +259,37 @@ Optimizer sẽ sinh ra cấu hình mà **luật audit hiện có kết tội**. 
 - Luật `PLA && bed ≥ 65 → "Bed hơi nóng cho PLA"` là ý kiến riêng, **trái với wiki Bambu** (đích 55–65°C trên Textured PEI, và A1 khung hở ở phòng lạnh còn phải +10°C). Đổi thành luật **theo diện tích đế**: đế nhỏ mà bed 65 → nhắc hạ; đế lớn (`> 150 cm²`) mà bed < 65 → nhắc **tăng**.
 - Luật khuyên `sparse_infill_pattern` tiết kiệm sẽ va với `gyroid` mà tầng 2 khoá. `auditFile` phải biết: đế lớn ⇒ gyroid là **đúng**, không phải lãng phí.
 
-## 12. Rủi ro
+## 12. Bảng đòn bẩy — cái nào thật sự miễn phí
+
+Xếp theo "trả giá bằng gì". Chỉ nhóm đầu được tầng 5 dùng tự động.
+
+| Đòn bẩy | Cắt được | Trả giá bằng |
+|---|---|---|
+| ↑ tốc độ **vùng khuất** tới trần lưu lượng | ~5–15% phần đó | **không gì** — vùng không nhìn thấy, không chịu lực chính |
+| Tắt prime tower (in 1 màu) | thời gian + nhựa purge | không gì |
+| Bỏ support khi overhang thật ≤ 2% | support time + nhựa | không gì |
+| ↓ `sparse_infill_density` | nhiều (time ∝ thể tích × mật độ) | **độ bền**, và **võng mặt trên** nếu < 12% |
+| ↑ `layer_height` | rất nhiều (≈ tuyến tính theo số lớp) | **liên kết liên lớp** (52→48 MPa) + bậc thang |
+| ↓ `wall_loops` | vừa | **độ bền nhiều nhất** — thành là đường truyền lực chính |
+| ↓ `outer_wall_speed` / accel | **âm** — làm CHẬM đi | đo thật: 10h37m → 31h54m |
+
+Ba dòng cuối là đánh đổi, không phải tối ưu. Hub được phép **đề xuất** chúng kèm số, nhưng không tự áp dụng.
+
+## 13. Nguồn
+
+| Khẳng định | Nguồn |
+|---|---|
+| Enum, default, `ignore` set, mode | `PrintConfig.cpp` (bản cài trên máy) |
+| Trang *Setting Overrides*, scarf seam không có checkbox | `Tab.cpp:4113`, `Tab.cpp:4426` |
+| Chuỗi chặn VLH / prime tower | `resources/i18n/en/BambuStudio.mo` |
+| `min/max_layer_height`, `printable_area` | `profiles/BBL/machine/Bambu Lab A1 0.4 nozzle.json` |
+| Bed 55–65°C, brim 8–10mm, no-cooling 3 lớp đầu, gyroid ≤25% cho vật đế rộng, giảm accel 20–30% cho vật cao mảnh, A1 khung hở +10°C | [wiki Bambu — Model Warping](https://wiki.bambulab.com/en/filament-acc/filament/print-quality/warping-falling-off-collapsing) |
+| `brim_object_gap` ↔ elephant foot | [wiki Bambu — Brim](https://wiki.bambulab.com/en/software/bambu-studio/auto-brim) |
+| Thành > infill; `infill_wall_overlap` 10–25%; infill thấp gây võng mặt phẳng lớn | [UltiMaker — infill density](https://ultimaker.com/learn/3d-printing-infill-density-optimizing-strength-and-apeed/) |
+| Layer 25–75% nozzle; bảng MPa/thời gian; halving layer ≈ gấp đôi time | [BigRep — layer height](https://bigrep.com/posts/optimizing-layer-height-3d-printing/) |
+| Số lớp / thời gian `Body 14`, đường đánh đổi `STEP_TARGET` | đo thật, phiên 2026-07-09/10 |
+
+## 14. Rủi ro
 
 - `islands` cần rasterize lát cắt — phần tốn công nhất. Nếu phải cắt scope, bỏ `thinWall_cm2` trước (nó chỉ dẫn tới `arachne`, vốn đã bật sẵn trong preset).
 - Ngưỡng `firstArea > 150 cm²` và `baseDiag > 150 mm` là suy ra từ khuyến nghị wiki cho "large flat model", chưa có số đo trực tiếp. Cần đánh dấu là **giả định** trong bảng quyết định, không được trình bày như đã đo.
