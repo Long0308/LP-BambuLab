@@ -1914,6 +1914,16 @@ function auditTime(ps){
  return F;
 }
 
+/* PURE:START */
+/* Khối hàm THUẦN — không đụng DOM, không đụng biến toàn cục của trang.
+   tests/unit/lib/loadPure.js trích nguyên khối này ra chạy bằng node. */
+function geoFeatures(world){ return null; }
+function printerLimits(ps){ return null; }
+function derive(cfg,L){ return null; }
+function checkInvariants(cfg,L,d,vlhWanted){ return []; }
+function optimize(F,L,mat,goal,ps){ return null; }
+/* PURE:END */
+
 /* audit */
 function auditFile(ps,geo,slice){
  const F=[],add=(l,t,d)=>F.push([l,t,d]); const g=k=>firstOf(ps[k]);
