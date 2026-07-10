@@ -41,6 +41,14 @@ function bridge() {
   return [...box(20,20,50), ...shift(box(20,20,50), 80, 0, 0), ...shift(box(100,20,10), 40, 0, 50)];
 }
 
+/* Hộp 40³ + một gờ đua 24×24×4 ở lưng chừng → overhang thật 5.17%, rơi đúng vào dải
+   GIỮA (2–8%) của luật support. Không dạng vật nào ở ARCHETYPES chạm dải đó, nên nhánh
+   `tree(manual)` từng không có test nào đi qua. */
+function ledge() {
+  const shift = (T, dx, dy, dz) => T.map(t => t.map(p => [p[0]+dx, p[1]+dy, p[2]+dz]));
+  return [...box(40,40,40), ...shift(box(24,24,4), 0, 28, 20)];
+}
+
 const ARCHETYPES = [
   { name: 'hop-lon-phang',   tris: box(200,150,20) },
   { name: 'cot-cao-manh',    tris: box(20,20,150) },
@@ -50,4 +58,4 @@ const ARCHETYPES = [
   { name: 'bridge-2-chan',   tris: bridge() },
 ];
 
-module.exports = { box, sphere, frustum, bridge, ARCHETYPES };
+module.exports = { box, sphere, frustum, bridge, ledge, ARCHETYPES };

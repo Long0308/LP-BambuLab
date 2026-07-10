@@ -2170,6 +2170,7 @@ function optimize(F,L,mat,goal,ps,mode,targetMaxvol){
   const isPLA=/pla/i.test(mat)||/pla/i.test(String(f(ps.filament_type)||''));
   const isMatte=/matte/i.test(mat);
   const functional=/cơ khí|chức năng|functional/i.test(goal||'');
+  const decor=/trang trí|decor/i.test(goal||'');
   const layerMaxEff=functional?Math.min(L.layerMax,0.25):L.layerMax;
 
   /* Layer height của mode, kẹp vào giới hạn máy + quy tắc nozzle. Đặt SỚM vì mọi
@@ -2275,8 +2276,16 @@ function optimize(F,L,mat,goal,ps,mode,targetMaxvol){
       put(dP,'enable_support',0,4,`overhang thật ${F.down.toFixed(2)}% (${F.down_cm2.toFixed(1)} cm²) → tự đỡ được`,'đo thật');
     }else if(F.down<=8){
       put(dP,'enable_support',1,4,`overhang thật ${F.down.toFixed(1)}%`,'đo thật');
-      put(dP,'support_type','tree(manual)',4,'ít overhang + đồ trang trí → chỉ đỡ chỗ sơn, không để sẹo','PrintConfig.cpp:5184');
-      warnings.push({key:'support_type',msg:"support_type '(manual)' KHÔNG sinh gì nếu chưa sơn enforcer. Prepare ▸ Support painting."});
+      /* '(manual)' KHÔNG sinh support nào nếu chưa sơn enforcer. Ghi nó vào preset là bẫy:
+         ai áp preset mà bỏ qua cảnh báo sẽ in ra vật gãy. Chỉ dùng khi người dùng CHỦ ĐỘNG
+         chọn mục tiêu trang trí (đổi sẹo support lấy bề mặt). Mọi mục tiêu khác: bật support
+         rồi để support_type kế thừa preset gốc. */
+      if(decor){
+        put(dP,'support_type','tree(manual)',4,'ít overhang + đồ trang trí → chỉ đỡ chỗ sơn, không để sẹo','PrintConfig.cpp:5184');
+        warnings.push({key:'support_type',msg:"support_type '(manual)' KHÔNG sinh gì nếu chưa sơn enforcer. Prepare ▸ Support painting."});
+      }else{
+        warnings.push({key:'support_type',msg:`Overhang ${F.down.toFixed(1)}% (dải 2–8%). Giữ nguyên support_type của preset gốc. Nếu bạn ưu tiên bề mặt và chịu sơn enforcer bằng tay, chọn mục tiêu "Chi tiết trang trí" để hub đề xuất tree(manual).`});
+      }
     }else{
       put(dP,'enable_support',1,4,`overhang thật ${F.down.toFixed(1)}% → quá nhiều để sơn tay`,'đo thật');
       put(dP,'support_type','tree(auto)',4,'overhang lớn, không có support là hỏng','PrintConfig.cpp:5184');

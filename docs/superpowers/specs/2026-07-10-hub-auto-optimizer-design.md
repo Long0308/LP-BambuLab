@@ -183,7 +183,11 @@ Ba giá trị này **đo trên máy**, không suy ra được từ tam giác. Hu
 | `down` | Quyết định | Vì sao |
 |---|---|---|
 | `≤ 2%` | `enable_support = 0` | tự đỡ được (đặt ở tầng 5) |
-| `2% < down ≤ 8%` | `enable_support = 1`, `support_type = tree(manual)` | ít overhang + đồ trang trí → chỉ đỡ chỗ sơn, không để sẹo. Hub **phải** kèm cảnh báo: `(manual)` không sinh gì nếu chưa sơn enforcer (`PrintConfig.cpp:5184`) |
+| `2% < down ≤ 8%` | `enable_support = 1`. `support_type = tree(manual)` **chỉ khi `goal` = trang trí**; mọi mục tiêu khác để `support_type` kế thừa | ít overhang + đồ trang trí → chỉ đỡ chỗ sơn, không để sẹo. Hub **phải** kèm cảnh báo: `(manual)` không sinh gì nếu chưa sơn enforcer (`PrintConfig.cpp:5184`) |
+
+> **Vì sao gác theo `goal`** (chốt 2026-07-10, sau khi chạy trên `organic+controller+support.3mf`, overhang 5.4%). `tree(manual)` **không sinh support nào** cho tới khi người dùng sơn enforcer bằng tay. Ghi nó vào preset xuất ra là một cái bẫy: ai áp preset mà bỏ qua callout cảnh báo sẽ in ra vật gãy. Lý do của chính luật này nói *"ít overhang + đồ trang trí"*, nên nó chỉ được chạy khi người dùng **chủ động** chọn mục tiêu trang trí — tức chấp nhận đổi sẹo support lấy bề mặt. Với `Thông thường` và `Công năng cơ khí`: bật support, để `support_type` kế thừa preset gốc, và nói cho người dùng biết họ có lựa chọn kia.
+>
+> Không dạng vật nào trong `ARCHETYPES` có `down` rơi vào dải 2–8%, nên nhánh này từng **không có test nào đi qua**. Đã thêm fixture `ledge()` (hộp 40³ + gờ đua 24×24×4 ⇒ `down = 5.17%`).
 | `> 8%` | `enable_support = 1`, `support_type = tree(auto)` | quá nhiều overhang để sơn tay; không có support là hỏng |
 
 - Bo cong: `zSlope` → `vlhRanges[]` (mục 7). Kích hoạt khi `Σ area(25° ≤ θ < 50°) > 3 cm²` **hoặc** `Σ area(θ ≥ 50°) > 20 cm²` — vế sau là cơ hội **dày layer miễn phí** (vase côn loe có 449 cm² ở dải này).

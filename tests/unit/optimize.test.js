@@ -3,7 +3,7 @@ const { test } = require('node:test');
 const assert = require('node:assert');
 const { loadPure } = require('./lib/loadPure');
 const { geoFeatures, printerLimits, optimize, MODES } = loadPure();
-const { box, sphere, frustum, bridge } = require('./fixtures/meshes');
+const { box, sphere, frustum, bridge, ledge } = require('./fixtures/meshes');
 
 /* Kế thừa '0.20mm Standard @BBL A1' + Bambu PLA Matte (maxvol 22). */
 const PS = {
@@ -111,6 +111,31 @@ test('Support: 3 khoảng rạch ròi, không có vùng xám', () => {
   const P2 = run(sphere(40));
   assert.equal(P2.deltaProcess.enable_support, 1);
   assert.equal(P2.deltaProcess.support_type, 'tree(auto)', 'overhang 14% > 8% → auto');
+});
+
+/* Dải GIỮA (overhang 2–8%). `tree(manual)` KHÔNG sinh support nào nếu chưa sơn enforcer —
+   ghi nó vào preset là cái bẫy: ai áp preset mà không đọc cảnh báo sẽ in ra vật gãy.
+   Lý do của chính luật nói "ít overhang + đồ trang trí", nên nó chỉ được phép chạy khi
+   mục tiêu ĐÚNG LÀ trang trí. Với mọi mục tiêu khác: bật support, để support_type kế thừa. */
+test('Dải giữa + mục tiêu trang trí → tree(manual) + cảnh báo', () => {
+  const P = run(ledge(), 'Chi tiết trang trí');
+  assert.equal(P.deltaProcess.enable_support, 1);
+  assert.equal(P.deltaProcess.support_type, 'tree(manual)');
+  assert.ok(P.warnings.some(w => /enforcer/i.test(w.msg)));
+});
+
+test('Dải giữa + mục tiêu KHÁC → không được ghi tree(manual)', () => {
+  for (const goal of ['Thông thường', 'Công năng cơ khí']) {
+    const P = run(ledge(), goal);
+    assert.equal(P.deltaProcess.enable_support, 1, goal + ': vẫn phải bật support');
+    assert.equal(P.deltaProcess.support_type, undefined,
+      goal + ": không được ghi tree(manual) — nó KHÔNG sinh support nếu chưa sơn enforcer");
+  }
+});
+
+test('Dải giữa: fixture đúng nằm trong 2–8%', () => {
+  const F = geoFeatures(ledge());
+  assert.ok(F.down > 2 && F.down <= 8, `down=${F.down}`);
 });
 
 test('Bridge: bật enable_overhang_speed + overhang_fan_speed', () => {
