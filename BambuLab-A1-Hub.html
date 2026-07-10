@@ -1917,7 +1917,108 @@ function auditTime(ps){
 /* PURE:START */
 /* Khối hàm THUẦN — không đụng DOM, không đụng biến toàn cục của trang.
    tests/unit/lib/loadPure.js trích nguyên khối này ra chạy bằng node. */
-function geoFeatures(world){ return null; }
+function geoFeatures(world){
+  if(!world||!world.length)return null;
+  const C45=Math.cos(Math.PI/4), BIN=10;
+  const mx=a=>{let m=-Infinity;for(const v of a)if(v>m)m=v;return m;};
+  const mn=a=>{let m=Infinity;for(const v of a)if(v<m)m=v;return m;};
+  let zmin=Infinity;
+  for(const t of world)for(const p of t)if(p[2]<zmin)zmin=p[2];
+  const zBase=zmin+0.6, zFirst=zmin+0.05;
+  const xs=[],ys=[],zs=[];
+  let area=0,vol=0,base=0,down=0,top=0,vert=0,slope=0,firstA=0;
+  const fx=[],fy=[];
+  const bands={lo:0,mid:0,hi:0};
+  const ohBins={'45-60':0,'60-75':0,'75-90':0};
+  const zsl=[];      // bin Z -> [[theta,area],...]
+  const plateaus={}; // z làm tròn 1mm -> area
+  for(const [p1,p2,p3] of world){
+    for(const p of [p1,p2,p3]){xs.push(p[0]);ys.push(p[1]);zs.push(p[2]);}
+    vol+=(p1[0]*(p2[1]*p3[2]-p3[1]*p2[2])-p1[1]*(p2[0]*p3[2]-p3[0]*p2[2])+p1[2]*(p2[0]*p3[1]-p3[0]*p2[1]))/6;
+    const ux=p2[0]-p1[0],uy=p2[1]-p1[1],uz=p2[2]-p1[2];
+    const vx=p3[0]-p1[0],vy=p3[1]-p1[1],vz=p3[2]-p1[2];
+    const nx=uy*vz-uz*vy,ny=uz*vx-ux*vz,nz=ux*vy-uy*vx;
+    const a=Math.hypot(nx,ny,nz)/2; if(a<1e-9)continue;
+    area+=a;
+    const cz=nz/(2*a), zc=(p1[2]+p2[2]+p3[2])/3;
+    if(cz>0.985){ top+=a; const k=Math.round(zc); plateaus[k]=(plateaus[k]||0)+a; }
+    else if(cz<-C45){
+      if(zc<=zBase){ base+=a; if(zc<=zFirst){ firstA+=a; for(const p of [p1,p2,p3]){fx.push(p[0]);fy.push(p[1]);} } }
+      else{
+        down+=a;
+        const dip=Math.acos(Math.min(1,-cz))*180/Math.PI; // 0 = phẳng úp xuống, 90 = thẳng đứng
+        const ov=90-dip;                                   // góc so với mặt phẳng ngang
+        if(ov>=75)ohBins['75-90']+=a; else if(ov>=60)ohBins['60-75']+=a; else if(ov>=45)ohBins['45-60']+=a;
+      }
+    }
+    else if(Math.abs(cz)<0.15)vert+=a; else slope+=a;
+    const th=Math.acos(Math.min(1,Math.abs(cz)))*180/Math.PI;
+    if(th>5&&th<85){
+      if(th<25)bands.lo+=a; else if(th<50)bands.mid+=a; else bands.hi+=a;
+      if(zc>zBase){ const i=Math.floor((zc-zmin)/BIN); (zsl[i]=zsl[i]||[]).push([th,a]); }
+    }
+  }
+  const dx=mx(xs)-mn(xs), dy=mx(ys)-mn(ys), dz=mx(zs)-mn(zs);
+  const pc=v=>area?v/area*100:0;
+  const zSlope=[];
+  const nb=Math.max(1,Math.ceil(dz/BIN));
+  for(let i=0;i<nb;i++){
+    const bl=(zsl[i]||[]).slice().sort((a,b)=>a[0]-b[0]);
+    const tot=bl.reduce((s,x)=>s+x[1],0);
+    let p10=0,acc=0;
+    for(const [th,a] of bl){acc+=a; if(acc>=0.10*tot){p10=th;break;}}
+    zSlope.push({z0:i*BIN,z1:Math.min((i+1)*BIN,dz),area:tot/100,thetaP10:p10});
+  }
+  const topPlateaus=Object.keys(plateaus).map(k=>({z:+k,area_cm2:plateaus[k]/100}))
+    .filter(x=>x.area_cm2>0.5).sort((a,b)=>b.area_cm2-a.area_cm2);
+  const baseDiag=fx.length?Math.hypot(mx(fx)-mn(fx),mx(fy)-mn(fy)):0;
+  return {
+    tris:world.length, dx,dy,dz,
+    vol_cm3:Math.abs(vol)/1000, area_cm2:area/100,
+    down:pc(down), down_cm2:down/100, base:pc(base),
+    top:pc(top), topArea_cm2:top/100, vert:pc(vert), slope:pc(slope),
+    firstArea_cm2:firstA/100, baseDiag_mm:baseDiag,
+    islands:countIslands(world,zmin),
+    aspect:Math.min(dx,dy)>0?dz/Math.min(dx,dy):0,
+    maxObj:Math.max(dx,dy,dz),
+    bands:{lo:bands.lo/100,mid:bands.mid/100,hi:bands.hi/100},
+    ohBins:{'45-60':ohBins['45-60']/100,'60-75':ohBins['60-75']/100,'75-90':ohBins['75-90']/100},
+    zSlope, topPlateaus,
+  };
+}
+
+/* Rasterize lát cắt z=zmin trên lưới 0.5mm rồi đếm thành phần liên thông (4-neighbour). */
+function countIslands(world,zmin){
+  const G=0.5, zf=zmin+0.05, cells=new Set();
+  let minx=Infinity,miny=Infinity;
+  const pts=[];
+  for(const t of world){
+    if(Math.max(t[0][2],t[1][2],t[2][2])>zf)continue;
+    for(const p of t){pts.push(p); if(p[0]<minx)minx=p[0]; if(p[1]<miny)miny=p[1];}
+  }
+  if(!pts.length)return 0;
+  for(const t of world){
+    if(Math.max(t[0][2],t[1][2],t[2][2])>zf)continue;
+    const xs=t.map(p=>p[0]), ys=t.map(p=>p[1]);
+    const i0=Math.floor((Math.min.apply(null,xs)-minx)/G), i1=Math.ceil((Math.max.apply(null,xs)-minx)/G);
+    const j0=Math.floor((Math.min.apply(null,ys)-miny)/G), j1=Math.ceil((Math.max.apply(null,ys)-miny)/G);
+    for(let i=i0;i<=i1;i++)for(let j=j0;j<=j1;j++)cells.add(i+','+j);
+  }
+  let n=0; const seen=new Set();
+  for(const c of cells){
+    if(seen.has(c))continue;
+    n++; const st=[c];
+    while(st.length){
+      const k=st.pop(); if(seen.has(k))continue; seen.add(k);
+      const [i,j]=k.split(',').map(Number);
+      for(const [di,dj] of [[1,0],[-1,0],[0,1],[0,-1]]){
+        const m=(i+di)+','+(j+dj);
+        if(cells.has(m)&&!seen.has(m))st.push(m);
+      }
+    }
+  }
+  return n;
+}
 function printerLimits(ps){ return null; }
 function derive(cfg,L){ return null; }
 function checkInvariants(cfg,L,d,vlhWanted){ return []; }
