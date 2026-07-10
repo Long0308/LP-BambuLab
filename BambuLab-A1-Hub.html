@@ -2109,8 +2109,19 @@ function checkInvariants(cfg,L,d,vlhWanted,owned){
     V.push({id:'I6',key:'brim_object_gap',msg:`elephant foot compensation > 0 ⇒ brim_object_gap phải = 0, nếu không brim tách khỏi vật`});
   const ovr=['1','true'].includes(S('override_process_overhang_speed'));
   const feo=['1','true'].includes(S('filament_enable_overhang_speed'));
-  const dead=[].concat(ovr?[]:OVERHANG_NEED_OVERRIDE.filter(set),
-                       (ovr&&feo)?[]:OVERHANG_NEED_BOTH.filter(set));
+  /* File .3mf mang config ĐÃ PHÂN GIẢI nên cả 7 ô filament_* luôn có giá trị, phần lớn
+     bằng đúng ô process tương ứng (PrintConfig.cpp:6275 ghép cặp bằng cách bỏ tiền tố).
+     Trùng giá trị thì cổng đóng cũng chẳng mất gì — chỉ ô LỆCH mới là override thật.
+     Không lọc bước này thì mọi file thật đều dính I7: đo Body 14 - LP.3mf, 6/7 ô là nhiễu. */
+  const differs=k=>{
+    if(!set(k))return false;
+    const p=k.slice('filament_'.length);
+    if(!set(p))return true;                       // không có ô process để so → coi là override
+    const x=f(cfg[k]), y=f(cfg[p]), nx=parseFloat(x), ny=parseFloat(y);
+    return (!isNaN(nx)&&!isNaN(ny))?Math.abs(nx-ny)>1e-9:String(x)!==String(y);
+  };
+  const dead=[].concat(ovr?[]:OVERHANG_NEED_OVERRIDE.filter(differs),
+                       (ovr&&feo)?[]:OVERHANG_NEED_BOTH.filter(differs));
   if(dead.length){
     const need=[]; if(!ovr)need.push('override_process_overhang_speed=1');
     if(!feo&&OVERHANG_NEED_BOTH.some(k=>dead.includes(k)))need.push('filament_enable_overhang_speed=1');

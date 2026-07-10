@@ -123,6 +123,27 @@ test('I7: 5 key phần trăm cần CẢ override lẫn filament_enable_overhang_
     'bật cả hai → hợp lệ');
 });
 
+/* File .3mf thật mang config ĐÃ PHÂN GIẢI: cả 7 key filament_* đều có giá trị, phần lớn
+   bằng đúng key process tương ứng (PrintConfig.cpp:6275 ghép cặp bằng cách bỏ tiền tố
+   'filament_'). Nếu bằng nhau thì cổng đóng cũng chẳng mất gì → không được báo.
+   Đo trên 'Body 14 - LP.3mf': 6/7 key trùng, chỉ filament_bridge_speed=25 vs bridge_speed=50. */
+test('I7: giá trị filament TRÙNG key process → không báo (nhiễu do phân giải config)', () => {
+  const noise = { ...BASE,
+    filament_enable_overhang_speed: ['1'], enable_overhang_speed: ['1'],
+    filament_overhang_2_4_speed: ['50'], overhang_2_4_speed: ['50'] };
+  assert.ok(!ids(noise).includes('I7'), 'trùng giá trị thì cổng đóng cũng không mất gì');
+});
+
+test('I7: chỉ báo key thật sự LỆCH khỏi process', () => {
+  const real = { ...BASE, filament_bridge_speed: ['25'], bridge_speed: ['50'],
+                 filament_enable_overhang_speed: ['1'], enable_overhang_speed: ['1'] };
+  const v = checkInvariants(real, printerLimits(real), derive(real, printerLimits(real)));
+  const i7 = v.find(x => x.id === 'I7');
+  assert.ok(i7, 'bridge 25 vs 50 là override thật, cổng đóng → mất');
+  assert.ok(/filament_bridge_speed/.test(i7.msg));
+  assert.ok(!/filament_enable_overhang_speed/.test(i7.msg), 'key trùng giá trị không được kể tên');
+});
+
 test('I7: overhang_fan_speed KHÔNG bị gác (là quạt, không phải tốc độ)', () => {
   assert.ok(!ids({ ...BASE, overhang_fan_speed: ['100'] }).includes('I7'),
     'tầng 4 đặt overhang_fan_speed; nếu I7 bắt nhầm thì golden test sẽ đỏ oan');
