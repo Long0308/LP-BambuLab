@@ -458,6 +458,12 @@
     <h2 class="sec">Tính năng OrcaSlicer / Bambu Studio giúp CẢI THIỆN in</h2>
     <div class="lead">Bật/dùng đúng lúc — nguồn: OrcaSlicer wiki + wiki Bambu + cộng đồng (Firecrawl). Bambu Studio là bản phái sinh nên phần lớn đều có.</div>
 
+    <div class="sectitle">🧱 Bảng đánh giá 22 pattern infill — xếp theo THỜI GIAN</div>
+    <div class="gd">Số của OrcaSlicer wiki, họ đo bằng Klipper Estimator trên <b>cùng một khối lập phương, cùng mật độ</b>. Đây là thang <b>tương đối</b>, không phải phần trăm tuyệt đối — muốn con số thật cho vật của bạn thì phải slice. <b>Bền: cao là tốt. Nhựa &amp; Thời gian: cao là tệ.</b> Cột <code>key</code> là giá trị ghi vào preset; cột Tên là nhãn Bambu Studio hiển thị (Bambu gọi <code>zig-zag</code> là "Rectilinear").</div>
+    <div id="patternTable"></div>
+    <div class="callout c-info"><svg class="icn"><use href="#i-info"/></svg><div><b>Điều đáng ngạc nhiên nhất trong bảng.</b> <b>Gyroid</b> có điểm thời gian <b>8/8 — cao nhất</b>, tức chậm nhất, trong khi sức bền <b>6/6</b> chỉ <i>ngang bằng</i> Grid và Cubic chứ không hơn. Nó cũng <b>không tốn nhựa hơn</b> (cùng mật độ thì cùng thể tích). Cái nó thật sự mua được là <b>đẳng hướng hoàn toàn</b> và <b>không có đường cắt nhau</b>. Nếu vật của bạn không chịu tải nhiều phương, <b>Cubic</b> cho cùng độ bền với thời gian 3, còn <b>Adaptive Cubic</b> cho 5/5 với nhựa 2 và thời gian 2.</div></div>
+    <div class="callout c-amber"><svg class="icn"><use href="#i-alert"/></svg><div><b>Mật độ chỉ nên dày khi vật CHỊU LỰC.</b> Nâng mật độ trên vật trang trí chỉ đổi thời gian lấy hư không. Bộ tối ưu của hub vì thế không bao giờ nâng <code>sparse_infill_density</code> cao hơn giá trị đang có trong file, trừ khi bạn chọn mục tiêu <b>Công năng cơ khí</b>.</div></div>
+
     <div class="sectitle">⭐ Variable layer height — đòn chính cứu MẶT CONG (không đội thời gian)</div>
     <div class="grid g2">
       <div class="card bar-q">
@@ -2141,6 +2147,90 @@ const MODES={
   fast:    {name:'Nhanh',    lh:0.24, infill:'10%', ironing:false},
 };
 
+/* Bảng pattern infill. `xy`/`z` = sức bền (CAO là tốt). `mat`/`time` = vật liệu và thời
+   gian (CAO là tệ). Số của OrcaSlicer wiki, họ đo bằng Klipper Estimator trên cùng một
+   khối lập phương — là thang tương đối, không phải phần trăm tuyệt đối.
+   Nhãn `label` lấy đúng từ PrintConfig.cpp enum_labels (Bambu gọi `zig-zag` là "Rectilinear").
+   Nguồn: orcaslicer.com/wiki/print_settings/strength/strength_settings_patterns_quick_reference */
+const PATTERNS=[
+  {v:'lightning',         label:'Lightning',          xy:2,z:2,mat:0,time:0, use:'Chỉ đỡ mặt trên', desc:'Rẻ nhất mọi mặt. Chỉ dựng cột đỡ ngay dưới mặt trên, phần còn lại rỗng. Không chịu lực.'},
+  {v:'supportcubic',      label:'Support Cubic',      xy:2,z:2,mat:1,time:1, use:'Chỉ đỡ mặt trên', desc:'Như Lightning nhưng đều hơn. Rất nhẹ, rất nhanh, gần như không chịu lực.'},
+  {v:'grid',              label:'Grid',               xy:6,z:6,mat:4,time:2, use:'Bền + nhanh',      desc:'Bền nhất nhóm nhanh. NHƯNG đầu phun cắt qua đường cũ, và wiki Bambu cảnh báo Grid/Triangle tạo ứng suất theo phương tuyến → dễ cong vênh trên đế lớn.'},
+  {v:'adaptivecubic',     label:'Adaptive Cubic',     xy:5,z:5,mat:2,time:2, use:'Mặc định tốt nhất',desc:'Dày gần thành, thưa dần vào ruột. Rẻ nhất về nhựa lẫn thời gian trong nhóm còn chịu lực khá. Không thuộc họ grid/triangle nên không có ứng suất tuyến.'},
+  {v:'cubic',             label:'Cubic',              xy:6,z:6,mat:4,time:3, use:'Chịu lực',         desc:'Bền đẳng hướng 6/6 như Gyroid nhưng thời gian 3 thay vì 8. Lựa chọn chịu lực rẻ nhất.'},
+  {v:'triangles',         label:'Triangles',          xy:6,z:4,mat:4,time:3, use:'Bền phương ngang', desc:'Bền X-Y cao, Z kém hơn. Cùng cảnh báo ứng suất tuyến như Grid.'},
+  {v:'tri-hexagon',       label:'Tri-hexagon',        xy:6,z:5,mat:4,time:3, use:'Bền phương ngang', desc:'Ba hướng đan nhau, bền hơn Triangles theo Z.'},
+  {v:'zig-zag',           label:'Rectilinear',        xy:3,z:2,mat:4,time:3, use:'Thường',           desc:'Đường thẳng đổi hướng từng lớp. Bền thấp, không có gì đặc biệt.'},
+  {v:'alignedrectilinear',label:'Aligned Rectilinear',xy:3,z:4,mat:4,time:3, use:'Thường',           desc:'Như Rectilinear nhưng mọi lớp cùng hướng → bám Z tốt hơn.'},
+  {v:'zigzag',            label:'Zig Zag',            xy:3,z:2,mat:4,time:3, use:'Thường',           desc:'Nối liền mạch, ít rút sợi hơn Rectilinear.'},
+  {v:'crosszag',          label:'Cross Zag',          xy:4,z:2,mat:4,time:3, use:'Thường',           desc:'Zig Zag xoay lệch từng lớp, bền X-Y khá hơn.'},
+  {v:'line',              label:'Line',               xy:2,z:2,mat:4,time:3, use:'Thường',           desc:'Bền thấp nhất nhóm đường thẳng.'},
+  {v:'concentric',        label:'Concentric',         xy:2,z:4,mat:4,time:3, use:'Vật dẻo / vase',   desc:'Chạy vòng theo biên. Bền X-Y kém. Dùng cho TPU hoặc khi cần mặt trong đẹp.'},
+  {v:'archimedeanchords', label:'Archimedean Chords', xy:2,z:4,mat:4,time:3, use:'Vật dẻo',          desc:'Xoắn ốc liên tục, ít rút sợi. Bền kém.'},
+  {v:'2dlattice',         label:'2D Lattice',         xy:3,z:3,mat:4,time:3, use:'Thường',           desc:'Lưới 2D, cân bằng nhẹ.'},
+  {v:'octagramspiral',    label:'Octagram Spiral',    xy:2,z:4,mat:4,time:4, use:'Trang trí',        desc:'Hoa văn sao tám cánh. Chọn vì thẩm mỹ, không vì cơ tính.'},
+  {v:'lockedzag',         label:'Locked Zag',         xy:3,z:3,mat:5,time:5, use:'Thử nghiệm',       desc:'Zig Zag có khoá ngang. Tốn nhựa và thời gian hơn mà bền không hơn bao nhiêu.'},
+  {v:'crosshatch',        label:'Cross Hatch',        xy:5,z:5,mat:4,time:6, use:'Chịu lực',         desc:'Đan chéo 3D. Bền tốt nhưng chậm, và thời gian mỗi lớp chênh lệch lớn.'},
+  {v:'hilbertcurve',      label:'Hilbert Curve',      xy:2,z:4,mat:4,time:7, use:'Trang trí',        desc:'Đường lấp không gian. Rất chậm, bền kém. Chọn vì hoa văn.'},
+  {v:'3dhoneycomb',       label:'3D Honeycomb',       xy:5,z:5,mat:3,time:7, use:'Chịu lực',         desc:'Tổ ong 3D. Nhựa vừa phải nhưng rất chậm.'},
+  {v:'gyroid',            label:'Gyroid',             xy:6,z:6,mat:4,time:8, use:'Đẳng hướng',       desc:'CHẬM NHẤT BẢNG (8/8). Bền 6/6 — bằng Grid và Cubic, KHÔNG hơn. Ưu thế thật là đẳng hướng hoàn toàn và không có đường cắt nhau. Trả giá bằng thời gian.'},
+  {v:'honeycomb',         label:'Honeycomb',          xy:6,z:6,mat:6,time:8, use:'Chịu lực nặng',    desc:'Bền 6/6 nhưng tốn nhựa nhất VÀ chậm nhất. Gần như luôn có lựa chọn tốt hơn.'},
+];
+const PATTERN_TIME=PATTERNS.reduce((m,p)=>{m[p.v]=p.time;return m;},{});
+
+/* Hướng thời gian của một thay đổi: +1 chậm hơn, -1 nhanh hơn, 0 không đổi.
+   Chỉ nêu HƯỚNG, không bịa con số phần trăm — muốn con số thì phải slice. */
+const TIME_DIR={
+  sparse_infill_density:(a,b)=>sgn(pct(b)-pct(a)),
+  sparse_infill_pattern:(a,b)=>sgn((PATTERN_TIME[String(b)]??3)-(PATTERN_TIME[String(a)]??3)),
+  layer_height:(a,b)=>sgn(num0(a)-num0(b)),            // layer mỏng hơn ⇒ nhiều lớp hơn ⇒ chậm
+  top_shell_layers:(a,b)=>sgn(num0(b)-num0(a)),
+  bottom_shell_layers:(a,b)=>sgn(num0(b)-num0(a)),
+  wall_loops:(a,b)=>sgn(num0(b)-num0(a)),
+  enable_support:(a,b)=>sgn(bool0(b)-bool0(a)),
+  enable_overhang_speed:(a,b)=>sgn(bool0(b)-bool0(a)),  // bật ⇒ ghì tốc vùng đua
+  ironing_type:(a,b)=>sgn(iron(b)-iron(a)),
+  default_acceleration:(a,b)=>sgn(num0(a)-num0(b)),
+  outer_wall_acceleration:(a,b)=>sgn(num0(a)-num0(b)),
+  initial_layer_speed:(a,b)=>sgn(num0(a)-num0(b)),
+};
+/* support và overhang speed là ĐÚNG/SAI, không phải đòn bẩy thời gian: bật support khi
+   overhang >2% là bắt buộc, không phải "làm chậm". Chốt chặn bỏ qua hai key này. */
+const TIME_EXEMPT=new Set(['enable_support','enable_overhang_speed']);
+const SPEED_KEY=/^(inner_wall|sparse_infill|internal_solid_infill|outer_wall|top_surface)_speed$/;
+
+function sgn(x){ return x>1e-9?1:(x<-1e-9?-1:0); }
+function pct(v){ return parseFloat(String(v??'').replace('%',''))||0; }
+function num0(v){ const n=parseFloat(Array.isArray(v)?v[0]:v); return isNaN(n)?0:n; }
+function bool0(v){ return ['1','true'].includes(String(Array.isArray(v)?v[0]:v).toLowerCase())?1:0; }
+function iron(v){ const s=String(v??'').toLowerCase(); return (s&&s!=='no ironing')?1:0; }
+
+/* So delta với cấu hình gốc, trả các key làm CHẬM hơn.
+   TỐC ĐỘ không được so bằng số thô: stock đặt 300 mm/s nhưng bộ giới hạn ghì còn 244, nên
+   "300 → 244" thật ra không chậm đi. So bằng LƯU LƯỢNG hữu hiệu min(lh×w×v, maxvol), và
+   phải dùng layer height của mỗi bên vì trần đổi theo nó. Dung sai 1% cho nhiễu làm tròn.
+   `brim_*` không tính: brim chỉ thêm ở lớp đầu, là biện pháp chống cong vênh. */
+function timeRegressions(dP,dF,ps,Lfile,Lnew){
+  const f=v=>Array.isArray(v)?v[0]:v;
+  const delta=Object.assign({},dP,dF);
+  const out=[];
+  for(const k in delta){
+    const from=f(ps[k]);
+    if(from===undefined||from===null||from==='')continue;
+    let d=0;
+    if(SPEED_KEY.test(k)){
+      const base=k.replace(/_speed$/,'');
+      const flow=(L,v)=>Math.min(L.layerHeight*(L.width[base]||0.45)*num0(v), L.maxvol||Infinity);
+      const a=flow(Lfile,from), b=flow(Lnew,delta[k]);
+      d=(Math.abs(a-b)<=0.01*Math.max(a,b))?0:sgn(a-b);   // lưu lượng cao hơn ⇒ nhanh hơn
+    }else if(TIME_DIR[k]){
+      d=TIME_DIR[k](from,delta[k]);
+    }else continue;
+    if(d>0)out.push({key:k,from:String(from),to:String(delta[k])});
+  }
+  return out;
+}
+
 /* `targetMaxvol` = trần lưu lượng của nhựa ĐÍCH (nhựa mà preset filament sẽ inherits),
    có thể khác nhựa đang gán trong file. Body 14 - LP.3mf gán slot 1 = PLA Lite (16) nhưng
    preset xuất ra inherits PLA Matte (22); tính trần theo 16 thì tốc độ ghi ra chậm 23%.
@@ -2216,7 +2306,12 @@ function optimize(F,L,mat,goal,ps,mode,targetMaxvol){
       put(dP,'outer_wall_acceleration',3750,2,`aspect ${F.aspect.toFixed(1)} → wiki giảm 20–30%`,'wiki/warping');
     }
     if(bigBase){
-      put(dP,'sparse_infill_pattern','gyroid',2,'wiki: large flat model → gyroid','wiki/warping');
+      /* wiki Bambu bảo dùng gyroid cho vật đế lớn phẳng. Cơ chế nó nêu là "grid và triangle
+         tạo ứng suất kéo theo phương tuyến". adaptivecubic KHÔNG thuộc họ đó, nên tránh
+         được đúng cơ chế ấy — mà theo số của Orca thì nó rẻ nhất bảng (vật liệu 2, thời
+         gian 2) trong khi gyroid đắt nhất (thời gian 8, gấp 4). Chọn adaptivecubic. */
+      put(dP,'sparse_infill_pattern','adaptivecubic',2,'đế lớn: tránh họ grid/triangle (ứng suất tuyến). adaptivecubic rẻ nhất về thời gian lẫn nhựa, gyroid chậm gấp 4 mà bền không hơn','wiki/warping + orca/patterns');
+      warnings.push({key:'sparse_infill_pattern',msg:`Đế lớn ${F.firstArea_cm2.toFixed(0)} cm². Hub chọn adaptivecubic thay vì gyroid mà wiki Bambu khuyên: gyroid có điểm thời gian 8/8 (Orca đo), gấp 4 lần adaptivecubic, trong khi sức bền hai bên đều 6/6 và 5/5. Nếu in xong VẪN cong vênh, hãy đổi tay sang gyroid.`});
       if(isPLA)put(dF,'textured_plate_temp',65,2,'wiki: PLA trên Textured PEI đích 55–65°C','wiki/warping');
     }
   }
@@ -2246,14 +2341,38 @@ function optimize(F,L,mat,goal,ps,mode,targetMaxvol){
     put(dF,'filament_scarf_seam_type',scarf,3,'I4: filament luôn đè process, phải khớp','Tab.cpp:4426');
   }
 
-  /* Tầng 3b — độ bền (chỉ khi goal chức năng). Thành TRƯỚC infill. */
+  /* Tầng 3b — độ bền. Mật độ dày và pattern chịu lực CHỈ khi mục đích là chịu lực.
+     Không chịu lực mà nâng mật độ thì chỉ tốn thời gian, không đổi lấy gì. */
   if(functional){
     put(dP,'wall_loops',3,3,'UltiMaker: 2 perimeter thêm > nâng infill 20→30%','ultimaker/infill');
-    put(dP,'sparse_infill_density','25%',3,'PLA cứng: 20–30%','ultimaker/infill');
-    put(dP,'sparse_infill_pattern','gyroid',3,'pattern chịu lực đẳng hướng','ultimaker/infill');
+    put(dP,'sparse_infill_density','25%',3,'chịu lực: PLA 20–30%','ultimaker/infill');
+    /* Orca đo: cubic bền 6/6 ĐÚNG BẰNG gyroid, mà điểm thời gian 3 thay vì 8. */
+    put(dP,'sparse_infill_pattern','cubic',3,'chịu lực: cubic bền 6/6 như gyroid nhưng thời gian 3 thay vì 8','orca/patterns');
     put(dP,'infill_wall_overlap','15%',3,'khuyến nghị 10–25%; thấp hơn gây bong thành↔infill','ultimaker/infill');
+    notes.push({key:'sparse_infill_pattern',msg:'Chọn cubic vì cùng sức bền 6/6 với gyroid mà nhanh hơn gấp đôi. Chỉ đổi sang gyroid nếu vật chịu tải nhiều phương và bạn chấp nhận thời gian gấp 4 (Orca: gyroid điểm thời gian 8/8, cao nhất bảng).'});
   }else{
-    put(dP,'sparse_infill_density',M.infill,3,`mode ${M.name}`,'mode');
+    /* KHÔNG chịu lực ⇒ mật độ không bao giờ được vượt file gốc. Mode chỉ được phép HẠ. */
+    const cur=pct(f(ps.sparse_infill_density)), want=pct(M.infill);
+    const den=(cur>0)?Math.min(want,cur):want;
+    put(dP,'sparse_infill_density',den+'%',3,
+      cur>0&&den<want?`mode ${M.name} muốn ${want}% nhưng file đang ${cur}% — không chịu lực thì không nâng mật độ, chỉ tốn thời gian`:`mode ${M.name}`,'mode');
+  }
+
+  /* Thứ tự thành. PrintConfig.cpp:2045-2050 — giá trị THẬT là 3 chuỗi dưới đây; "inner/outer"
+     chỉ là NHÃN hiển thị, ghi nhãn thì Studio bỏ qua im lặng.
+     wiki Bambu (quality-advance-settings): "If orders of outer/inner or inner/outer/inner are
+     used, the outer wall is completely overhanging with no adhesion on both sides, resulting
+     in poor overhang quality." ⇒ hễ có mặt đua thì bắt buộc inner/outer. */
+  if(!hasGeo)skipped.push('Thứ tự thành (wall_sequence) — cần biết vật có mặt đua hay không');
+  else{
+    const wl=parseInt(f(dP.wall_loops!==undefined?dP.wall_loops:ps.wall_loops),10)||2;
+    const overhangy=F.down>2||(F.ohBins['45-60']+F.ohBins['60-75']+F.ohBins['75-90'])>5;
+    if(overhangy)
+      put(dP,'wall_sequence','inner wall/outer wall',3,`có mặt đua (${F.down.toFixed(1)}%) → thành trong in trước làm chỗ bám cho thành ngoài`,'wiki/quality-advance');
+    else if(wl>=3)
+      put(dP,'wall_sequence','inner wall/outer wall/inner wall',3,`ít mặt đua + ${wl} thành → thành ngoài in khi các thành trong đã nguội, ít bị co ép`,'wiki/quality-advance');
+    else
+      put(dP,'wall_sequence','outer wall/inner wall',3,`ít mặt đua + ${wl} thành → thành ngoài nguội trước, bớt vết ép; seam rõ hơn một chút`,'wiki/quality-advance');
   }
 
   /* Tầng 4b — võng mặt trên do infill quá thưa */
@@ -2369,8 +2488,16 @@ function optimize(F,L,mat,goal,ps,mode,targetMaxvol){
     if(!fixed)break;
   }
 
+  /* CHỐT CHẶN THỜI GIAN. Một bộ "tối ưu" xuất ra cấu hình chậm hơn bản gốc thì không phải
+     tối ưu. Mode Chắc cố ý hạ layer (đó là mục đích của nó) và mục tiêu cơ khí cố ý đổi
+     thời gian lấy độ bền — hai ca đó được phép. Mọi ca còn lại: cấm. */
+  const slower=timeRegressions(dP,dF,ps,printerLimits(ps),Lh)
+    .filter(x=>!TIME_EXEMPT.has(x.key));
+  const timeGuard=(mode==='quality'||functional)?[]:slower;
+  timeGuard.forEach(x=>warnings.push({key:x.key,msg:`CHẬM HƠN BẢN GỐC: ${x.key} ${x.from} → ${x.to}. Mode ${M.name} không được phép làm chậm. Đây là lỗi của hub, hãy báo lại.`}));
+
   return {mode,modeName:M.name,hasGeo,skipped,deltaProcess:dP,deltaFilament:dF,vlhRanges:vlh,
-          reasons,conflicts,calibration,warnings,notes,violations,
+          reasons,conflicts,calibration,warnings,notes,violations,slower,timeGuard,
           limits:Object.assign({},Lh,{layerMaxEff}),
           _ctx:{isPLA,isMatte,functional,bigBase,tinyContact,tallThin,wantVLH}};
 }
@@ -2410,6 +2537,31 @@ function buildPresets(plans,mat){
 /* PURE:END */
 
 /* ================= BỘ TỐI ƯU — phần đụng DOM ================= */
+
+/* Bảng 22 pattern, dựng từ chính PATTERNS mà optimizer dùng — bảng và luật không thể lệch. */
+function renderPatternTable(){
+  const box=$("#patternTable"); if(!box)return;
+  const bar=(n,max,good)=>{
+    const w=Math.round(n/max*100);
+    const c=good?(n>=5?"var(--q)":(n>=3?"var(--s)":"var(--red)"))
+                :(n<=2?"var(--q)":(n<=4?"var(--s)":"var(--red)"));
+    return "<span style='display:inline-block;width:52px;height:8px;border-radius:4px;background:var(--line);vertical-align:middle'>"
+      +"<span style='display:block;width:"+w+"%;height:100%;border-radius:4px;background:"+c+"'></span></span> "
+      +"<span class='gd' style='font-variant-numeric:tabular-nums'>"+n+"</span>";
+  };
+  let h="<table><tr><th>#</th><th>Tên (Bambu)</th><th><code>key</code></th><th>Bền X-Y</th><th>Bền Z</th><th>Nhựa</th><th>Thời gian</th><th>Dùng khi</th><th>Mô tả</th></tr>";
+  PATTERNS.forEach((p,i)=>{
+    const hot=/^(gyroid|adaptivecubic|cubic|grid)$/.test(p.v);
+    h+="<tr"+(hot?" style='background:color-mix(in srgb,var(--teal) 7%,transparent)'":"")+">"
+      +"<td class='gd'>"+(i+1)+"</td>"
+      +"<td><b>"+esc(p.label)+"</b></td>"
+      +"<td><code>"+esc(p.v)+"</code></td>"
+      +"<td>"+bar(p.xy,6,true)+"</td><td>"+bar(p.z,6,true)+"</td>"
+      +"<td>"+bar(p.mat,8,false)+"</td><td>"+bar(p.time,8,false)+"</td>"
+      +"<td class='gd'>"+esc(p.use)+"</td><td class='gd'>"+esc(p.desc)+"</td></tr>";
+  });
+  box.innerHTML=h+"</table>";
+}
 
 /* MATERIALS[..].maxvol là chuỗi kiểu "~22" — bóc lấy số. */
 function targetMaxvol(mat){
@@ -2847,7 +2999,7 @@ drop.addEventListener("drop",e=>{e.preventDefault();drop.classList.remove("hot")
 file.addEventListener("change",()=>{if(file.files[0])analyze(file.files[0]);});
 
 /* init */
-renderSettings(); renderStatic();
+renderSettings(); renderStatic(); renderPatternTable();
 </script>
 </body>
 </html>

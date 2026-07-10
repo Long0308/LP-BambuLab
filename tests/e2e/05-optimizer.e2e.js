@@ -40,6 +40,25 @@ module.exports = async function run() {
   const s = new Suite("05-optimizer");
   const browser = await launch();
   try {
+    // --- bảng 22 pattern infill phải render ở tab Cải thiện ---
+    {
+      const { page, errors } = await openHub(browser);
+      try {
+        const t = await page.evaluate(() => {
+          const el = document.querySelector("#patternTable");
+          const rows = el ? el.querySelectorAll("tr").length - 1 : 0;
+          const txt = el ? el.innerText : "";
+          return { rows, gyroid: /Gyroid/.test(txt), rect: /Rectilinear/.test(txt), key: /adaptivecubic/.test(txt) };
+        });
+        s.eq("[pattern] bảng có đủ 22 dòng", t.rows, 22);
+        s.check("[pattern] có Gyroid", t.gyroid);
+        s.check("[pattern] zig-zag hiện nhãn Rectilinear", t.rect);
+        s.check("[pattern] cột key hiện giá trị máy", t.key);
+        s.eq("[pattern] pageerror = 0", errors.length, 0, errors[0]);
+      } finally {
+        await page.close();
+      }
+    }
     // --- có mesh: đầy đủ, có nút xuất ---
     {
       const name = "scarf-trap.3mf";

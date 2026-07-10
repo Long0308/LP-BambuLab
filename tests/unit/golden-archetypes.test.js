@@ -17,9 +17,18 @@ const PS = {
   override_process_overhang_speed: ['0'],
 };
 
-/* Kỳ vọng chốt từ spec §9. Đổi luật mà bảng này đổi ⇒ phải giải trình trong PR. */
+/* Kỳ vọng chốt từ spec §9. Đổi luật mà bảng này đổi ⇒ phải giải trình trong PR.
+ *
+ * GIẢI TRÌNH 2026-07-10 — `hop-lon-phang`: gyroid → adaptivecubic.
+ * wiki Bambu khuyên gyroid cho vật đế lớn phẳng, nhưng CƠ CHẾ nó nêu là "Grid và Triangle
+ * tạo ứng suất kéo theo phương tuyến". adaptivecubic không thuộc họ đó nên tránh được đúng
+ * cơ chế ấy. Số của OrcaSlicer (đo bằng Klipper Estimator): gyroid có điểm thời gian 8/8 —
+ * cao nhất bảng, gấp 4 lần adaptivecubic (2) — trong khi sức bền 6/6 chỉ NGANG grid và cubic.
+ * Ràng buộc người dùng đặt ra: cấu hình tối ưu không được chậm hơn file gốc. Nên chọn
+ * adaptivecubic và cảnh báo rõ; nếu in xong vẫn cong vênh thì đổi tay sang gyroid.
+ */
 const EXPECT = {
-  'hop-lon-phang':  { brim_type: 'outer_only', sparse_infill_pattern: 'gyroid', enable_support: 0, accel: false },
+  'hop-lon-phang':  { brim_type: 'outer_only', sparse_infill_pattern: 'adaptivecubic', enable_support: 0, accel: false },
   'cot-cao-manh':   { brim_type: 'outer_only', enable_support: 0, accel: true },
   'cau-R40':        { brim_type: 'outer_only', enable_support: 1, support_type: 'tree(auto)', accel: false },
   'vase-con-loe':   { enable_support: 0, vlh: true },
