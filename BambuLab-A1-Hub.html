@@ -2192,12 +2192,20 @@ const TIME_DIR={
   ironing_type:(a,b)=>sgn(iron(b)-iron(a)),
   default_acceleration:(a,b)=>sgn(num0(a)-num0(b)),
   outer_wall_acceleration:(a,b)=>sgn(num0(a)-num0(b)),
+  /* Lớp đầu và mặt trên là DIỆN TÍCH cố định, in một lượt: thời gian = diện tích ÷
+     (tốc độ × bề rộng), không dính layer height. So bằng tốc độ, KHÔNG bằng lưu lượng. */
   initial_layer_speed:(a,b)=>sgn(num0(a)-num0(b)),
+  top_surface_speed:(a,b)=>sgn(num0(a)-num0(b)),
 };
-/* support và overhang speed là ĐÚNG/SAI, không phải đòn bẩy thời gian: bật support khi
-   overhang >2% là bắt buộc, không phải "làm chậm". Chốt chặn bỏ qua hai key này. */
-const TIME_EXEMPT=new Set(['enable_support','enable_overhang_speed']);
-const SPEED_KEY=/^(inner_wall|sparse_infill|internal_solid_infill|outer_wall|top_surface)_speed$/;
+/* Miễn trừ khỏi chốt chặn — đây là quyết định ĐÚNG/SAI hoặc an toàn, không phải đòn bẩy
+   thời gian, và hub đã cảnh báo riêng cho từng cái:
+   · enable_support / enable_overhang_speed — bật khi overhang >2% là bắt buộc.
+   · default_acceleration / outer_wall_acceleration — hạ cho vật cao mảnh là chống rung/đổ. */
+const TIME_EXEMPT=new Set(['enable_support','enable_overhang_speed',
+  'default_acceleration','outer_wall_acceleration']);
+/* Thời gian ∝ thể tích ÷ lưu lượng, nên bốn vùng này so bằng LƯU LƯỢNG.
+   top_surface KHÔNG nằm đây: nó là diện tích, không phải thể tích. */
+const SPEED_KEY=/^(inner_wall|sparse_infill|internal_solid_infill|outer_wall)_speed$/;
 
 function sgn(x){ return x>1e-9?1:(x<-1e-9?-1:0); }
 function pct(v){ return parseFloat(String(v??'').replace('%',''))||0; }
@@ -2325,7 +2333,10 @@ function optimize(F,L,mat,goal,ps,mode,targetMaxvol){
       put(dP,'ironing_type','top surfaces',3,`mặt phẳng trên ${F.top.toFixed(0)}%`,'wiki/ironing');
     if(F.bands.lo>5){
       put(dP,'top_surface_pattern','monotonicline',3,'mặt trên đều','—');
-      put(dP,'top_surface_speed',150,3,'chậm để mặt trên mịn','—');
+      /* Hạ tốc mặt trên là ĐỔI THỜI GIAN LẤY BỀ MẶT (stock 200 → 150). Chỉ mode Chắc
+         được phép; Cân bằng/Nhanh phải giữ tốc độ kế thừa, nếu không là chậm hơn bản gốc. */
+      if(M.ironing)put(dP,'top_surface_speed',150,3,`mode ${M.name}: mặt trên chạy chậm cho mịn`,'—');
+      else notes.push({key:'top_surface_speed',msg:`Hạ top_surface_speed xuống 150 (stock 200) làm mặt trên mịn hơn nhưng CHẬM hơn. Mode ${M.name} không đụng vào. Muốn mịn thì chọn mode Chắc.`});
     }
   }
   /* I2: bề dày trần là ràng buộc thật, số lớp phải suy từ layer height của mode. */

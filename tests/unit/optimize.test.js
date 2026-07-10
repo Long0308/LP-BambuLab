@@ -300,9 +300,33 @@ test('Tầng 5: ba vùng khuất = floor(trần), không đụng outer_wall', ()
   assert.deepEqual(P.violations, [], 'floor(trần) không bao giờ vượt trần');
 });
 
-test('top_surface_speed do tầng 3 đặt, chỉ khi vật có mặt dốc', () => {
-  assert.equal(run(sphere(40)).deltaProcess.top_surface_speed, 150);
-  assert.equal(run(box(100, 100, 50)).deltaProcess.top_surface_speed, undefined, 'hộp không có mặt dốc');
+/* Hạ tốc mặt trên (stock 200 → 150) là đổi thời gian lấy bề mặt. Chỉ mode Chắc được phép. */
+test('top_surface_speed: chỉ mode Chắc mới hạ, và chỉ khi vật có mặt dốc', () => {
+  assert.equal(run(sphere(40), DECOR, 'quality').deltaProcess.top_surface_speed, 150);
+  assert.equal(run(sphere(40), DECOR, 'balanced').deltaProcess.top_surface_speed, undefined);
+  assert.equal(run(sphere(40), DECOR, 'fast').deltaProcess.top_surface_speed, undefined);
+  assert.ok(run(sphere(40), DECOR, 'balanced').notes.some(n => /top_surface_speed/.test(n.msg)),
+    'phải nói cho người dùng biết lựa chọn đó tồn tại');
+  assert.equal(run(box(100, 100, 50), DECOR, 'quality').deltaProcess.top_surface_speed, undefined, 'hộp không có mặt dốc');
+});
+
+/* Mặt trên là DIỆN TÍCH cố định, in một lượt: thời gian = diện tích ÷ (tốc độ × bề rộng),
+   không dính layer height. So bằng lưu lượng sẽ báo oan "150 → 150 là chậm hơn" khi mode
+   Chắc hạ layer từ 0.20 xuống 0.16. */
+test('top_surface_speed không đổi thì KHÔNG được coi là chậm hơn, dù layer mỏng đi', () => {
+  const ps = { ...FILE_10, top_surface_speed: ['150'] };
+  const P = optimize(geoFeatures(sphere(40)), printerLimits(ps), 'PLA Matte', DECOR, ps, 'quality', 22);
+  assert.equal(P.deltaProcess.top_surface_speed, 150);
+  assert.ok(!P.slower.some(x => x.key === 'top_surface_speed'), JSON.stringify(P.slower));
+});
+
+/* Hạ acceleration cho vật cao mảnh là chống rung/đổ — an toàn, không phải đòn bẩy thời
+   gian. Chốt chặn phải miễn trừ, nếu không nó tự tố cáo hub trên mọi vật cao mảnh. */
+test('Vật cao mảnh: hạ accel không làm chốt chặn báo lỗi, nhưng vẫn được ghi nhận', () => {
+  const ps = { ...FILE_10, default_acceleration: ['6000'], outer_wall_acceleration: ['5000'] };
+  const P = optimize(geoFeatures(box(20, 20, 150)), printerLimits(ps), 'PLA Matte', DECOR, ps, 'balanced', 22);
+  assert.equal(P.deltaProcess.default_acceleration, 4500);
+  assert.deepEqual(P.timeGuard, [], JSON.stringify(P.timeGuard));
 });
 
 test('Tầng 5: trần đổi theo layer height của mode', () => {
