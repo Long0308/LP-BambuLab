@@ -2340,20 +2340,42 @@ function optimize(F,L,mat,goal,ps,mode,targetMaxvol){
           limits:Object.assign({},Lh,{layerMaxEff}),
           _ctx:{isPLA,isMatte,functional,bigBase,tinyContact,tallThin,wantVLH}};
 }
-/* PURE:END */
-
-/* ================= BỘ TỐI ƯU — hiển thị & xuất preset =================
-   Ngoài khối PURE nên được đụng DOM. Kiểu dữ liệu MẢNG/vô hướng lấy từ preset stock
-   trên máy (đã giải chuỗi inherits), không đoán: coFloats/coInts/coBools per-extruder
-   phải là mảng, còn lại là chuỗi. Sai kiểu thì Bambu Studio từ chối import. */
+/* ===== Dựng preset — THUẦN, nên nằm trong khối PURE và test được bằng node.
+   Kiểu dữ liệu MẢNG/vô hướng và tên preset stock đều đọc từ
+   %APPDATA%\BambuStudio\system\BBL\ (đã giải chuỗi `inherits`), không đoán:
+   coFloats/coInts/coBools per-extruder phải là mảng, còn lại là chuỗi.
+   Sai kiểu, hoặc sai một chữ trong `inherits`, thì Bambu Studio từ chối import. */
 const ARRAY_KEYS=new Set([
   "initial_layer_speed","default_acceleration","outer_wall_acceleration","top_surface_speed",
   "enable_overhang_speed","inner_wall_speed","sparse_infill_speed","internal_solid_infill_speed",
   "close_fan_the_first_x_layers","textured_plate_temp","overhang_fan_speed",
   "filament_scarf_seam_type","override_process_overhang_speed","filament_enable_overhang_speed"]);
-/* Tên preset stock — đọc từ %APPDATA%\BambuStudio\system\BBL\process\, không phải trí nhớ.
-   Khoá phải là CHUỖI: {0.20:x} trong JS thành khoá "0.2", không khớp toFixed(2)="0.20". */
+/* Khoá phải là CHUỖI: {0.20:x} trong JS thành khoá "0.2", không khớp toFixed(2)="0.20". */
 const INHERIT_PROCESS={"0.16":"0.16mm Optimal @BBL A1","0.20":"0.20mm Standard @BBL A1","0.24":"0.24mm Draft @BBL A1"};
+
+function shapeFix(o){
+  const r={};
+  for(const k in o)r[k]=ARRAY_KEYS.has(k)?[String(o[k])]:String(o[k]);
+  return r;
+}
+function buildPresets(plans,mat){
+  return plans.map(P=>{
+    const lh=P.deltaProcess.layer_height, key=lh.toFixed(2);
+    const inh=INHERIT_PROCESS[key];
+    if(!inh)throw new Error("Layer "+key+"mm không có preset stock A1 0.4 để kế thừa (chưa hỗ trợ nozzle khác 0.4).");
+    const name="AUTO-"+P.mode+"-"+key+"mm";
+    return {mode:P.mode, name,
+      process:Object.assign({from:"User",version:"2.7.0.8",name,inherits:inh,
+        print_settings_id:name,print_extruder_id:["1"],print_extruder_variant:["Direct Drive Standard"]},
+        shapeFix(P.deltaProcess)),
+      filament:Object.assign({from:"User",version:"2.7.0.8",name,inherits:"Bambu "+mat+" @BBL A1",
+        filament_settings_id:[name],filament_extruder_variant:["Direct Drive Standard"]},
+        shapeFix(P.deltaFilament))};
+  });
+}
+/* PURE:END */
+
+/* ================= BỘ TỐI ƯU — phần đụng DOM ================= */
 
 /* MATERIALS[..].maxvol là chuỗi kiểu "~22" — bóc lấy số. */
 function targetMaxvol(mat){
@@ -2429,31 +2451,17 @@ function renderPlan(plans,ps,mat,mv){
   return h;
 }
 
-function shapeFix(o){
-  const r={};
-  for(const k in o)r[k]=ARRAY_KEYS.has(k)?[String(o[k])]:String(o[k]);
-  return r;
-}
 function dl(obj,name){
   const b=new Blob([JSON.stringify(obj,null,4)],{type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(b); a.download=name; a.click();
   setTimeout(()=>URL.revokeObjectURL(a.href),2000);
 }
 function downloadOptimized(plans,mat){
-  const filInherit="Bambu "+mat+" @BBL A1";   // khớp tên trong system/BBL/filament/
-  plans.forEach((P,i)=>{
-    const lh=P.deltaProcess.layer_height;
-    const inh=INHERIT_PROCESS[lh.toFixed(2)];
-    if(!inh){alert("Layer "+lh.toFixed(2)+"mm không có preset stock A1 0.4 tương ứng để kế thừa. Chưa hỗ trợ nozzle khác 0.4.");return;}
-    const nm="AUTO-"+P.mode+"-"+lh.toFixed(2)+"mm";
-    const proc=Object.assign({from:"User",version:"2.7.0.8",name:nm,inherits:inh,
-      print_settings_id:nm,print_extruder_id:["1"],print_extruder_variant:["Direct Drive Standard"]},
-      shapeFix(P.deltaProcess));
-    const fil=Object.assign({from:"User",version:"2.7.0.8",name:nm,inherits:filInherit,
-      filament_settings_id:[nm],filament_extruder_variant:["Direct Drive Standard"]},
-      shapeFix(P.deltaFilament));
-    setTimeout(()=>{dl(proc,nm+"-process.json"); dl(fil,nm+"-filament.json");}, i*250);
-  });
+  let out;
+  try{ out=buildPresets(plans,mat); }catch(e){ alert(e.message); return; }
+  out.forEach((x,i)=>setTimeout(()=>{
+    dl(x.process,x.name+"-process.json"); dl(x.filament,x.name+"-filament.json");
+  }, i*250));
 }
 
 /* audit */
