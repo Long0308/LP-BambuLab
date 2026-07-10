@@ -1813,7 +1813,8 @@ function meshStats(files){
  const pc=v=>area?v/area*100:0;
  return {objects:builds.length||Object.keys(meshes).length,tris:world.length,dx,dy,dz,
    vol_cm3:Math.abs(vol)/1000,area_cm2:area/100,down:pc(down),down_cm2:down/100,base:pc(base),top:pc(top),vert:pc(vert),slope:pc(slope),
-   aspect:Math.min(dx,dy)>0?dz/Math.min(dx,dy):0,n:objDims.length||1,maxObj:objDims.length?mx(objDims):Math.max(dx,dy,dz)};
+   aspect:Math.min(dx,dy)>0?dz/Math.min(dx,dy):0,n:objDims.length||1,maxObj:objDims.length?mx(objDims):Math.max(dx,dy,dz),
+   _world:world};
 }
 /* ================= CONFLICT: Filament ĐÈ Process =================
    Nguồn: Tab.cpp — trang "Setting Overrides" (13 key Retraction + 7 key Overhang/Bridge). MỖI ô có
@@ -2120,8 +2121,12 @@ function checkInvariants(cfg,L,d,vlhWanted,owned){
     const x=f(cfg[k]), y=f(cfg[p]), nx=parseFloat(x), ny=parseFloat(y);
     return (!isNaN(nx)&&!isNaN(ny))?Math.abs(nx-ny)>1e-9:String(x)!==String(y);
   };
-  const dead=[].concat(ovr?[]:OVERHANG_NEED_OVERRIDE.filter(differs),
-                       (ovr&&feo)?[]:OVERHANG_NEED_BOTH.filter(differs));
+  /* Như I1: chỉ soi key optimizer TỰ GHI. Bật cổng để "sửa" một key kế thừa sẽ đổi hành vi
+     âm thầm — trên file thật, nó kéo bridge_speed từ 50 xuống 25. Việc báo cho người dùng
+     biết là của bảng audit (gọi checkInvariants không kèm `owned`). */
+  const gated=k=>differs(k)&&(!own||own.has(k));
+  const dead=[].concat(ovr?[]:OVERHANG_NEED_OVERRIDE.filter(gated),
+                       (ovr&&feo)?[]:OVERHANG_NEED_BOTH.filter(gated));
   if(dead.length){
     const need=[]; if(!ovr)need.push('override_process_overhang_speed=1');
     if(!feo&&OVERHANG_NEED_BOTH.some(k=>dead.includes(k)))need.push('filament_enable_overhang_speed=1');
@@ -2136,9 +2141,13 @@ const MODES={
   fast:    {name:'Nhanh',    lh:0.24, infill:'10%', ironing:false},
 };
 
-function optimize(F,L,mat,goal,ps,mode){
+/* `targetMaxvol` = trần lưu lượng của nhựa ĐÍCH (nhựa mà preset filament sẽ inherits),
+   có thể khác nhựa đang gán trong file. Body 14 - LP.3mf gán slot 1 = PLA Lite (16) nhưng
+   preset xuất ra inherits PLA Matte (22); tính trần theo 16 thì tốc độ ghi ra chậm 23%. */
+function optimize(F,L,mat,goal,ps,mode,targetMaxvol){
   ps=ps||{}; mode=MODES[mode]?mode:'balanced';
   const M=MODES[mode];
+  const R2=x=>+x.toFixed(2);   // chặn rác float lọt vào preset (0.2+0.04 = 0.24000000000000002)
   const f=v=>Array.isArray(v)?v[0]:v;
   const S=k=>String(f(ps[k])??'').toLowerCase();
   const num=k=>parseFloat(f(ps[k]));
@@ -2160,8 +2169,10 @@ function optimize(F,L,mat,goal,ps,mode){
   let lh=Math.min(layerMaxEff,Math.max(L.layerMin,M.lh));
   lh=Math.floor(lh/0.02+1e-6)*0.02;
   if(lh<L.layerMin)lh=Math.ceil(L.layerMin/0.02-1e-6)*0.02;
-  lh=+lh.toFixed(2);
-  const Lh=printerLimits(Object.assign({},ps,{layer_height:lh}));  // trần tính lại ở lh này
+  lh=R2(lh);
+  const mv=(targetMaxvol>0)?targetMaxvol:undefined;
+  const Lh=printerLimits(Object.assign({},ps,{layer_height:lh},
+    mv?{filament_max_volumetric_speed:[String(mv)]}:{}));  // trần tính lại ở lh + nhựa đích
 
   /* Tầng 0 — hiệu chuẩn: chỉ phát hiện, KHÔNG bịa giá trị */
   if(['0','false'].includes(S('enable_pressure_advance')))
@@ -2171,7 +2182,7 @@ function optimize(F,L,mat,goal,ps,mode){
   /* Tầng 1 — first layer, không ai được ghi đè */
   put(dF,'close_fan_the_first_x_layers',3,1,'wiki: first layer not sticking','wiki/warping');
   put(dP,'initial_layer_speed',25,1,'lớp đầu chạy chậm để bám','—');
-  put(dP,'initial_layer_print_height',Math.min(0.28,Math.max(0.20,lh+0.04)),1,'lớp đầu dày hơn để dung sai mặt bàn','—');
+  put(dP,'initial_layer_print_height',R2(Math.min(0.28,Math.max(0.20,lh+0.04))),1,'lớp đầu dày hơn để dung sai mặt bàn','—');
   /* layer_height là LỰA CHỌN của mode, không phải luật bề mặt — khoá ở tầng 1 để không
      tầng nào (nhất là tầng 3) hạ nó xuống hòng chữa bậc thang. Đo thật: ở vùng dốc <25°,
      ngay tại sàn 0.08 bậc vẫn còn 0.33mm ⇒ hạ layer chỉ tốn thời gian mà không hết bậc. */
@@ -2209,6 +2220,14 @@ function optimize(F,L,mat,goal,ps,mode){
   const tt=num('top_shell_thickness');
   if(tt>0)put(dP,'top_shell_layers',Math.ceil(tt/lh),3,`${tt}mm bề dày ÷ layer ${lh.toFixed(2)} — engine sẽ tự tăng nếu ta đặt thấp hơn`,'PrintConfig top_shell_thickness');
   put(dP,'wall_generator','arachne',3,'thành mỏng / chữ nhỏ','—');
+  /* Stock '0.20mm Standard @BBL A1' có seam_slope_type = 'none'. Preset xuất ra kế thừa nó,
+     nên nếu file đang bật scarf mà ta im lặng thì scarf bị TẮT. Mang theo, và ép filament
+     khớp (I4: ô filament không có checkbox override, nó luôn đè process). */
+  const scarf=S('seam_slope_type');
+  if(scarf&&scarf!=='none'){
+    put(dP,'seam_slope_type',scarf,3,'file đang bật scarf; stock là none nên phải ghi rõ kẻo mất','Tab.cpp:4426');
+    put(dF,'filament_scarf_seam_type',scarf,3,'I4: filament luôn đè process, phải khớp','Tab.cpp:4426');
+  }
 
   /* Tầng 3b — độ bền (chỉ khi goal chức năng). Thành TRƯỚC infill. */
   if(functional){
@@ -2307,12 +2326,11 @@ function optimize(F,L,mat,goal,ps,mode){
         dP.support_style='tree_hybrid'; dP.enable_prime_tower=0; fixed=true;
       }else if(v.id==='I6'){
         dP.brim_object_gap=0; fixed=true;
-      }else if(v.id==='I7'){
-        /* Phải bật CẢ HAI, nếu không 5 ô phần trăm vẫn khoá → không hội tụ (Tab.cpp:4269) */
-        dF.override_process_overhang_speed=1; dF.filament_enable_overhang_speed=1;
-        reasons.push({key:'override_process_overhang_speed',value:1,tier:5,why:'fixpoint I7: mở cổng cho giá trị filament overhang có hiệu lực',src:'Tab.cpp:4256'});
-        fixed=true;
       }
+      /* KHÔNG có nhánh I7. checkInvariants đã lọc theo `owned`, và optimizer không bao giờ
+         ghi key filament_* overhang nào (overhang_fan_speed là quạt, không bị gác). Nếu
+         "sửa" I7 của một key kế thừa bằng cách bật cổng, bridge_speed sẽ tụt 50 → 25 âm
+         thầm. Chuyện file người dùng vướng I7 là việc của bảng audit, không phải của tầng. */
     }
     if(!fixed)break;
   }
@@ -2323,6 +2341,120 @@ function optimize(F,L,mat,goal,ps,mode){
           _ctx:{isPLA,isMatte,functional,bigBase,tinyContact,tallThin,wantVLH}};
 }
 /* PURE:END */
+
+/* ================= BỘ TỐI ƯU — hiển thị & xuất preset =================
+   Ngoài khối PURE nên được đụng DOM. Kiểu dữ liệu MẢNG/vô hướng lấy từ preset stock
+   trên máy (đã giải chuỗi inherits), không đoán: coFloats/coInts/coBools per-extruder
+   phải là mảng, còn lại là chuỗi. Sai kiểu thì Bambu Studio từ chối import. */
+const ARRAY_KEYS=new Set([
+  "initial_layer_speed","default_acceleration","outer_wall_acceleration","top_surface_speed",
+  "enable_overhang_speed","inner_wall_speed","sparse_infill_speed","internal_solid_infill_speed",
+  "close_fan_the_first_x_layers","textured_plate_temp","overhang_fan_speed",
+  "filament_scarf_seam_type","override_process_overhang_speed","filament_enable_overhang_speed"]);
+/* Tên preset stock — đọc từ %APPDATA%\BambuStudio\system\BBL\process\, không phải trí nhớ.
+   Khoá phải là CHUỖI: {0.20:x} trong JS thành khoá "0.2", không khớp toFixed(2)="0.20". */
+const INHERIT_PROCESS={"0.16":"0.16mm Optimal @BBL A1","0.20":"0.20mm Standard @BBL A1","0.24":"0.24mm Draft @BBL A1"};
+
+/* MATERIALS[..].maxvol là chuỗi kiểu "~22" — bóc lấy số. */
+function targetMaxvol(mat){
+  const m=MATERIALS[mat]; if(!m)return 0;
+  return parseFloat(String(m.maxvol).replace(/[^\d.]/g,""))||0;
+}
+function renderPlan(plans,ps,mat,mv){
+  if(!plans||!plans.length)return "";
+  const g=k=>firstOf(ps[k]);
+  const P0=plans.find(p=>p.mode==="balanced")||plans[0];
+  let h="<h2 class='sec' style='margin-top:22px'>Cấu hình tối ưu — tự sinh từ hình học</h2>";
+
+  /* Nhựa trong file có thể KHÁC nhựa đích. Nói thẳng, vì mọi tốc độ đều dẫn xuất từ maxvol. */
+  const fileMv=parseFloat(firstOf(ps.filament_max_volumetric_speed));
+  const fileFil=firstOf(ps.filament_settings_id)||"";
+  if(mv&&fileMv&&Math.abs(fileMv-mv)>0.01){
+    h+="<div class='callout c-warn'><svg class='icn'><use href='#i-alert'/></svg><div><b>Nhựa trong file khác nhựa bạn chọn.</b> File gán vật vào <code>"+esc(fileFil)+"</code> (trần lưu lượng <b>"+fileMv+"</b> mm³/s), còn bạn chọn <b>"+esc(mat)+"</b> (trần <b>"+mv+"</b>). Preset dưới đây tính theo <b>"+mv+"</b>. Nhớ gán vật sang đúng slot nhựa đó trong Bambu Studio, nếu không bộ giới hạn sẽ ghì tốc độ xuống.</div></div>";
+  }
+
+  /* Engine đang âm thầm sửa gì trong file HIỆN TẠI (audit toàn cục, không lọc `owned`) */
+  const L=printerLimits(ps);
+  const cur=checkInvariants(ps,L,derive(ps,L));
+  if(cur.length){
+    h+="<div class='callout c-warn'><svg class='icn'><use href='#i-alert'/></svg><div><b>Engine đang âm thầm sửa cấu hình hiện tại của bạn.</b><ul>";
+    cur.forEach(v=>{h+="<li><code>"+esc(v.key)+"</code> ["+v.id+"] — "+esc(v.msg)+"</li>";});
+    h+="</ul></div></div>";
+  }
+  if(P0.calibration.length){
+    h+="<div class='callout c-amber'><svg class='icn'><use href='#i-alert'/></svg><div><b>Hiệu chuẩn trước đã.</b> Các giá trị dưới đây ĐO TRÊN MÁY, hub không đoán:<ul>";
+    P0.calibration.forEach(c=>{h+="<li><code>"+esc(c.key)+"</code> — "+esc(c.msg)+"</li>";});
+    h+="</ul></div></div>";
+  }
+
+  /* Bảng so sánh: hiện tại vs 3 mode */
+  const keys=[]; const seen=new Set();
+  for(const p of plans)for(const bag of [p.deltaProcess,p.deltaFilament])for(const k in bag)if(!seen.has(k)){seen.add(k);keys.push(k);}
+  h+="<div class='sectitle'>Thông số so với hiện tại</div>";
+  h+="<table><tr><th>Key</th><th>Hiện tại</th>"+plans.map(p=>"<th>"+esc(p.modeName)+"</th>").join("")+"</tr>";
+  for(const k of keys){
+    const now=g(k);
+    h+="<tr><td><code>"+esc(k)+"</code></td><td class='gd'>"+(now===""||now===undefined?"—":esc(String(now)))+"</td>";
+    for(const p of plans){
+      const v=k in p.deltaProcess?p.deltaProcess[k]:(k in p.deltaFilament?p.deltaFilament[k]:undefined);
+      const same=v!==undefined&&String(v)===String(now);
+      h+=v===undefined?"<td class='gd'>·</td>":"<td class='val'"+(same?" style='opacity:.55'":"")+">"+esc(String(v))+"</td>";
+    }
+    h+="</tr>";
+  }
+  h+="</table><div class='gd'>Ô mờ = trùng giá trị hiện tại. Dấu · = mode đó không đặt key này (kế thừa preset gốc).</div>";
+
+  /* Vì sao — bảng quyết định của mode Cân bằng */
+  h+="<div class='sectitle'>Vì sao (mode "+esc(P0.modeName)+")</div>";
+  h+="<table><tr><th>Key</th><th>Giá trị</th><th>Tầng</th><th>Vì sao</th><th>Nguồn</th></tr>";
+  P0.reasons.forEach(r=>{h+="<tr><td><code>"+esc(r.key)+"</code></td><td class='val'>"+esc(String(r.value))+"</td><td>T"+r.tier+"</td><td class='gd'>"+esc(r.why)+"</td><td class='gd'>"+esc(r.src)+"</td></tr>";});
+  h+="</table>";
+
+  if(P0.conflicts.length){
+    h+="<div class='callout c-info'><svg class='icn'><use href='#i-info'/></svg><div><b>Xung đột đã giải:</b><ul>";
+    P0.conflicts.forEach(c=>{h+="<li><code>"+esc(c.key)+"</code>: tầng "+c.tier+" muốn <b>"+esc(String(c.wanted))+"</b>, giữ <b>"+esc(String(c.kept))+"</b> (tầng ưu tiên cao hơn đã khoá)</li>";});
+    h+="</ul></div></div>";
+  }
+  P0.warnings.forEach(w=>{h+="<div class='callout c-amber'><svg class='icn'><use href='#i-alert'/></svg><div>"+esc(w.msg)+"</div></div>";});
+  P0.notes.forEach(n=>{h+="<div class='callout c-info'><svg class='icn'><use href='#i-info'/></svg><div>"+esc(n.msg)+"</div></div>";});
+
+  if(P0.vlhRanges.length){
+    h+="<div class='sectitle'>Bảng Height range — nhập tay vào Prepare ▸ chuột phải vật ▸ Height range Modifier</div>";
+    h+="<div class='gd'><code>adaptive_layer_height</code> nằm trong danh sách <code>ignore</code> của PrintConfig.cpp ⇒ KHÔNG set được bằng preset. Đây là cách duy nhất truyền đạt nó.</div>";
+    h+="<table><tr><th>Z từ (mm)</th><th>Z đến (mm)</th><th>Layer height</th><th>Góc dốc p10</th></tr>";
+    P0.vlhRanges.forEach(r=>{h+="<tr><td>"+r.z0.toFixed(0)+"</td><td>"+r.z1.toFixed(0)+"</td><td class='val'>"+r.layer.toFixed(2)+"</td><td class='gd'>"+(r.theta?r.theta.toFixed(0)+"°":"—")+"</td></tr>";});
+    h+="</table>";
+  }
+  h+="<div style='display:flex;gap:8px;margin-top:12px'><button class='btn' id='expOpt'>⬇ Xuất "+(plans.length*2)+" preset ("+plans.length+" mode × process+filament)</button></div>";
+  return h;
+}
+
+function shapeFix(o){
+  const r={};
+  for(const k in o)r[k]=ARRAY_KEYS.has(k)?[String(o[k])]:String(o[k]);
+  return r;
+}
+function dl(obj,name){
+  const b=new Blob([JSON.stringify(obj,null,4)],{type:"application/json"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(b); a.download=name; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+}
+function downloadOptimized(plans,mat){
+  const filInherit="Bambu "+mat+" @BBL A1";   // khớp tên trong system/BBL/filament/
+  plans.forEach((P,i)=>{
+    const lh=P.deltaProcess.layer_height;
+    const inh=INHERIT_PROCESS[lh.toFixed(2)];
+    if(!inh){alert("Layer "+lh.toFixed(2)+"mm không có preset stock A1 0.4 tương ứng để kế thừa. Chưa hỗ trợ nozzle khác 0.4.");return;}
+    const nm="AUTO-"+P.mode+"-"+lh.toFixed(2)+"mm";
+    const proc=Object.assign({from:"User",version:"2.7.0.8",name:nm,inherits:inh,
+      print_settings_id:nm,print_extruder_id:["1"],print_extruder_variant:["Direct Drive Standard"]},
+      shapeFix(P.deltaProcess));
+    const fil=Object.assign({from:"User",version:"2.7.0.8",name:nm,inherits:filInherit,
+      filament_settings_id:[nm],filament_extruder_variant:["Direct Drive Standard"]},
+      shapeFix(P.deltaFilament));
+    setTimeout(()=>{dl(proc,nm+"-process.json"); dl(fil,nm+"-filament.json");}, i*250);
+  });
+}
 
 /* audit */
 function auditFile(ps,geo,slice){
@@ -2470,7 +2602,26 @@ function compareToTarget(ps){
  });
  return rows;
 }
-function rerenderAnalysis(){ if(lastAnalysis) render(lastAnalysis.ps,lastAnalysis.geo,lastAnalysis.slice,lastAnalysis.findings,lastAnalysis.name); }
+/* Dựng bảng tối ưu và gắn vào cuối #result. Tách riêng vì render() ghi đè innerHTML,
+   nên đổi nhựa/mục tiêu mà không gọi lại thì bảng tối ưu biến mất. */
+function appendPlan(){
+  const A=lastAnalysis;
+  if(!A||!A.ps||!A.feat)return;
+  const R=$("#result"); if(!R)return;
+  const L=printerLimits(A.ps), mat=$("#mat").value;
+  /* Trần lưu lượng phải theo nhựa ĐÍCH (nhựa mà preset filament sẽ inherits), không theo
+     nhựa đang gán trong file — Body 14 gán PLA Lite (16) nhưng preset nhắm PLA Matte (22). */
+  const mv=targetMaxvol(mat);
+  const plans=Object.keys(MODES).map(m=>optimize(A.feat,L,mat,$("#uc").value,A.ps,m,mv));
+  A.plans=plans;
+  R.insertAdjacentHTML("beforeend",renderPlan(plans,A.ps,mat,mv));
+  const b=$("#expOpt"); if(b)b.addEventListener("click",()=>downloadOptimized(plans,mat));
+}
+function rerenderAnalysis(){
+  if(!lastAnalysis)return;
+  render(lastAnalysis.ps,lastAnalysis.geo,lastAnalysis.slice,lastAnalysis.findings,lastAnalysis.name);
+  appendPlan();
+}
 /* ---- IRONING: bật hay không + TỰ TÍNH thời gian thêm ----
    Bambu mặc định: ironing_speed 30 mm/s · ironing_spacing 0.15 mm · flow 10%
    => tốc độ phủ = speed × spacing (mm²/s). t = diện_tích_mặt_trên / tốc_độ_phủ.   */
@@ -2531,6 +2682,9 @@ async function analyze(file){
    const findings=ps?auditFile(ps,geo,slice):[];
    lastAnalysis={ps,geo,slice,findings,name:file.name};
    render(ps,geo,slice,findings,file.name);
+   /* geoFeatures đắt (198k tam giác) — tính một lần, dùng lại mỗi khi đổi nhựa/mục tiêu. */
+   lastAnalysis.feat=(geo&&geo._world)?geoFeatures(geo._world):null;
+   appendPlan();
  }catch(e){
    R.innerHTML="<div class='callout c-warn'><svg class='icn'><use href='#i-alert'/></svg><div>Lỗi đọc file: "+esc(e.message)+". Trình duyệt cần hỗ trợ DecompressionStream (Chrome/Edge mới).</div></div>";
  }

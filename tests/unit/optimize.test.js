@@ -193,11 +193,63 @@ test('MODES lộ ra tên tiếng Việt để UI dùng', () => {
   assert.equal(MODES.balanced.name, 'Cân bằng');
 });
 
-/* ---------- Fixpoint ---------- */
-test('Fixpoint: I4 được sửa — filament scarf khớp process', () => {
-  const ps = { ...PS, filament_scarf_seam_type: ['none'] };
+/* ---------- Nhựa đích khác nhựa trong file ---------- */
+/* File 'Body 14 - LP.3mf' gán object vào slot 1 = PLA Lite (maxvol 16), nhưng preset
+   xuất ra inherits 'Bambu PLA Matte @BBL A1' (maxvol 22). Trần lưu lượng phải tính theo
+   nhựa ĐÍCH, nếu không tốc độ ghi ra chậm hơn thực tế 23%. */
+test('maxvol đích ghi đè maxvol trong file', () => {
+  const lite = { ...PS, filament_max_volumetric_speed: ['16'] };
+  const P = optimize(geoFeatures(box(100, 100, 50)), printerLimits(lite), 'PLA Matte', DECOR, lite, 'balanced', 22);
+  assert.equal(P.limits.maxvol, 22);
+  assert.equal(P.deltaProcess.inner_wall_speed, 244, '22/(0.20×0.45)=244.4 — không phải 177 của PLA Lite');
+});
+
+test('không truyền maxvol đích → dùng của file', () => {
+  const lite = { ...PS, filament_max_volumetric_speed: ['16'] };
+  const P = optimize(geoFeatures(box(100, 100, 50)), printerLimits(lite), 'PLA Lite', DECOR, lite, 'balanced');
+  assert.equal(P.deltaProcess.inner_wall_speed, 177, '16/(0.20×0.45)=177.8');
+});
+
+/* ---------- Số sạch, không rác dấu phẩy động ---------- */
+test('mọi số ghi ra đều sạch, không có 0.24000000000000002', () => {
+  for (const m of ['quality', 'balanced', 'fast']) {
+    const P = run(box(100, 100, 50), DECOR, m);
+    for (const bag of [P.deltaProcess, P.deltaFilament])
+      for (const k in bag) {
+        const v = bag[k];
+        if (typeof v !== 'number') continue;
+        assert.equal(String(v), String(+v.toFixed(3)), `${m}/${k} = ${v} có rác float`);
+      }
+  }
+});
+
+/* ---------- Scarf seam: giữ ý định của file ---------- */
+/* Stock '0.20mm Standard @BBL A1' có seam_slope_type = 'none'. Preset xuất ra kế thừa nó,
+   nên nếu file bật scarf mà ta không mang theo thì scarf bị tắt âm thầm. */
+test('file bật scarf → preset mang theo cả process lẫn filament', () => {
+  const ps = { ...PS, seam_slope_type: 'all', filament_scarf_seam_type: ['none'] };
   const P = optimize(geoFeatures(box(100, 100, 50)), printerLimits(ps), 'PLA Matte', DECOR, ps, 'balanced');
-  assert.equal(P.deltaFilament.filament_scarf_seam_type, 'all');
+  assert.equal(P.deltaProcess.seam_slope_type, 'all', 'phải ghi rõ, kẻo kế thừa stock = none');
+  assert.equal(P.deltaFilament.filament_scarf_seam_type, 'all', 'filament luôn đè process');
+  assert.deepEqual(P.violations, []);
+});
+
+test('file tắt scarf → không đụng vào', () => {
+  const ps = { ...PS, seam_slope_type: 'none', filament_scarf_seam_type: ['none'] };
+  const P = optimize(geoFeatures(box(100, 100, 50)), printerLimits(ps), 'PLA Matte', DECOR, ps, 'balanced');
+  assert.equal(P.deltaProcess.seam_slope_type, undefined);
+  assert.equal(P.deltaFilament.filament_scarf_seam_type, undefined);
+});
+
+/* ---------- I7 không được tự bật cổng ---------- */
+/* File thật có filament_bridge_speed=25 vs bridge_speed=50, override=0. Bật cổng sẽ đổi
+   bridge từ 50 xuống 25 — đổi hành vi âm thầm. Optimizer không sở hữu key đó ⇒ không đụng. */
+test('Fixpoint KHÔNG tự bật override_process_overhang_speed cho key nó không sở hữu', () => {
+  const ps = { ...PS, filament_bridge_speed: ['25'], bridge_speed: ['50'] };
+  const P = optimize(geoFeatures(box(100, 100, 50)), printerLimits(ps), 'PLA Matte', DECOR, ps, 'balanced');
+  assert.equal(P.deltaFilament.override_process_overhang_speed, undefined);
+  assert.equal(P.deltaFilament.filament_enable_overhang_speed, undefined);
+  assert.deepEqual(P.violations, [], 'I7 phải bị `owned` lọc, không được kẹt lại');
 });
 
 test('Fixpoint: I6 được sửa — brim_object_gap về 0', () => {
