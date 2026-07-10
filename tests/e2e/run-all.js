@@ -5,6 +5,7 @@ const suites = [
   require("./02-analyze.e2e"),
   require("./03-time.e2e"),
   require("./04-fixtures.e2e"),
+  require("./05-optimizer.e2e"),
 ];
 
 (async () => {

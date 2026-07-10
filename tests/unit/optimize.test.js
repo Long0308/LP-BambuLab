@@ -85,6 +85,16 @@ test('Tầng 3b: goal chức năng → wall_loops tăng TRƯỚC, layer <= 0.25'
   assert.ok(P.limits.layerMaxEff <= 0.25);
 });
 
+/* Tầng 3b chọn gyroid để CHỊU LỰC. Tầng 5 muốn adaptivecubic để tiết kiệm nhựa.
+   `put()` chỉ khoá key ở tầng ≤2 thì tầng 5 sẽ ghi đè và xoá mất lựa chọn chịu lực —
+   không golden test nào bắt được vì chúng đều dùng mục tiêu trang trí. */
+test('Tầng 5 KHÔNG được ghi đè gyroid của tầng 3b (đế nhỏ, mục tiêu cơ khí)', () => {
+  const P = run(box(60, 60, 40), 'Công năng cơ khí');   // đế 36 cm² → tầng 2 không chạm pattern
+  assert.equal(P.deltaProcess.sparse_infill_pattern, 'gyroid');
+  assert.ok(P.conflicts.some(c => c.key === 'sparse_infill_pattern' && c.tier === 5),
+    'phải ghi nhận tầng 5 bị chặn');
+});
+
 test('Tầng 3b KHÔNG bật cho đồ trang trí', () => {
   const P = run(box(100, 100, 50));
   assert.equal(P.deltaProcess.wall_loops, undefined);
@@ -191,6 +201,63 @@ test('mode nhanh: infill thưa nhất, mode chắc: dày nhất', () => {
 test('MODES lộ ra tên tiếng Việt để UI dùng', () => {
   assert.deepEqual(Object.keys(MODES), ['quality', 'balanced', 'fast']);
   assert.equal(MODES.balanced.name, 'Cân bằng');
+});
+
+/* ---------- Không có mesh (.gcode.3mf) ----------
+   Bambu tước mesh khỏi bản đã slice: `.gcode.3mf` chỉ còn 3D/3dmodel.model rỗng, phần
+   3D/Objects/*.model bị bỏ. Nhưng project_settings.config thì vẫn đủ. Optimizer KHÔNG
+   cần thời gian in, chỉ cần hình học + config — nên thiếu mesh thì vẫn ra được mọi
+   quyết định thuần-config, và phải NÓI RÕ cái gì bị bỏ thay vì im lặng. */
+const noGeo = (mode = 'balanced', goal = DECOR) =>
+  optimize(null, printerLimits(PS), 'PLA Matte', goal, PS, mode, 22);
+
+test('không mesh: vẫn ra quyết định thuần-config', () => {
+  const P = noGeo();
+  assert.equal(P.deltaProcess.layer_height, 0.2);
+  assert.equal(P.deltaProcess.inner_wall_speed, 244, 'trần lưu lượng không cần mesh');
+  assert.equal(P.deltaProcess.internal_solid_infill_speed, 261);
+  assert.equal(P.deltaProcess.top_shell_layers, 5, 'ceil(1.0/0.20) — không cần mesh');
+  assert.equal(P.deltaProcess.wall_generator, 'arachne');
+  assert.equal(P.deltaProcess.enable_prime_tower, 0);
+  assert.equal(P.deltaProcess.seam_slope_type, 'all');
+  assert.equal(P.deltaFilament.filament_scarf_seam_type, 'all');
+  assert.equal(P.deltaFilament.close_fan_the_first_x_layers, 3);
+  assert.deepEqual(P.violations, [], JSON.stringify(P.violations));
+});
+
+test('không mesh: TUYỆT ĐỐI không đoán quyết định cần hình học', () => {
+  const P = noGeo();
+  for (const k of ['brim_type', 'brim_width', 'enable_support', 'support_type',
+                   'default_acceleration', 'enable_overhang_speed', 'ironing_type',
+                   'top_surface_pattern', 'sparse_infill_pattern'])
+    assert.equal(P.deltaProcess[k], undefined, k + ' cần mesh, không được đoán');
+  assert.equal(P.deltaFilament.textured_plate_temp, undefined, 'bed 65 phụ thuộc diện tích đế');
+  assert.equal(P.deltaFilament.overhang_fan_speed, undefined);
+  assert.equal(P.vlhRanges.length, 0);
+});
+
+test('không mesh: liệt kê đúng những gì bị bỏ', () => {
+  const P = noGeo();
+  const s = P.skipped.join(' · ');
+  assert.ok(P.skipped.length >= 4, s);
+  for (const t of [/brim|cong vênh/i, /support/i, /overhang|bridge/i, /Variable layer height|VLH/i])
+    assert.ok(t.test(s), 'thiếu mục bị bỏ: ' + t + ' trong "' + s + '"');
+});
+
+test('có mesh: skipped rỗng', () => {
+  assert.deepEqual(run(box(200, 150, 20)).skipped, []);
+});
+
+test('không mesh: infill theo mode vẫn đặt (mật độ không cần hình học)', () => {
+  assert.equal(noGeo('fast').deltaProcess.sparse_infill_density, '10%');
+  assert.equal(noGeo('quality').deltaProcess.sparse_infill_density, '20%');
+});
+
+test('không mesh + goal cơ khí: tầng 3b vẫn chạy (không cần hình học)', () => {
+  const P = noGeo('balanced', 'Công năng cơ khí');
+  assert.ok(P.deltaProcess.wall_loops >= 3);
+  assert.equal(P.deltaProcess.infill_wall_overlap, '15%');
+  assert.equal(P.deltaProcess.sparse_infill_pattern, 'gyroid', 'tầng 3b chọn gyroid vì chịu lực, không vì hình học');
 });
 
 /* ---------- Nhựa đích khác nhựa trong file ---------- */

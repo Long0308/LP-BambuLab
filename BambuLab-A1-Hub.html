@@ -2143,19 +2143,29 @@ const MODES={
 
 /* `targetMaxvol` = trần lưu lượng của nhựa ĐÍCH (nhựa mà preset filament sẽ inherits),
    có thể khác nhựa đang gán trong file. Body 14 - LP.3mf gán slot 1 = PLA Lite (16) nhưng
-   preset xuất ra inherits PLA Matte (22); tính trần theo 16 thì tốc độ ghi ra chậm 23%. */
+   preset xuất ra inherits PLA Matte (22); tính trần theo 16 thì tốc độ ghi ra chậm 23%.
+
+   `F` = null khi file không mang mesh (.gcode.3mf bị Bambu tước 3D/Objects/*.model).
+   Optimizer KHÔNG cần thời gian in — nó cần hình học + config. Thiếu mesh thì mọi quyết
+   định thuần-config vẫn ra được; những quyết định cần nhìn hình bị BỎ và ghi vào `skipped`,
+   tuyệt đối không đoán. */
 function optimize(F,L,mat,goal,ps,mode,targetMaxvol){
   ps=ps||{}; mode=MODES[mode]?mode:'balanced';
   const M=MODES[mode];
+  const hasGeo=!!F;
+  const skipped=[];
   const R2=x=>+x.toFixed(2);   // chặn rác float lọt vào preset (0.2+0.04 = 0.24000000000000002)
   const f=v=>Array.isArray(v)?v[0]:v;
   const S=k=>String(f(ps[k])??'').toLowerCase();
   const num=k=>parseFloat(f(ps[k]));
   const dP={}, dF={}, reasons=[], conflicts=[], calibration=[], warnings=[], notes=[], vlh=[], locked=new Set();
+  /* Khoá tới tầng 3: tầng 3b (cơ khí) chọn gyroid để CHỊU LỰC, nếu chỉ khoá tới tầng 2
+     thì tầng 5 ghi đè thành adaptivecubic và xoá mất lựa chọn đó. Tầng 4/5 không có key
+     nào trùng với tầng 3 ngoài chỗ này, nên siết khoá không mất gì. */
   const put=(bag,k,v,tier,why,src)=>{
     if(locked.has(k)){ conflicts.push({key:k,tier,wanted:v,kept:bag[k]}); return; }
     bag[k]=v; reasons.push({key:k,value:v,tier,why,src});
-    if(tier<=2)locked.add(k);
+    if(tier<=3)locked.add(k);
   };
   const isPLA=/pla/i.test(mat)||/pla/i.test(String(f(ps.filament_type)||''));
   const isMatte=/matte/i.test(mat);
@@ -2188,33 +2198,39 @@ function optimize(F,L,mat,goal,ps,mode,targetMaxvol){
      ngay tại sàn 0.08 bậc vẫn còn 0.33mm ⇒ hạ layer chỉ tốn thời gian mà không hết bậc. */
   put(dP,'layer_height',lh,1,`mode ${M.name}`,'mode');
 
-  /* Tầng 2 — warping. Ba điều kiện TÁCH BẠCH. */
-  const bigBase=F.firstArea_cm2>150||F.baseDiag_mm>150;
-  const tinyContact=F.firstArea_cm2<5;
-  const tallThin=F.aspect>3;
-  if(bigBase||tinyContact||tallThin){
-    put(dP,'brim_type','outer_only',2,bigBase?`đế ${F.firstArea_cm2.toFixed(0)} cm² / chéo ${F.baseDiag_mm.toFixed(0)} mm`:`tiếp xúc bé ${F.firstArea_cm2.toFixed(1)} cm²`,'wiki/warping');
-    put(dP,'brim_width',8,2,'wiki PLA: brim 8–10mm','wiki/warping');
-  }else{
-    put(dP,'brim_type','auto_brim',2,'đế vừa, không rủi ro đặc biệt','wiki/brim');
-  }
-  if(tallThin){
-    put(dP,'default_acceleration',4500,2,`aspect ${F.aspect.toFixed(1)} → wiki giảm 20–30%`,'wiki/warping');
-    put(dP,'outer_wall_acceleration',3750,2,`aspect ${F.aspect.toFixed(1)} → wiki giảm 20–30%`,'wiki/warping');
-  }
-  if(bigBase){
-    put(dP,'sparse_infill_pattern','gyroid',2,'wiki: large flat model → gyroid','wiki/warping');
-    if(isPLA)put(dF,'textured_plate_temp',65,2,'wiki: PLA trên Textured PEI đích 55–65°C','wiki/warping');
+  /* Tầng 2 — warping. Ba điều kiện TÁCH BẠCH. Tất cả đều cần mesh. */
+  const bigBase=hasGeo&&(F.firstArea_cm2>150||F.baseDiag_mm>150);
+  const tinyContact=hasGeo&&F.firstArea_cm2<5;
+  const tallThin=hasGeo&&F.aspect>3;
+  if(!hasGeo)skipped.push('Chống cong vênh: brim, giảm acceleration, gyroid, nhiệt bàn — đều suy từ diện tích đế và tỉ lệ cao/mảnh');
+  else{
+    if(bigBase||tinyContact||tallThin){
+      put(dP,'brim_type','outer_only',2,bigBase?`đế ${F.firstArea_cm2.toFixed(0)} cm² / chéo ${F.baseDiag_mm.toFixed(0)} mm`:`tiếp xúc bé ${F.firstArea_cm2.toFixed(1)} cm²`,'wiki/warping');
+      put(dP,'brim_width',8,2,'wiki PLA: brim 8–10mm','wiki/warping');
+    }else{
+      put(dP,'brim_type','auto_brim',2,'đế vừa, không rủi ro đặc biệt','wiki/brim');
+    }
+    if(tallThin){
+      put(dP,'default_acceleration',4500,2,`aspect ${F.aspect.toFixed(1)} → wiki giảm 20–30%`,'wiki/warping');
+      put(dP,'outer_wall_acceleration',3750,2,`aspect ${F.aspect.toFixed(1)} → wiki giảm 20–30%`,'wiki/warping');
+    }
+    if(bigBase){
+      put(dP,'sparse_infill_pattern','gyroid',2,'wiki: large flat model → gyroid','wiki/warping');
+      if(isPLA)put(dF,'textured_plate_temp',65,2,'wiki: PLA trên Textured PEI đích 55–65°C','wiki/warping');
+    }
   }
   if(num('elefant_foot_compensation')>0)
     put(dP,'brim_object_gap',0,2,'I6: EFC>0 ⇒ gap phải 0, nếu không brim tách khỏi vật','wiki/brim');
 
   /* Tầng 3 — bề mặt nhìn thấy. KHÔNG được đụng layer_height (tầng 1 đã khoá). */
-  if(F.top>12&&!isMatte&&M.ironing)
-    put(dP,'ironing_type','top surfaces',3,`mặt phẳng trên ${F.top.toFixed(0)}%`,'wiki/ironing');
-  if(F.bands.lo>5){
-    put(dP,'top_surface_pattern','monotonicline',3,'mặt trên đều','—');
-    put(dP,'top_surface_speed',150,3,'chậm để mặt trên mịn','—');
+  if(!hasGeo)skipped.push('Bề mặt: ironing và monotonic mặt trên — cần biết tỉ lệ mặt phẳng trên và mặt dốc <25°');
+  else{
+    if(F.top>12&&!isMatte&&M.ironing)
+      put(dP,'ironing_type','top surfaces',3,`mặt phẳng trên ${F.top.toFixed(0)}%`,'wiki/ironing');
+    if(F.bands.lo>5){
+      put(dP,'top_surface_pattern','monotonicline',3,'mặt trên đều','—');
+      put(dP,'top_surface_speed',150,3,'chậm để mặt trên mịn','—');
+    }
   }
   /* I2: bề dày trần là ràng buộc thật, số lớp phải suy từ layer height của mode. */
   const tt=num('top_shell_thickness');
@@ -2241,29 +2257,36 @@ function optimize(F,L,mat,goal,ps,mode,targetMaxvol){
 
   /* Tầng 4b — võng mặt trên do infill quá thưa */
   const infPct=parseFloat(String(dP.sparse_infill_density||f(ps.sparse_infill_density)||'15'));
-  if(F.top>15&&infPct<12)
+  if(!hasGeo)skipped.push('Cảnh báo võng mặt trên — cần biết tỉ lệ mặt phẳng trên');
+  else if(F.top>15&&infPct<12)
     warnings.push({key:'sparse_infill_density',msg:`Mặt phẳng trên ${F.top.toFixed(0)}% + infill ${infPct}% → nguy cơ VÕNG mặt trên (UltiMaker). Nâng infill lên 15% hoặc top_shell_layers lên ${Math.ceil(tt/lh)+1}. Cả hai đều tốn thêm thời gian.`});
 
+  if(!hasGeo){
+    skipped.push('Support và bridge/overhang — cần đo diện tích mặt hướng xuống theo dải góc');
+    skipped.push('Variable layer height (bảng Height range) — cần góc dốc theo từng lát Z');
+  }
   /* Tầng 4 — overhang & bridge */
-  if(F.ohBins['75-90']>2){
+  if(hasGeo&&F.ohBins['75-90']>2){
     put(dP,'enable_overhang_speed',1,4,`${F.ohBins['75-90'].toFixed(1)} cm² mặt 75–90° (bắc cầu)`,'—');
     put(dF,'overhang_fan_speed',100,4,'thổi mát vùng đua/bắc cầu (là QUẠT, không bị override_process_overhang_speed gác)','Tab.cpp:4256');
   }
-  if(F.down<=2){
-    put(dP,'enable_support',0,4,`overhang thật ${F.down.toFixed(2)}% (${F.down_cm2.toFixed(1)} cm²) → tự đỡ được`,'đo thật');
-  }else if(F.down<=8){
-    put(dP,'enable_support',1,4,`overhang thật ${F.down.toFixed(1)}%`,'đo thật');
-    put(dP,'support_type','tree(manual)',4,'ít overhang + đồ trang trí → chỉ đỡ chỗ sơn, không để sẹo','PrintConfig.cpp:5184');
-    warnings.push({key:'support_type',msg:"support_type '(manual)' KHÔNG sinh gì nếu chưa sơn enforcer. Prepare ▸ Support painting."});
-  }else{
-    put(dP,'enable_support',1,4,`overhang thật ${F.down.toFixed(1)}% → quá nhiều để sơn tay`,'đo thật');
-    put(dP,'support_type','tree(auto)',4,'overhang lớn, không có support là hỏng','PrintConfig.cpp:5184');
+  if(hasGeo){
+    if(F.down<=2){
+      put(dP,'enable_support',0,4,`overhang thật ${F.down.toFixed(2)}% (${F.down_cm2.toFixed(1)} cm²) → tự đỡ được`,'đo thật');
+    }else if(F.down<=8){
+      put(dP,'enable_support',1,4,`overhang thật ${F.down.toFixed(1)}%`,'đo thật');
+      put(dP,'support_type','tree(manual)',4,'ít overhang + đồ trang trí → chỉ đỡ chỗ sơn, không để sẹo','PrintConfig.cpp:5184');
+      warnings.push({key:'support_type',msg:"support_type '(manual)' KHÔNG sinh gì nếu chưa sơn enforcer. Prepare ▸ Support painting."});
+    }else{
+      put(dP,'enable_support',1,4,`overhang thật ${F.down.toFixed(1)}% → quá nhiều để sơn tay`,'đo thật');
+      put(dP,'support_type','tree(auto)',4,'overhang lớn, không có support là hỏng','PrintConfig.cpp:5184');
+    }
   }
 
   /* Tầng 4 — Variable layer height. Chỉ hạ layer ở vùng dốc 25–50°:
      dưới 25° thì ngay ở sàn 0.08 bậc thang vẫn còn 0.33mm ⇒ hạ layer vô ích. */
   const STEP_TARGET=0.20;
-  const wantVLH=F.bands.mid>3||F.bands.hi>20;
+  const wantVLH=hasGeo&&(F.bands.mid>3||F.bands.hi>20);
   if(wantVLH){
     const raw=F.zSlope.map(b=>{
       let x;
@@ -2297,7 +2320,9 @@ function optimize(F,L,mat,goal,ps,mode,targetMaxvol){
     notes.push({key:'*_speed',msg:`Ba tốc độ vùng khuất đặt đúng floor(trần) tại maxvol ${Lh.maxvol} mm³/s và layer ${lh.toFixed(2)}. Đổi sang nhựa có maxvol khác thì bộ giới hạn tự ghì — không hỏng, chỉ chậm lại. Outer wall và Top surface giữ nguyên vì chúng quyết định bề mặt.`});
   }
   if(!wantVLH)put(dP,'enable_prime_tower',0,5,'in 1 màu không cần prime tower','—');
-  put(dP,'sparse_infill_pattern','adaptivecubic',5,'tiết kiệm nhựa','—'); // bị tầng 2/3b chặn nếu đế lớn / cơ khí
+  /* adaptivecubic tiết kiệm nhựa nhưng đánh đổi bằng rủi ro cong vênh trên đế lớn.
+     Không có mesh thì không biết đế lớn hay nhỏ ⇒ không chọn, để kế thừa stock. */
+  if(hasGeo)put(dP,'sparse_infill_pattern','adaptivecubic',5,'tiết kiệm nhựa','—'); // bị tầng 2/3b chặn nếu đế lớn / cơ khí
 
   /* Derive → Validate → sửa → lặp. Tối đa 3 vòng. */
   let violations=[];
@@ -2335,7 +2360,7 @@ function optimize(F,L,mat,goal,ps,mode,targetMaxvol){
     if(!fixed)break;
   }
 
-  return {mode,modeName:M.name,deltaProcess:dP,deltaFilament:dF,vlhRanges:vlh,
+  return {mode,modeName:M.name,hasGeo,skipped,deltaProcess:dP,deltaFilament:dF,vlhRanges:vlh,
           reasons,conflicts,calibration,warnings,notes,violations,
           limits:Object.assign({},Lh,{layerMaxEff}),
           _ctx:{isPLA,isMatte,functional,bigBase,tinyContact,tallThin,wantVLH}};
@@ -2387,6 +2412,14 @@ function renderPlan(plans,ps,mat,mv){
   const g=k=>firstOf(ps[k]);
   const P0=plans.find(p=>p.mode==="balanced")||plans[0];
   let h="<h2 class='sec' style='margin-top:22px'>Cấu hình tối ưu — tự sinh từ hình học</h2>";
+
+  /* Bambu tước 3D/Objects/*.model khỏi bản .gcode.3mf. Optimizer không cần THỜI GIAN IN,
+     nó cần MESH. Thiếu mesh thì các tầng thuần-config vẫn chạy; phải nói rõ cái gì bị bỏ. */
+  if(!P0.hasGeo){
+    h+="<div class='callout c-amber'><svg class='icn'><use href='#i-alert'/></svg><div><b>File này không mang lưới hình học (mesh).</b> Bản <code>.gcode.3mf</code> chỉ chứa g-code đã slice; phần mesh nằm ở <code>3D/Objects/*.model</code> của bản <b>.3mf Project</b>. Cấu hình dưới đây vẫn suy ra được từ Process config, nhưng <b>"+P0.skipped.length+" nhóm quyết định bị bỏ</b> vì chúng phải nhìn hình:<ul>";
+    P0.skipped.forEach(s=>{h+="<li>"+esc(s)+"</li>";});
+    h+="</ul>Muốn đủ: <code>File ▸ Save Project as…</code> rồi thả file <code>.3mf</code> đó vào đây.</div></div>";
+  }
 
   /* Nhựa trong file có thể KHÁC nhựa đích. Nói thẳng, vì mọi tốc độ đều dẫn xuất từ maxvol. */
   const fileMv=parseFloat(firstOf(ps.filament_max_volumetric_speed));
@@ -2447,7 +2480,14 @@ function renderPlan(plans,ps,mat,mv){
     P0.vlhRanges.forEach(r=>{h+="<tr><td>"+r.z0.toFixed(0)+"</td><td>"+r.z1.toFixed(0)+"</td><td class='val'>"+r.layer.toFixed(2)+"</td><td class='gd'>"+(r.theta?r.theta.toFixed(0)+"°":"—")+"</td></tr>";});
     h+="</table>";
   }
-  h+="<div style='display:flex;gap:8px;margin-top:12px'><button class='btn' id='expOpt'>⬇ Xuất "+(plans.length*2)+" preset ("+plans.length+" mode × process+filament)</button></div>";
+  /* Không có preset stock để `inherits` thì preset xuất ra sẽ không import được.
+     Nói thẳng và ẩn nút, thay vì để người dùng bấm rồi nhận alert. */
+  const badLayer=plans.map(p=>p.deltaProcess.layer_height).find(x=>!INHERIT_PROCESS[x.toFixed(2)]);
+  if(badLayer!==undefined){
+    h+="<div class='callout c-warn'><svg class='icn'><use href='#i-alert'/></svg><div><b>Chưa xuất được preset.</b> Mode cần layer <code>"+badLayer.toFixed(2)+"mm</code>, nhưng hub chỉ biết ba preset stock để kế thừa: <code>0.16mm Optimal</code>, <code>0.20mm Standard</code>, <code>0.24mm Draft</code> — đều là A1 nozzle 0.4. Bảng trên vẫn dùng để chỉnh tay.</div></div>";
+  }else{
+    h+="<div style='display:flex;gap:8px;margin-top:12px'><button class='btn' id='expOpt'>⬇ Xuất "+(plans.length*2)+" preset ("+plans.length+" mode × process+filament)</button></div>";
+  }
   return h;
 }
 
@@ -2614,7 +2654,9 @@ function compareToTarget(ps){
    nên đổi nhựa/mục tiêu mà không gọi lại thì bảng tối ưu biến mất. */
 function appendPlan(){
   const A=lastAnalysis;
-  if(!A||!A.ps||!A.feat)return;
+  /* Không cần mesh vẫn chạy được: optimize() bỏ các tầng cần hình học và ghi vào skipped.
+     Nhưng KHÔNG có Process config thì chẳng suy ra được gì. */
+  if(!A||!A.ps)return;
   const R=$("#result"); if(!R)return;
   const L=printerLimits(A.ps), mat=$("#mat").value;
   /* Trần lưu lượng phải theo nhựa ĐÍCH (nhựa mà preset filament sẽ inherits), không theo
