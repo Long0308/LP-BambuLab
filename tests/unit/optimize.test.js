@@ -2,7 +2,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert');
 const { loadPure } = require('./lib/loadPure');
-const { geoFeatures, printerLimits, optimize, MODES, PATTERNS } = loadPure();
+const { geoFeatures, printerLimits, optimize, MODES, PATTERNS, timeRegressions } = loadPure();
 const { box, sphere, frustum, bridge, ledge } = require('./fixtures/meshes');
 
 /* Kế thừa '0.20mm Standard @BBL A1' + Bambu PLA Matte (maxvol 22). */
@@ -318,6 +318,38 @@ test('top_surface_speed không đổi thì KHÔNG được coi là chậm hơn, 
   const P = optimize(geoFeatures(sphere(40)), printerLimits(ps), 'PLA Matte', DECOR, ps, 'quality', 22);
   assert.equal(P.deltaProcess.top_surface_speed, 150);
   assert.ok(!P.slower.some(x => x.key === 'top_surface_speed'), JSON.stringify(P.slower));
+});
+
+/* Đổi nhựa đích sang loại có trần lưu lượng THẤP hơn thì tốc độ ghi ra tất nhiên nhỏ hơn.
+   Đó KHÔNG phải hub làm chậm: với nhựa mới, con số cũ cũng bị bộ giới hạn ghì về đúng trần
+   ấy. Phải kẹp CẢ HAI vế bằng trần của nhựa ĐÍCH, nếu không chốt chặn tự vu cho hub.
+   Đo thật: file PLA Matte (22) speeds 244/244/261 · đích PLA Basic (21) → hub ghi 233/233/249,
+   lưu lượng hữu hiệu chênh 0.14–0.40%. */
+test('Đổi sang nhựa trần thấp hơn: KHÔNG được coi là hub làm chậm', () => {
+  const ps = { ...PS, filament_max_volumetric_speed: ['22'], sparse_infill_density: '15%',
+    inner_wall_speed: ['244'], sparse_infill_speed: ['244'], internal_solid_infill_speed: ['261'],
+    outer_wall_speed: ['200'], top_surface_speed: ['150'] };
+  const P = optimize(geoFeatures(box(100, 100, 50)), printerLimits(ps), 'PLA Basic', 'Thông thường', ps, 'balanced', 21);
+  assert.equal(P.deltaProcess.inner_wall_speed, 233, 'floor(21/(0.20×0.45))');
+  assert.deepEqual(P.timeGuard, [], JSON.stringify(P.timeGuard));
+});
+
+/* Chốt chặn PHẢI còn răng: một tốc độ thật sự thấp hơn vẫn phải bị bắt. Gọi thẳng
+   timeRegressions, đừng kiểm gián tiếp — test giả là test vô dụng. */
+test('Chốt chặn vẫn bắt tốc độ thật sự chậm hơn', () => {
+  const ps = { ...PS, filament_max_volumetric_speed: ['22'], inner_wall_speed: ['244'] };
+  const L = printerLimits(ps);
+  assert.deepEqual(timeRegressions({ inner_wall_speed: 200 }, {}, ps, L, L).map(x => x.key),
+    ['inner_wall_speed'], '200 thật sự chậm hơn 244 ở cùng trần');
+  assert.deepEqual(timeRegressions({ inner_wall_speed: 244 }, {}, ps, L, L), [], 'bằng nhau thì không');
+});
+
+test('Chốt chặn: kẹp cả hai vế bằng trần của nhựa ĐÍCH, không phải nhựa trong file', () => {
+  const ps = { ...PS, filament_max_volumetric_speed: ['22'], inner_wall_speed: ['244'] };
+  const Lfile = printerLimits(ps);
+  const Lnew = printerLimits({ ...ps, filament_max_volumetric_speed: ['21'] });
+  assert.deepEqual(timeRegressions({ inner_wall_speed: 233 }, {}, ps, Lfile, Lnew), [],
+    'với PLA Basic thì 244 cũng bị ghì còn 21 mm³/s — 233 không chậm hơn');
 });
 
 /* Hạ acceleration cho vật cao mảnh là chống rung/đổ — an toàn, không phải đòn bẩy thời

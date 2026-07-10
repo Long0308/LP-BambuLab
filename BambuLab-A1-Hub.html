@@ -2228,7 +2228,12 @@ function timeRegressions(dP,dF,ps,Lfile,Lnew){
     let d=0;
     if(SPEED_KEY.test(k)){
       const base=k.replace(/_speed$/,'');
-      const flow=(L,v)=>Math.min(L.layerHeight*(L.width[base]||0.45)*num0(v), L.maxvol||Infinity);
+      /* Kẹp CẢ HAI vế bằng trần của nhựa ĐÍCH. Đổi sang nhựa trần thấp hơn thì con số cũ
+         cũng bị bộ giới hạn ghì về đúng trần ấy — không phải hub làm chậm. Kẹp vế cũ bằng
+         trần của nhựa trong file sẽ khiến chốt chặn tự vu cho hub (đo: PLA Matte 22 → PLA
+         Basic 21, hub ghi 233 thay 244, chênh lưu lượng hữu hiệu chỉ 0.14%). */
+      const cap=Lnew.maxvol||Infinity;
+      const flow=(L,v)=>Math.min(L.layerHeight*(L.width[base]||0.45)*num0(v), cap);
       const a=flow(Lfile,from), b=flow(Lnew,delta[k]);
       d=(Math.abs(a-b)<=0.01*Math.max(a,b))?0:sgn(a-b);   // lưu lượng cao hơn ⇒ nhanh hơn
     }else if(TIME_DIR[k]){
@@ -2549,6 +2554,100 @@ function buildPresets(plans,mat){
 
 /* ================= BỘ TỐI ƯU — phần đụng DOM ================= */
 
+/* ===== Việt hoá bảng tra ETL =====
+   Cột "Tên hiển thị" GIỮ NGUYÊN tiếng Anh vì đó đúng là chữ phải tìm trong Bambu Studio;
+   nghĩa tiếng Việt đặt ngay dưới. Dịch khoá theo KEY MÁY chứ không theo tên hiển thị: có
+   tới 5 tên trùng nhau (Fan speed ×2, Outer wall ×2, Other layers ×2, Type, Max, Min…). */
+const VI_PAGE={
+  "Quality":"Chất lượng","Strength":"Độ bền","Speed":"Tốc độ","Support":"Giá đỡ",
+  "Others":"Khác","Cooling":"Làm mát","Filament":"Nhựa",
+  "Setting Overrides":"Nhựa đè Process","Plate Settings":"Khay in",
+  "Single extruder MM setup":"In nhiều màu 1 đầu phun","—":"—",
+};
+const VI_GROUP={
+  "Basic information":"Thông tin cơ bản","Layer height limits":"Giới hạn bề dày lớp",
+  "Part cooling fan":"Quạt làm mát vật","Filament scarf seam settings":"Mối vát giấu seam (nhựa)",
+  "Volumetric speed limitation":"Trần lưu lượng","Speed":"Tốc độ","Prime tower":"Tháp mồi",
+  "Advanced":"Nâng cao","Ironing":"Là mặt (ironing)","Layer height":"Bề dày lớp",
+  "Precision":"Độ chính xác","Seam":"Đường nối (seam)","Wall generator":"Bộ sinh thành",
+  "Acceleration":"Gia tốc","Initial layer speed":"Tốc độ lớp đầu","Other layers speed":"Tốc độ các lớp sau",
+  "Sparse infill":"Ruột (infill)","Top/bottom shells":"Vỏ trên/dưới","Walls":"Thành",
+  "Support":"Giá đỡ","Bed adhension":"Bám bàn","—":"—",
+};
+const VI_MODE={"Simple":"Cơ bản","Advanced":"Nâng cao"};
+const VI_KEY={
+  nozzle_diameter:"Đường kính đầu phun",
+  max_layer_height:"Bề dày lớp tối đa máy cho phép",
+  min_layer_height:"Bề dày lớp tối thiểu máy cho phép",
+  overhang_fan_speed:"Tốc độ quạt ở vùng đua / bắc cầu",
+  enable_pressure_advance:"Bật bù áp suất (đo trên máy, đừng đoán)",
+  filament_flow_ratio:"Hệ số lưu lượng (đo bằng Flow Rate Calibration)",
+  pressure_advance:"Giá trị K của bù áp suất",
+  filament_scarf_seam_type:"Kiểu mối vát — ô NHỰA, luôn ĐÈ ô Process",
+  filament_max_volumetric_speed:"Trần lưu lượng của nhựa (mm³/s) — quyết định tốc độ THẬT",
+  override_process_overhang_speed:"Công tắc cho phép ô nhựa đè tốc độ vùng đua",
+  fan_min_speed:"Tốc độ quạt tối thiểu",
+  fan_max_speed:"Tốc độ quạt tối đa",
+  close_fan_the_first_x_layers:"Tắt quạt trong N lớp đầu (để bám bàn)",
+  textured_plate_temp:"Nhiệt bàn khi dùng khay Textured PEI",
+  nozzle_temperature:"Nhiệt đầu phun các lớp sau",
+  enable_prime_tower:"Bật tháp mồi (in 1 màu không cần; nó CHẶN Variable layer height)",
+  wall_sequence:"Thứ tự in thành — có mặt đua thì phải inner/outer",
+  ironing_type:"Là mặt trên cho phẳng bóng (PLA Matte không cần)",
+  initial_layer_print_height:"Bề dày lớp đầu",
+  layer_height:"Bề dày lớp",
+  elefant_foot_compensation:"Bù phồng chân lớp đầu",
+  seam_slope_type:"Kiểu mối vát — ô PROCESS, bị ô nhựa đè",
+  seam_position:"Vị trí đường nối",
+  wall_generator:"Bộ sinh thành (Arachne = thành biến thiên)",
+  default_acceleration:"Gia tốc in thường",
+  outer_wall_acceleration:"Gia tốc thành ngoài",
+  initial_layer_speed:"Tốc độ lớp đầu",
+  bridge_speed:"Tốc độ bắc cầu",
+  inner_wall_speed:"Tốc độ thành trong (vùng khuất)",
+  internal_solid_infill_speed:"Tốc độ lớp đặc bên trong (vùng khuất)",
+  outer_wall_speed:"Tốc độ thành ngoài — quyết định BỀ MẶT, đừng hạ",
+  enable_overhang_speed:"Chạy chậm ở vùng đua",
+  sparse_infill_speed:"Tốc độ ruột (vùng khuất)",
+  top_surface_speed:"Tốc độ mặt trên",
+  infill_wall_overlap:"Độ chồng lấn ruột ↔ thành",
+  sparse_infill_density:"Mật độ ruột — chỉ dày khi vật CHỊU LỰC",
+  sparse_infill_pattern:"Kiểu ruột — xem bảng 22 pattern ở tab Cải thiện",
+  bottom_shell_layers:"Số lớp vỏ đáy",
+  top_shell_layers:"Số lớp vỏ trên",
+  top_shell_thickness:"Bề dày vỏ trên (mm) — engine TỰ TĂNG số lớp cho đủ",
+  top_surface_pattern:"Kiểu đường mặt trên",
+  wall_loops:"Số vòng thành",
+  support_top_z_distance:"Khe hở Z giữa giá đỡ và vật",
+  enable_support:"Bật giá đỡ",
+  support_on_build_plate_only:"Chỉ dựng giá đỡ từ mặt bàn",
+  support_style:"Kiểu giá đỡ (organic CHẶN Variable layer height)",
+  support_threshold_angle:"Góc ngưỡng sinh giá đỡ",
+  support_type:"Loại giá đỡ — (manual) KHÔNG sinh gì nếu chưa sơn enforcer",
+  brim_type:"Kiểu viền chân",
+  brim_width:"Bề rộng viền chân",
+  brim_object_gap:"Khe hở viền ↔ vật (phải = 0 khi có bù phồng chân)",
+  curr_bed_type:"Loại khay in",
+};
+function localizeEtl(){
+  const rows=document.querySelectorAll("#ky-thuat table tr");
+  rows.forEach(tr=>{
+    const td=tr.querySelectorAll("td");
+    if(td.length!==5)return;                       // bỏ header và dòng nhóm
+    const code=td[3].querySelector("code");
+    if(!code)return;
+    const gloss=(en,dict)=>{
+      const vi=dict[en.trim()];
+      return vi&&vi!==en.trim() ? esc(vi)+" <span class='gd' style='opacity:.65'>· "+esc(en)+"</span>" : esc(en);
+    };
+    td[0].innerHTML=gloss(td[0].textContent,VI_PAGE);
+    td[1].innerHTML=gloss(td[1].textContent,VI_GROUP);
+    td[4].innerHTML=gloss(td[4].textContent,VI_MODE);
+    const vi=VI_KEY[code.textContent.trim()];
+    if(vi)td[2].innerHTML=td[2].innerHTML+"<div class='gd' style='font-weight:400'>"+esc(vi)+"</div>";
+  });
+}
+
 /* Bảng 22 pattern, dựng từ chính PATTERNS mà optimizer dùng — bảng và luật không thể lệch. */
 function renderPatternTable(){
   const box=$("#patternTable"); if(!box)return;
@@ -2768,14 +2867,37 @@ function auditFile(ps,geo,slice){
  }
  return F.concat(auditOverrides(ps),auditTime(ps));
 }
+/* Mỗi thẻ: [tiêu đề, màu, giải thích, CÁCH CHỈNH].
+   `fix` = mảng [đường dẫn menu trong Bambu Studio, key máy, giá trị đặt].
+   Khuyến nghị không kèm chỗ bấm là khuyến nghị vô dụng. */
 function geoAdvice(geo){
  if(!geo)return[]; const it=[];
- if(geo.slope>25)it.push(["Nhiều mặt CONG/DỐC (~"+geo.slope.toFixed(0)+"%)","var(--su)","Dùng Variable layer height (mỏng CHỈ chỗ cong) thay vì hạ layer toàn cục. Bật Slow down for overhangs."]);
- else it.push(["Ít mặt cong (~"+geo.slope.toFixed(0)+"%)","var(--q)","Chủ yếu phẳng/đứng → Layer 0.20 vẫn đẹp → in nhanh hơn."]);
- if(geo.top>12)it.push(["Mặt TRÊN phẳng lớn (~"+geo.top.toFixed(0)+"%)","var(--teal)","Bật Ironing = Top surfaces (mịn/bóng); ↑ Top shell 5; Monotonic."]);
- if(geo.down>8)it.push(["Overhang (~"+geo.down.toFixed(0)+"%)","var(--red)","Cần Support + ↑ Fan 100% + ↓ Outer wall speed vùng đua. In-place → dùng Support blocker."]);
- else it.push(["Ít overhang (~"+geo.down.toFixed(0)+"%)","var(--q)","Gần như không cần support → tiết kiệm nhựa."]);
- if(geo.aspect>3)it.push(["Cao & MẢNH (tỉ lệ "+geo.aspect.toFixed(1)+")","var(--s)","Dễ rung/đổ → ↓ tốc độ, BẬT Brim, giảm acceleration."]);
+ if(geo.slope>25)it.push(["Nhiều mặt CONG/DỐC (~"+geo.slope.toFixed(0)+"%)","var(--su)",
+   "Hạ layer toàn cục là phí: vùng phẳng cũng bị mỏng theo. Chỉ mỏng ĐÚNG chỗ cong.",
+   [["Prepare ▸ chuột phải vào vật ▸ Height range Modifier","(không có key — preset không mang được)","Nhập bảng Z-range mà hub sinh ở cuối trang"],
+    ["Process ▸ Speed ▸ Other layers speed ▸ Slow down for overhang","enable_overhang_speed","bật"]]]);
+ else it.push(["Ít mặt cong (~"+geo.slope.toFixed(0)+"%)","var(--q)",
+   "Chủ yếu phẳng/đứng → không cần layer mỏng, in nhanh hơn.",
+   [["Process ▸ Quality ▸ Layer height","layer_height","0.20 hoặc 0.24"]]]);
+ if(geo.top>12)it.push(["Mặt TRÊN phẳng lớn (~"+geo.top.toFixed(0)+"%)","var(--teal)",
+   "Mặt trên lớn thì đường in phải đều và đủ lớp đặc. PLA Matte KHÔNG nên là (bị bóng loang).",
+   [["Process ▸ Quality ▸ Ironing ▸ Ironing Type","ironing_type","Top surfaces — trừ PLA Matte thì để No ironing"],
+    ["Process ▸ Strength ▸ Top/bottom shells ▸ Top shell layers","top_shell_layers","≥ ceil(top_shell_thickness ÷ layer_height)"],
+    ["Process ▸ Strength ▸ Top surface pattern","top_surface_pattern","Monotonic line"]]]);
+ if(geo.down>8)it.push(["Overhang (~"+geo.down.toFixed(0)+"%)","var(--red)",
+   "Quá nhiều mặt đua để sơn tay. Cần giá đỡ tự động + thổi mát mạnh.",
+   [["Process ▸ Support ▸ Enable support","enable_support","bật"],
+    ["Process ▸ Support ▸ Type","support_type","tree(auto)"],
+    ["Filament ▸ Cooling ▸ Fan speed for overhang","overhang_fan_speed","100"],
+    ["Prepare ▸ chuột phải ▸ Support painting","(sơn tay)","chuột PHẢI = blocker ĐỎ để chặn chỗ không muốn đỡ"]]]);
+ else it.push(["Ít overhang (~"+geo.down.toFixed(0)+"%)","var(--q)",
+   "Gần như tự đỡ được. Tắt giá đỡ tiết kiệm nhựa và thời gian — nhưng xem Preview trước khi in.",
+   [["Process ▸ Support ▸ Enable support","enable_support","tắt (nếu Preview không thấy chỗ rơi)"]]]);
+ if(geo.aspect>3)it.push(["Cao & MẢNH (tỉ lệ "+geo.aspect.toFixed(1)+")","var(--s)",
+   "Dễ rung và đổ. Hạ gia tốc chứ ĐỪNG hạ tốc độ thành ngoài — hạ nó thời gian tăng vọt.",
+   [["Process ▸ Speed ▸ Acceleration ▸ Normal printing","default_acceleration","4500 (giảm ~25%)"],
+    ["Process ▸ Speed ▸ Acceleration ▸ Outer wall","outer_wall_acceleration","3750 (giảm ~25%)"],
+    ["Process ▸ Others ▸ Bed adhension ▸ Brim type","brim_type","Outer brim only, rộng 8mm"]]]);
  return it;
 }
 function goalSuggest(geo){
@@ -2971,7 +3093,16 @@ function render(ps,geo,slice,findings,name){
    // geometry advice
    const adv=geoAdvice(geo);
    if(adv.length){h+="<div class='sectitle'>Hình học → thông số nên chỉnh</div><div class='grid g2'>";
-     adv.forEach(a=>h+="<div class='card' style='border-top:3px solid "+a[1]+"'><h3 style='color:"+a[1]+"'>"+esc(a[0])+"</h3><div class='gd'>"+esc(a[2])+"</div></div>");h+="</div>";}
+     adv.forEach(a=>{
+       h+="<div class='card geo-fix' style='border-top:3px solid "+a[1]+"'><h3 style='color:"+a[1]+"'>"+esc(a[0])+"</h3><div class='gd'>"+esc(a[2])+"</div>";
+       if(a[3]&&a[3].length){
+         h+="<div class='sectitle' style='margin-top:10px;font-size:12px'>Chỉnh ở đâu</div><table style='margin-top:4px'>"
+           +"<tr><th>Đường dẫn trong Bambu Studio</th><th>Key máy</th><th>Đặt thành</th></tr>";
+         a[3].forEach(f=>{h+="<tr><td class='gd'>"+esc(f[0])+"</td><td><code>"+esc(f[1])+"</code></td><td class='val'>"+esc(f[2])+"</td></tr>";});
+         h+="</table>";
+       }
+       h+="</div>";
+     });h+="</div>";}
  }
  // findings
  if(findings.length){
@@ -3010,7 +3141,7 @@ drop.addEventListener("drop",e=>{e.preventDefault();drop.classList.remove("hot")
 file.addEventListener("change",()=>{if(file.files[0])analyze(file.files[0]);});
 
 /* init */
-renderSettings(); renderStatic(); renderPatternTable();
+renderSettings(); renderStatic(); renderPatternTable(); localizeEtl();
 </script>
 </body>
 </html>

@@ -55,6 +55,35 @@ module.exports = async function run() {
         s.check("[pattern] zig-zag hiện nhãn Rectilinear", t.rect);
         s.check("[pattern] cột key hiện giá trị máy", t.key);
         s.eq("[pattern] pageerror = 0", errors.length, 0, errors[0]);
+
+        // --- bảng tra ETL phải được Việt hoá, nhưng GIỮ chữ tiếng Anh để tìm trong Studio ---
+        const etl = await page.evaluate(() => {
+          const rows = [...document.querySelectorAll("#ky-thuat table tr")].filter(
+            (tr) => tr.querySelectorAll("td").length === 5 && tr.querySelector("code")
+          );
+          const cell = (k, i) => {
+            const tr = rows.find((r) => r.querySelector("code").textContent.trim() === k);
+            return tr ? tr.querySelectorAll("td")[i].innerText : "";
+          };
+          return {
+            n: rows.length,
+            page: cell("wall_sequence", 0),
+            group: cell("wall_sequence", 1),
+            name: cell("wall_sequence", 2),
+            mode: cell("wall_sequence", 4),
+            fanMin: cell("fan_min_speed", 2),
+            fanMax: cell("fan_max_speed", 2),
+          };
+        });
+        s.eq("[etl] đủ 52 dòng", etl.n, 52);
+        s.check("[etl] cột Trang có tiếng Việt", /Chất lượng/.test(etl.page), etl.page);
+        s.check("[etl] cột Trang GIỮ tiếng Anh để tra trong Studio", /Quality/.test(etl.page), etl.page);
+        s.check("[etl] cột Nhóm Việt hoá", /Nâng cao/.test(etl.group), etl.group);
+        s.check("[etl] cột Chế độ Việt hoá", /Nâng cao/.test(etl.mode), etl.mode);
+        s.check("[etl] tên hiển thị giữ nguyên + nghĩa tiếng Việt", /Order of walls/.test(etl.name) && /Thứ tự in thành/.test(etl.name), etl.name);
+        // 5 tên hiển thị trùng nhau → phải dịch theo KEY, không theo tên
+        s.check("[etl] fan_min và fan_max cùng tên nhưng khác nghĩa",
+          /tối thiểu/.test(etl.fanMin) && /tối đa/.test(etl.fanMax), etl.fanMin + " | " + etl.fanMax);
       } finally {
         await page.close();
       }
@@ -70,6 +99,21 @@ module.exports = async function run() {
         s.check(`[${name}] có nút xuất preset`, p.hasBtn);
         s.check(`[${name}] KHÔNG báo thiếu mesh`, !p.noMesh);
         s.check(`[${name}] bảng so sánh có dòng`, p.cmpRows > 5, `chỉ ${p.cmpRows} dòng`);
+        // mọi khuyến nghị hình học phải kèm ĐƯỜNG DẪN + KEY, không chỉ lời khuyên suông
+        const fix = await page.evaluate(() => {
+          const cards = [...document.querySelectorAll("#result .card.geo-fix")];
+          const withFix = cards.filter((c) => /Chỉnh ở đâu/.test(c.innerText));
+          return {
+            cards: cards.length,
+            withFix: withFix.length,
+            hasPath: withFix.some((c) => /Process ▸|Prepare ▸|Filament ▸/.test(c.innerText)),
+            hasKey: withFix.some((c) => c.querySelector("code")),
+          };
+        });
+        s.check(`[${name}] mỗi thẻ hình học có mục "Chỉnh ở đâu"`, fix.withFix > 0 && fix.withFix === fix.cards,
+          `${fix.withFix}/${fix.cards} thẻ`);
+        s.check(`[${name}] có đường dẫn menu Bambu Studio`, fix.hasPath);
+        s.check(`[${name}] có key máy`, fix.hasKey);
         s.eq(`[${name}] pageerror = 0`, errors.length, 0, errors[0]);
       } finally {
         await page.close();
