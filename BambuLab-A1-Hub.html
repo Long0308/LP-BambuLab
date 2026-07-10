@@ -585,6 +585,38 @@
       </div>
     </div>
 
+    <div class="sectitle">⚔️ Wiki chính hãng vs CỘNG ĐỒNG — chỗ nào khớp, chỗ nào lệch</div>
+    <div class="card bar-ot">
+      <div class="gd" style="margin-bottom:10px">Cào bằng Firecrawl từ cả hai phía (wiki.bambulab.com · reddit r/BambuLab · UltiMaker · BigRep). Khi hai nguồn lệch nhau, hub ghi rõ theo bên nào và vì sao.</div>
+      <table>
+        <tr><th>Chủ đề</th><th>Wiki Bambu</th><th>Cộng đồng / nguồn khác</th><th>Hub theo</th></tr>
+        <tr>
+          <td><b>Bed PLA trên Textured PEI</b></td>
+          <td class="gd">Trang <i>Warping</i>: cong góc → tăng bed, đích <b>55–65°C</b>. Trang <i>Textured PEI troubleshooting</i>: nhiệt QUÁ cao → elephant foot + clog. Hai trang, hai giọng.</td>
+          <td class="gd">Reddit đồng thuận: <b>65 là chuẩn</b> textured PEI; 55–60 khi phồng chân; +5–10°C mùa lạnh/garage.</td>
+          <td class="gd"><b>Cả hai</b> — luật theo diện tích đế: đế lớn &lt;65 → cảnh báo; đế nhỏ ≥65 → chỉ nhắc hạ nếu phồng chân.</td>
+        </tr>
+        <tr>
+          <td><b>Tăng tốc vùng khuất</b></td>
+          <td class="gd">Trang <i>Volumetric</i>: slicer tự hạ tốc khi vượt trần; "in chậm hơn kỳ vọng → xem Max Volumetric Speed".</td>
+          <td class="gd"><b>Đo thật trên máy</b>: stock đặt inner wall 300 / infill 270 — <b>vượt sẵn trần 244</b> → hai vùng đó đã chạy hết tốc.</td>
+          <td class="gd"><b>Số đo</b> — đừng set lại 2 key đó; chỉ <code>internal_solid_infill_speed</code> còn dư (+4%).</td>
+        </tr>
+        <tr>
+          <td><b>Variable layer height</b></td>
+          <td class="gd">Studio gợi ý: <i>"print even faster by using Adaptive Layer Height"</i>.</td>
+          <td class="gd"><b>Đo thật</b>: Adaptive mặc định thiên mịn → 1155 lớp / 14h41m so với 750 / 10h44m — <b>chậm hơn 37%</b>.</td>
+          <td class="gd"><b>Số đo</b> — VLH chỉ nhanh khi kéo về "coarser" và lọc vùng dốc &lt;25°.</td>
+        </tr>
+        <tr>
+          <td><b>Bền: wall hay infill?</b></td>
+          <td class="gd">Wiki không nói thẳng.</td>
+          <td class="gd">UltiMaker: <i>"2 perimeter thêm &gt; nâng infill 20→30%"</i>. BigRep: layer 0.2→0.3 mất 52→48 MPa.</td>
+          <td class="gd"><b>UltiMaker/BigRep</b> — tăng wall trước, kẹp layer ≤0.25 cho vật chịu lực.</td>
+        </tr>
+      </table>
+    </div>
+
     <div class="sectitle">Công thức SMOOTH theo từng vùng bề mặt</div>
     <div class="grid g2">
       <div class="card bar-q">
@@ -1862,8 +1894,12 @@ function auditTime(ps){
    if(s>vmax+1)over.push(vn+": đang "+s.toFixed(0)+" nhưng trần chỉ "+vmax.toFixed(0)+" mm/s (flow "+flow.toFixed(1)+" > "+mv+" mm³/s)");
    else if(hidden&&vmax>s*1.03)gains.push(vn+": "+s.toFixed(0)+" → "+vmax.toFixed(0)+" mm/s (+"+((vmax/s-1)*100).toFixed(0)+"%)");
  }
- if(over.length)add("warn","Tốc độ VƯỢT trần lưu lượng → đặt cao vô nghĩa",over.join(" · ")+". Máy tự hạ về trần, số nhập thêm không có tác dụng. Muốn nhanh hơn: ↑ max volumetric speed (nếu nhựa chịu được) hoặc ↑ layer height.");
- if(gains.length)add("info","Còn DƯ trần lưu lượng ở vùng khuất → tăng tốc MIỄN PHÍ",gains.join(" · ")+". Các vùng này không lộ ra ngoài nên tăng tốc không ảnh hưởng bề mặt. GIỮ NGUYÊN Outer wall & Top surface.");
+ /* Vượt trần KHÔNG phải lỗi: đo profile stock '0.20mm Standard @BBL A1' thấy inner_wall=300,
+    sparse_infill=270 — Bambu CỐ TÌNH đặt vượt trần rồi để bộ giới hạn ghì về v_max
+    (wiki Volumetric: "the slicer automatically adjusts by reducing the speed"). 8/10 file
+    thật dính → hạ xuống THÔNG TIN, nói rõ tốc độ THẬT khi in. */
+ if(over.length)add("info","Tốc độ đặt VƯỢT trần lưu lượng — bộ giới hạn sẽ ghì về v_max",over.join(" · ")+". Đây là THIẾT KẾ của profile stock Bambu (vd 0.20mm Standard đặt inner wall 300 > trần 244): slicer tự hạ tốc về trần, tốc độ THẬT khi in = v_max. Không phải lỗi — nhưng đừng kỳ vọng con số đã nhập.");
+ if(gains.length)add("info","Tốc độ vùng khuất đặt DƯỚI trần → đang TỰ HÃM",gains.join(" · ")+". Vùng khuất không lộ bề mặt — hoặc XOÁ override để kế thừa stock (stock đặt vượt trần, bộ giới hạn tự ghì về v_max ở mọi layer height), hoặc nâng lên ≥ trần. GIỮ NGUYÊN Outer wall & Top surface.");
  const inf=parseFloat(g("sparse_infill_density")), tl=+g("top_shell_layers"), bl=+g("bottom_shell_layers"), wl=+g("wall_loops");
  const prime=["1","true"].includes(String(g("enable_prime_tower")).toLowerCase());
  const tips=[];
@@ -1910,7 +1946,16 @@ function auditFile(ps,geo,slice){
  const lh=+g("layer_height")||0.2, ow=+g("outer_wall_speed"), wl=+g("wall_loops"), inf=parseFloat(g("sparse_infill_density"));
  const bed=+(g("textured_plate_temp")||g("hot_plate_temp"));
  if(ow>=100&&ow<=145)add("warn","Outer wall vùng 'vân belt'",ow+"mm/s ~120 → A1 dễ vân sóng. Giảm <100 hoặc tăng >160.");
- if(ft.includes("PLA")&&bed>=65)add("warn","Bed hơi nóng cho PLA","bed "+bed+"°C → dễ phồng chân (elephant foot) + heat-creep. Hè VN 55–60°C là đủ.");
+ /* Bed PLA trên Textured PEI — 3 nguồn khớp nhau:
+    wiki Warping: cong góc → tăng bed, đích 55–65 (A1 khung hở phòng <20°C thì +10);
+    wiki Textured-PEI troubleshooting: nhiệt QUÁ cao → elephant foot + clog;
+    cộng đồng (reddit r/BambuLab): 65 là CHUẨN textured PEI, hạ 55–60 khi phồng chân.
+    => luật theo DIỆN TÍCH ĐẾ, không phán một chiều. Luật cũ "bed>=65 là nóng" trái wiki. */
+ if(ft.includes("PLA")&&bed&&geo){
+   const bigBase=geo.dx*geo.dy>15000;
+   if(bigBase&&bed<65)add("warn","Đế LỚN mà bed thấp","Đế "+(geo.dx*geo.dy/100).toFixed(0)+" cm² + bed "+bed+"°C. Wiki Bambu: PLA cong góc → bed 55–65°C (65 là chuẩn cộng đồng cho Textured PEI; A1 khung hở, phòng <20°C thì +10°C nữa).");
+   else if(!bigBase&&bed>=65)add("info","Bed "+bed+"°C với vật đế nhỏ","65 là chuẩn Textured PEI. Đế nhỏ ít rủi ro vênh — nếu thấy PHỒNG CHÂN (elephant foot) thì hạ 55–60°C (wiki: nhiệt quá cao gây elephant foot + clog).");
+ }
  const ws=(g("wall_sequence")||"").toLowerCase(); const isIOI=ws.includes("inner-outer-inner");
  if(isIOI&&wl<3)add("bad","Inner/Outer/Inner nhưng chỉ "+wl+" wall","Thứ tự 'Inner/Outer/Inner' CẦN ≥3 wall mới có tác dụng (in tường trong từ vòng 3 trở đi) → đang "+wl+" wall nên nó KHÔNG hiệu lực. Tăng Wall loops = 3, hoặc đổi về 'Outer/Inner'.");
  else if(!isIOI&&wl>=3)add("info","Có ≥3 wall → nên dùng Inner/Outer/Inner","Đang '"+(g("wall_sequence")||"—")+"'. Với ≥3 wall, 'Inner/Outer/Inner' cho bề mặt + dung sai đẹp nhất (đổi lại overhang yếu hơn).");
@@ -1919,7 +1964,12 @@ function auditFile(ps,geo,slice){
  const iron=(g("ironing_type")||"").toLowerCase();
  if(isMatte&&iron&&!iron.includes("no"))add("warn","Ironing BẬT trên PLA Matte","Matte bị là sẽ chảy BÓNG LOANG từng vệt, mất vẻ nhám đồng đều → để 'No ironing'. Muốn mặt trên phẳng: ↑Top shell 5 + Monotonic Line + ↓Top surface speed.");
  else if((!iron||iron.includes("no"))&&!isMatte)add("info","Ironing đang TẮT","Bật 'Top surfaces' nếu cần mặt trên phẳng bóng (mặt phẳng lớn).");
- if(ft.includes("PLA")&&/basic|generic/i.test(fn))add("warn","Kiểm tra đúng profile nhựa","Profile = '"+fn+"'. Nếu spool là PLA Matte/Lite… hãy chọn đúng profile.");
+ /* Luật cũ bắt TÊN (/basic|generic/) nên báo oan 8/10 file — PLA Basic là nhựa hợp lệ.
+    Cái đáng báo là LỆCH giữa combobox đang chọn và nhựa trong file: bảng "So với
+    KHUYẾN NGHỊ" so theo combobox, lệch nhựa thì cột đó vô nghĩa. */
+ const selMat=(typeof $!=="undefined"&&$("#mat"))?$("#mat").value:"";
+ const matFam=s=>{s=String(s).toLowerCase();return /matte/.test(s)?"pla matte":/lite/.test(s)?"pla lite":/petg/.test(s)?"petg":/pla/.test(s)?"pla basic":s;};
+ if(selMat&&fn&&matFam(selMat)!==matFam(fn))add("info","Nhựa trong FILE ≠ combobox đang chọn","File dùng '"+fn+"' nhưng bảng khuyến nghị đang so theo '"+selMat+"'. Đổi combobox Nhựa cho khớp thì cột 'So với KHUYẾN NGHỊ' mới có nghĩa.");
  if(inf>50)add("warn","Infill quá cao",inf+"% → cong vênh/tốn. Ít khi cần >50%.");
  // ---- Gợi ý ĐỘNG: kết hợp hình học × cài đặt (không cứng) ----
  if(geo){
@@ -1945,7 +1995,9 @@ function auditFile(ps,geo,slice){
    }
    if(geo.top>15&&(!iron||iron.includes("no"))&&!isMatte)add("info","Mặt phẳng trên LỚN → nên bật Ironing","~"+geo.top.toFixed(0)+"% mặt phẳng trên → Ironing 'Top surfaces' cho mịn/bóng.");
    const baseArea=geo.dx*geo.dy;
-   if(baseArea>15000&&(brim===""||brim.includes("no")||brim.includes("auto")))add("warn","Đế LỚN → rủi ro CONG VÊNH","Đế "+geo.dx.toFixed(0)+"×"+geo.dy.toFixed(0)+"mm ("+(baseArea/100).toFixed(0)+" cm²) trên A1 hở khung. Brim đang '"+(g("brim_type")||"—")+"' → đổi 'Outer brim only' rộng 5–8mm; fan OFF 2–3 lớp đầu; tránh gió lùa.");
+   if(baseArea>15000&&(brim===""||brim.includes("no")||brim.includes("auto")))add("warn","Đế LỚN → rủi ro CONG VÊNH","Đế "+geo.dx.toFixed(0)+"×"+geo.dy.toFixed(0)+"mm ("+(baseArea/100).toFixed(0)+" cm²) trên A1 hở khung. Brim đang '"+(g("brim_type")||"—")+"' → đổi 'Outer brim only' rộng 8mm; fan OFF 3 lớp đầu; tránh gió lùa.");
+   const ipat=(g("sparse_infill_pattern")||"").toLowerCase();
+   if(baseArea>15000&&/grid|triangle|tri-?hexagon/.test(ipat))add("warn","Đế LỚN + infill '"+ipat+"' → ứng suất tuyến","Wiki Bambu (Model Warping): Grid/Triangle tạo ứng suất kéo theo phương tuyến trong lòng vật → cong vênh, và đường giao trong 1 lớp còn tạo bướu cho nozzle va phải. Vật đế rộng → đổi 'Gyroid' ≤25% (co đều mọi hướng).");
    if(geo.aspect>3&&(brim===""||brim.includes("no")))add("warn","Cao & MẢNH nhưng Brim TẮT","tỉ lệ "+geo.aspect.toFixed(1)+" dễ đổ/vênh → BẬT Brim (outer) + giảm tốc + giảm acceleration.");
    if(geo.vert>45&&ow<160&&ow>0)add("info","Nhiều thành ĐỨNG → in nhanh được","~"+geo.vert.toFixed(0)+"% thành đứng (ít bậc thang) → có thể ↑ Inner/Outer wall speed để tiết kiệm thời gian.");
    const dens2=densOf(ps),sg2=geo.vol_cm3*dens2,pw2=slice&&slice.weight?+slice.weight:0;

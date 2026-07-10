@@ -288,12 +288,15 @@ Ghi lại để không lặp:
 - Chọn filament có đuôi `@BBL A1 0.2 nozzle` sẽ **đổi luôn printer preset**, kéo `max_volumetric_speed` từ 22 xuống 2.
 - `meshStats` từng đếm **mặt đáy** là overhang. `Body 14`: 10.0% → 0.32% sau khi sửa; `alphabet-blocks`: 35.3% → 0.0%.
 
-## 11. Phải sửa trong `auditFile()` trước, nếu không sẽ tự báo oan
+## 11. Phải sửa trong `auditFile()` trước, nếu không sẽ tự báo oan — **ĐÃ LÀM 2026-07-10**
 
-Optimizer sẽ sinh ra cấu hình mà **luật audit hiện có kết tội**. Hai chỗ:
+Đo trên 10 file thật: 36 cảnh báo, phần lớn là nhiễu. Sau khi sửa còn 22, tất cả có căn cứ.
 
-- Luật `PLA && bed ≥ 65 → "Bed hơi nóng cho PLA"` là ý kiến riêng, **trái với wiki Bambu** (đích 55–65°C trên Textured PEI, và A1 khung hở ở phòng lạnh còn phải +10°C). Đổi thành luật **theo diện tích đế**: đế nhỏ mà bed 65 → nhắc hạ; đế lớn (`> 150 cm²`) mà bed < 65 → nhắc **tăng**.
-- Luật khuyên `sparse_infill_pattern` tiết kiệm sẽ va với `gyroid` mà tầng 2 khoá. `auditFile` phải biết: đế lớn ⇒ gyroid là **đúng**, không phải lãng phí.
+- ✅ Luật `PLA && bed ≥ 65 → "Bed hơi nóng"` (bắn oan 5 file) — **trái wiki**. Thay bằng luật theo diện tích đế, khớp cả 3 nguồn: wiki *Warping* (đích 55–65, A1 khung hở +10 khi lạnh), wiki *Textured PEI troubleshooting* (quá cao → elephant foot + clog), reddit (65 là chuẩn textured PEI). Đế lớn `bed < 65` → cảnh báo tăng; đế nhỏ `bed ≥ 65` → chỉ nhắc hạ nếu phồng chân.
+- ✅ Luật `/basic|generic/ → "Kiểm tra đúng profile nhựa"` (bắn oan 8 file — PLA Basic là nhựa hợp lệ). Thay bằng: **lệch giữa combobox và nhựa trong file** → THÔNG TIN (bảng "So với KHUYẾN NGHỊ" so theo combobox, lệch nhựa thì cột đó vô nghĩa).
+- ✅ Luật `Tốc độ VƯỢT trần` hạ CẢNH BÁO → THÔNG TIN (8/10 file dính vì đó là **thiết kế** của profile stock — inner wall 300 > trần 244, bộ giới hạn tự ghì). Luật "còn dư trần" đổi lời khuyên: **xoá override để kế thừa stock**, không phải nhập số sát trần.
+- ✅ Thêm luật `đế > 150 cm² && pattern Grid/Triangle` → cảnh báo đổi Gyroid ≤25% (wiki *Warping*). Bắn đúng trên 3 file thật.
+- ✅ Fixture chiều dương: `scarf-trap.3mf`, `nozzle-02-trap.3mf` (suite 04) — hai luật LỖI được chứng minh cả hai chiều.
 
 ## 12. Bảng đòn bẩy — cái nào thật sự miễn phí
 
@@ -364,3 +367,4 @@ Hạ `layer_height` một nửa ⇒ lưu lượng giảm một nửa ⇒ đượ
 - `islands` cần rasterize lát cắt — phần tốn công nhất. Nếu phải cắt scope, bỏ `thinWall_cm2` trước (nó chỉ dẫn tới `arachne`, vốn đã bật sẵn trong preset).
 - Ngưỡng `firstArea > 150 cm²` và `baseDiag > 150 mm` là suy ra từ khuyến nghị wiki cho "large flat model", chưa có số đo trực tiếp. Cần đánh dấu là **giả định** trong bảng quyết định, không được trình bày như đã đo.
 - `STEP_TARGET` mặc định `0.20mm` chọn theo bảng đánh đổi, không theo một nghiên cứu về ngưỡng cảm nhận thị giác. Cũng là giả định.
+- Khay **nhiều vật nhỏ** (vd `Dimond_Back`, 19mm/vật): luật đế-lớn của `auditFile` dùng bbox chung nên hơi quá tay. `geoFeatures` dùng `firstArea_cm2` (diện tích tiếp xúc **thật**) + `islands` nên optimizer không dính; luật audit cũ chấp nhận hạn chế này.

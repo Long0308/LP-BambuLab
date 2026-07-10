@@ -18,22 +18,10 @@
         "BambuLab - PLA Matte - LP - Decor"
     ],
     "from": "User",
-    "hot_plate_temp": [
-        "60"
-    ],
-    "hot_plate_temp_initial_layer": [
-        "65"
-    ],
     "inherits": "Bambu PLA Matte @BBL A1",
     "name": "BambuLab - PLA Matte - LP - Decor",
     "overhang_fan_speed": [
         "100"
-    ],
-    "textured_plate_temp": [
-        "60"
-    ],
-    "textured_plate_temp_initial_layer": [
-        "65"
     ],
     "version": "2.7.0.8"
 }

@@ -4,6 +4,7 @@ const suites = [
   require("./01-smoke.e2e"),
   require("./02-analyze.e2e"),
   require("./03-time.e2e"),
+  require("./04-fixtures.e2e"),
 ];
 
 (async () => {
