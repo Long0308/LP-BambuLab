@@ -898,6 +898,16 @@ FILES_PAGE = r"""<!doctype html><html lang="vi"><head>
  .pbtn:disabled{opacity:.4;cursor:not-allowed;background:#334155}
  .pbtn svg{width:16px;height:16px;fill:currentColor}
  .loading{color:var(--mut);text-align:center;padding:30px}
+ .up{padding:13px;border-radius:14px;background:linear-gradient(160deg,var(--card2),var(--card1));
+   box-shadow:var(--sh),var(--hl);margin:10px 0}
+ .uprow{display:flex;gap:10px;align-items:center}
+ .ubtn{flex:1;background:linear-gradient(160deg,#38bdf8,#0284c7);color:#fff;border:none;border-radius:12px;
+   padding:13px;font-weight:800;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px}
+ .ubtn:disabled{opacity:.45;cursor:not-allowed;background:#334155}
+ .ubtn svg{width:17px;height:17px;fill:currentColor}
+ .ubar{height:7px;border-radius:99px;background:#0c111a;border:1px solid var(--line);margin-top:10px;overflow:hidden;display:none}
+ .ubar > i{display:block;height:100%;width:0;background:linear-gradient(90deg,#38bdf8,#22c55e);transition:width .2s}
+ .uhint{font-size:11.5px;color:var(--mut);margin-top:8px}
  #toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#0b1220;border:1px solid var(--line);
    color:#fff;padding:11px 18px;border-radius:12px;opacity:0;transition:opacity .25s;font-size:14px;box-shadow:var(--sh);z-index:50;max-width:90%}
  #toast.show{opacity:1}
@@ -906,6 +916,19 @@ FILES_PAGE = r"""<!doctype html><html lang="vi"><head>
 <a class="back" href="/"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M15 6l-6 6 6 6z"/></svg> Về dashboard</a>
 <h2>File in trên máy <span id="count" style="color:var(--mut);font-size:13px"></span></h2>
 <div id="busy"></div>
+
+<div class="up">
+  <div class="uprow">
+    <input type="file" id="fpick" accept=".3mf" style="display:none" onchange="pick()">
+    <button class="ubtn" id="ubtn" onclick="document.getElementById('fpick').click()">
+      <svg viewBox="0 0 24 24"><path d="M5 20h14v-2H5v2zM12 2L6.5 9.5h4V16h3V9.5h4L12 2z"/></svg>
+      <span id="ulabel">Đẩy file .3mf từ máy tính lên máy in</span>
+    </button>
+  </div>
+  <div class="ubar" id="ubar"><i id="ufill"></i></div>
+  <div class="uhint">Slice trong Bambu Studio / OrcaSlicer → <b>Export plate sliced file</b> (.gcode.3mf) → chọn ở đây. Truyền qua LAN (FTPS), không cần cloud.</div>
+</div>
+
 <input class="search" id="q" placeholder="Tìm file…" oninput="render()">
 <div id="root"><div class="loading">Đang tải danh sách từ máy…</div></div>
 <div class="foot">Nút "In" chỉ hoạt động khi máy RẢNH. Đây là lệnh điều khiển do BẠN bấm.</div>
@@ -924,6 +947,40 @@ async function printFile(name,path){
     toast(j.ok?("Đã gửi lệnh in: "+name):("Lỗi: "+(j.msg||"")));
     setTimeout(()=>location.href="/",1500);
   }catch(e){ toast("Lỗi gửi lệnh: "+e); }
+}
+function pick(){
+  const inp=document.getElementById("fpick"), f=inp.files&&inp.files[0];
+  inp.value="";                                  // cho phep chon lai cung file
+  if(!f) return;
+  if(!f.name.toLowerCase().endsWith(".3mf")){ toast("Chỉ nhận file .3mf"); return; }
+  upload(f);
+}
+function upload(f){
+  const btn=document.getElementById("ubtn"), lab=document.getElementById("ulabel");
+  const bar=document.getElementById("ubar"), fill=document.getElementById("ufill");
+  btn.disabled=true; bar.style.display="block"; fill.style.width="0";
+  const mb=(f.size/1048576).toFixed(1);
+  const xhr=new XMLHttpRequest();
+  xhr.open("POST","/api/upload?name="+encodeURIComponent(f.name));
+  xhr.upload.onprogress=e=>{
+    if(!e.lengthComputable) return;
+    const p=Math.round(e.loaded/e.total*100);
+    fill.style.width=p+"%"; lab.textContent="Đang đẩy… "+p+"% ("+mb+" MB)";
+  };
+  xhr.onload=()=>{
+    btn.disabled=false; bar.style.display="none";
+    lab.textContent="Đẩy file .3mf từ máy tính lên máy in";
+    let j={}; try{ j=JSON.parse(xhr.responseText); }catch(e){}
+    if(xhr.status===200 && j.ok){ toast("Đã đẩy lên máy: "+j.name); load(); }
+    else{ toast("Lỗi: "+(j.msg||("HTTP "+xhr.status))); }
+  };
+  xhr.onerror=()=>{
+    btn.disabled=false; bar.style.display="none";
+    lab.textContent="Đẩy file .3mf từ máy tính lên máy in";
+    toast("Mất kết nối khi đẩy file");
+  };
+  lab.textContent="Đang đẩy… 0% ("+mb+" MB)";
+  xhr.send(f);
 }
 function render(){
   const q=(document.getElementById("q").value||"").toLowerCase();
@@ -1061,6 +1118,53 @@ class H(BaseHTTPRequestHandler):
         except (ValueError, OSError):
             return {}
 
+    MAX_UPLOAD = 300 * 1024 * 1024      # 300 MB — .gcode.3mf that hiem khi qua 100
+
+    def _do_upload(self):
+        """Nhan raw bytes tu trinh duyet -> STOR len the SD cua may qua FTPS.
+
+        Nguoi dung bam nut tren web moi chay. Chot chan: chi .3mf, cat ve
+        basename (chan path traversal), gioi han dung luong.
+        """
+        from urllib.parse import urlparse, parse_qs, unquote
+        raw = unquote(parse_qs(urlparse(self.path).query).get("name", [""])[0])
+        name = os.path.basename(raw.replace("\\", "/")).strip()
+        if not name or name in (".", ".."):
+            self._send(400, json.dumps({"ok": False, "msg": "Thiếu tên file"}),
+                       "application/json; charset=utf-8")
+            return
+        if not name.lower().endswith(".3mf"):
+            self._send(400, json.dumps({"ok": False, "msg": "Chỉ nhận file .3mf (đã slice)"}),
+                       "application/json; charset=utf-8")
+            return
+        try:
+            n = int(self.headers.get("Content-Length", 0))
+        except ValueError:
+            n = 0
+        if n <= 0:
+            self._send(400, json.dumps({"ok": False, "msg": "File rỗng"}),
+                       "application/json; charset=utf-8")
+            return
+        if n > self.MAX_UPLOAD:
+            self._send(413, json.dumps({"ok": False, "msg": "File quá lớn (>300 MB)"}),
+                       "application/json; charset=utf-8")
+            return
+        try:
+            data = self.rfile.read(n)
+        except OSError as e:
+            self._send(400, json.dumps({"ok": False, "msg": f"Đọc file lỗi: {e}"}),
+                       "application/json; charset=utf-8")
+            return
+        with THUMB_LOCK:                # dung chung khoa FTP: khong tai/day song song
+            ok, msg = filament_ftp.upload_file(IP, CODE, data, name)
+        if ok:
+            FILES_CACHE["ts"] = 0       # ep lam moi danh sach file
+            self._send(200, json.dumps({"ok": True, "path": msg, "name": name}),
+                       "application/json; charset=utf-8")
+        else:
+            self._send(502, json.dumps({"ok": False, "msg": f"FTP lỗi: {msg}"}),
+                       "application/json; charset=utf-8")
+
     def do_POST(self):
         if self.path == "/api/cmd/pause":
             ok, msg = cmd_print("pause")
@@ -1080,6 +1184,9 @@ class H(BaseHTTPRequestHandler):
                 return
             ok, msg = cmd_project_file(name, fpath)
             self._send(200, json.dumps({"ok": ok, "msg": msg}), "application/json; charset=utf-8")
+            return
+        elif self.path.startswith("/api/upload"):
+            self._do_upload()
             return
         elif self.path == "/api/filament":
             body = self._read_json()

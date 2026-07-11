@@ -29,15 +29,21 @@ Dashboard xem/điều khiển máy in **Bambu Lab A1 + AMS Lite** qua **LAN**, m
    Sửa: layer 0.24→0.16, wall 2→3, inner/outer sequence, outer_wall_speed 120, seam aligned.
    UI-only (không nhét preset được): Variable Layer Height + calib PA/Flow + Slow-down-for-overhangs.
 
+3. **Upload file lên máy qua LAN** — XONG. `filament_ftp.upload_file()` (FTPS `STOR` lên gốc `/`)
+   + route `POST /api/upload?name=` (nhận **raw bytes**, KHÔNG multipart — đơn giản hơn nhiều)
+   + nút đẩy file kèm progress bar (XHR `upload.onprogress`) trên `/files`.
+   Chốt chặn: chỉ `.3mf`, cắt về `basename` (chặn path traversal), ≤300 MB, dùng chung
+   `THUMB_LOCK` để không tải/đẩy FTP song song.
+   Đã test 4 case chặn (txt / thiếu tên / rỗng / traversal) → đều HTTP 400.
+4. **Tmp file trùng tên** — XONG: `_tmp_3mf()` dùng `tempfile.mkstemp` thay tên cố định.
+
 ## Còn dở (ưu tiên phiên sau)
-1. **Upload/push file từ máy tính → máy in qua LAN** (user hỏi "còn upload từ bambo xuống như nào").
-   Hướng: FTPS `STOR` lên `/` hoặc `/cache`, rồi có thể chọn in ngay trên /files. Cùng đường FTPS đang dùng.
-2. **Test LIVE lệnh in** `cmd_project_file` (BETA, chưa chạy thật). Nghi ngờ payload `url`:
-   `file:///sdcard/...` có thể phải là `/mnt/sdcard/...` hoặc cần `ams_mapping`. Chỉ test khi máy RẢNH.
-3. **Bug tiềm ẩn** `filament_ftp.py`: `fetch_job` dùng tmp cố định `bambu_job.3mf`, `fetch_thumb_for`
-   dùng `bambu_thumb.3mf` → nên đổi sang `tempfile.NamedTemporaryFile` (rủi ro thấp vì THUMB_LOCK
-   đã serial hoá, nhưng nên vá).
-4. Cache thumb theo `basename`, không hết hạn → file trùng tên đổi nội dung sẽ hiện ảnh cũ (phụ).
+1. **Test LIVE upload**: bấm nút "Đẩy file .3mf" trên `/files` → xem file có hiện trong danh sách.
+   Chưa test STOR thật (CỐ Ý: AI không đẩy file lên máy in, user tự bấm).
+   Nếu máy từ chối ghi vào `/`, đổi `remote_dir` sang `/cache` trong `upload_file()`.
+2. **Test LIVE lệnh in** `cmd_project_file` (BETA). Nghi ngờ payload `url`: `file:///sdcard/...`
+   có thể phải là `/mnt/sdcard/...` hoặc cần `ams_mapping`. Chỉ test khi máy RẢNH.
+3. Cache thumb theo `basename`, không hết hạn → file trùng tên đổi nội dung sẽ hiện ảnh cũ (phụ).
 
 ## Chạy
 ```

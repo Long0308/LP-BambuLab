@@ -252,15 +252,21 @@ def parse_job_info(zip_path) -> dict:
     return info
 
 
+def _tmp_3mf(data: bytes) -> str:
+    """Ghi bytes ra file tam DUY NHAT (khong dung ten co dinh -> tranh dam nhau)."""
+    fd, path = tempfile.mkstemp(suffix=".3mf", prefix="bambu_")
+    with os.fdopen(fd, "wb") as f:
+        f.write(data)
+    return path
+
+
 def fetch_job(host: str, code: str, gcode_file: str) -> dict:
     """Tai file dang in 1 lan -> tra {weight, thumb, info}. Rong neu that bai."""
     data = _download(host, code, gcode_file)
     if not data:
         return {}
-    tmp = os.path.join(tempfile.gettempdir(), "bambu_job.3mf")
+    tmp = _tmp_3mf(data)
     try:
-        with open(tmp, "wb") as f:
-            f.write(data)
         return {"weight": parse_weight(tmp), "thumb": parse_thumbnail(tmp),
                 "info": parse_job_info(tmp)}
     finally:
@@ -297,16 +303,42 @@ def fetch_thumb_for(host: str, code: str, path: str) -> bytes | None:
     data = _download_exact(host, code, path)
     if not data:
         return None
-    tmp = os.path.join(tempfile.gettempdir(), "bambu_thumb.3mf")
+    tmp = _tmp_3mf(data)
     try:
-        with open(tmp, "wb") as f:
-            f.write(data)
         return parse_thumbnail(tmp)
     finally:
         try:
             os.remove(tmp)
         except OSError:
             pass
+
+
+def upload_file(host: str, code: str, data: bytes, remote_name: str,
+                remote_dir: str = "/") -> tuple[bool, str]:
+    """Day 1 file .3mf len the SD cua may qua FTPS (STOR).
+
+    Mac dinh len goc "/" — cung noi Bambu Studio day xuong, va la noi
+    cmd_project_file(url=file:///sdcard/<ten>) doc duoc de in ngay sau do.
+    Tra (ok, duong_dan_hoac_loi).
+    """
+    ftp = None
+    try:
+        ftp = _connect(host, code, timeout=180.0)   # file vai chuc MB qua wifi
+        try:
+            ftp.cwd(remote_dir)
+        except ftplib.error_perm:
+            remote_dir = "/"
+            ftp.cwd("/")
+        ftp.storbinary("STOR " + remote_name, io.BytesIO(data))
+        return True, remote_dir.rstrip("/") + "/" + remote_name
+    except Exception as e:                          # noqa: BLE001 - bao loi len UI
+        return False, str(e)
+    finally:
+        if ftp:
+            try:
+                ftp.quit()
+            except Exception:
+                pass
 
 
 def _main():
