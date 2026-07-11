@@ -42,6 +42,25 @@ class ImplicitFTP_TLS(ftplib.FTP_TLS):
             value = self.context.wrap_socket(value, server_hostname=None)
         self._sock = value
 
+    def storbinary(self, cmd, fp, blocksize=8192, callback=None, rest=None):
+        """Nhu ftplib nhung KHONG goi conn.unwrap() o cuoi.
+
+        ftplib goc dong TLS bang unwrap(), tuc cho may in tra lai `close_notify`.
+        FTP server cua Bambu KHONG BAO GIO tra -> unwrap() treo vinh vien, upload
+        dung o 100%. Tai xuong khong dinh vi luc do MAY IN la ben dong ket noi.
+        """
+        self.voidcmd("TYPE I")
+        with self.transfercmd(cmd, rest) as conn:
+            while True:
+                buf = fp.read(blocksize)
+                if not buf:
+                    break
+                conn.sendall(buf)
+                if callback:
+                    callback(buf)
+            # co y BO conn.unwrap() — xem docstring
+        return self.voidresp()
+
 
 def _connect(host: str, code: str, timeout: float = 20.0) -> ImplicitFTP_TLS:
     ctx = ssl._create_unverified_context()
@@ -298,19 +317,42 @@ def _download_exact(host: str, code: str, path: str) -> bytes | None:
                 pass
 
 
-def fetch_thumb_for(host: str, code: str, path: str) -> bytes | None:
-    """Tai file tai `path` -> tra anh preview (PNG). Dung cho danh sach file."""
+_PLATE_GCODE = re.compile(r"Metadata/plate_\d+\.gcode$", re.I)
+
+
+def parse_is_sliced(zip_path) -> bool:
+    """File .3mf nay da co G-code ben trong chua? -> may in duoc ngay.
+
+    KHONG the doan bang duoi ten file: Bambu Studio khi bam Print day file DA SLICE
+    xuong /cache/<ten>.3mf — van la ".3mf" chu khong phai ".gcode.3mf". Cach duy nhat
+    dung la mo zip ra xem co Metadata/plate_N.gcode hay khong.
+    """
+    try:
+        z = zipfile.ZipFile(zip_path)
+    except (zipfile.BadZipFile, OSError):
+        return False
+    with z:
+        return any(_PLATE_GCODE.search(n) for n in z.namelist())
+
+
+def fetch_file_meta(host: str, code: str, path: str) -> dict:
+    """Tai file tai `path` 1 lan -> {thumb: PNG|None, sliced: bool}. Rong neu that bai."""
     data = _download_exact(host, code, path)
     if not data:
-        return None
+        return {}
     tmp = _tmp_3mf(data)
     try:
-        return parse_thumbnail(tmp)
+        return {"thumb": parse_thumbnail(tmp), "sliced": parse_is_sliced(tmp)}
     finally:
         try:
             os.remove(tmp)
         except OSError:
             pass
+
+
+def fetch_thumb_for(host: str, code: str, path: str) -> bytes | None:
+    """Tai file tai `path` -> tra anh preview (PNG). Dung cho danh sach file."""
+    return fetch_file_meta(host, code, path).get("thumb")
 
 
 def upload_file(host: str, code: str, data: bytes, remote_name: str,

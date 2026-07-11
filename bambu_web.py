@@ -170,6 +170,60 @@ def get_files():
     return data
 
 
+def ensure_file_meta(fpath):
+    """Tai 1 file .3mf tren may (1 lan duy nhat) -> (anh PNG | None, da_slice | None).
+
+    Cache ra job_cache/<key>.png + <key>.json nen lan sau tuc thi. Tra sliced=None
+    khi khong tai duoc (de UI biet la "chua ro" chu khong phai "khong in duoc").
+    """
+    key = _cache_key(os.path.basename(fpath))
+    png = os.path.join(CACHE_DIR, key + ".png")
+    meta = os.path.join(CACHE_DIR, key + ".json")
+
+    def _read_cache():
+        thumb = None
+        if os.path.isfile(png):
+            try:
+                with open(png, "rb") as f:
+                    thumb = f.read()
+            except OSError:
+                pass
+        if os.path.isfile(meta):
+            try:
+                with open(meta, encoding="utf-8") as f:
+                    return thumb, json.load(f).get("sliced")
+            except (OSError, ValueError):
+                pass
+        return thumb, None
+
+    thumb, sliced = _read_cache()
+    if sliced is not None:
+        return thumb, sliced
+
+    with THUMB_LOCK:                       # Bambu FTP chi chiu 1 ket noi -> tuan tu
+        thumb, sliced = _read_cache()      # luong khac vua tai xong?
+        if sliced is not None:
+            return thumb, sliced
+        try:
+            m = filament_ftp.fetch_file_meta(IP, CODE, fpath)
+        except Exception as e:             # noqa: BLE001 - chi log, UI van chay
+            print("[filemeta] loi:", e)
+            return None, None
+        if not m:
+            return None, None
+        thumb, sliced = m.get("thumb"), bool(m.get("sliced"))
+        try:
+            os.makedirs(CACHE_DIR, exist_ok=True)
+            if thumb:
+                with open(png, "wb") as f:
+                    f.write(thumb)
+            with open(meta, "w", encoding="utf-8") as f:
+                json.dump({"sliced": sliced}, f)
+        except OSError:
+            pass
+        return thumb, sliced
+
+
 def is_busy():
     with LOCK:
         gc = STATE["data"].get("gcode_state")
@@ -934,7 +988,7 @@ FILES_PAGE = r"""<!doctype html><html lang="vi"><head>
 <div class="foot">Nút "In" chỉ hoạt động khi máy RẢNH. Đây là lệnh điều khiển do BẠN bấm.</div>
 <div id="toast"></div>
 <script>
-let FILES=[], BUSY=true;
+let FILES=[], BUSY=true, META={}, OBS=null;   // META: path -> true(da slice) / false / null(loi)
 function toast(m){const t=document.getElementById("toast");t.textContent=m;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),3000);}
 function fsize(b){ if(!b) return "?"; const m=b/1048576; return m>=1?(m.toFixed(1)+" MB"):((b/1024).toFixed(0)+" KB"); }
 function folder(p){ if(p.startsWith("/cache")) return "cache"; if(p.startsWith("/model")) return "model"; return "máy"; }
@@ -965,7 +1019,11 @@ function upload(f){
   xhr.upload.onprogress=e=>{
     if(!e.lengthComputable) return;
     const p=Math.round(e.loaded/e.total*100);
-    fill.style.width=p+"%"; lab.textContent="Đang đẩy… "+p+"% ("+mb+" MB)";
+    fill.style.width=p+"%";
+    // 100% = trinh duyet gui xong cho SERVER. Server con phai ghi tiep vao may in
+    // qua FTPS -> phai noi ro, khong de im lang nhu treo.
+    lab.textContent = p<100 ? ("Đang đẩy… "+p+"% ("+mb+" MB)")
+                            : "Đang ghi vào máy in… (chờ máy xác nhận)";
   };
   xhr.onload=()=>{
     btn.disabled=false; bar.style.display="none";
@@ -982,6 +1040,31 @@ function upload(f){
   lab.textContent="Đang đẩy… 0% ("+mb+" MB)";
   xhr.send(f);
 }
+function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;"); }
+// Khong the doan "da slice" bang duoi ten file: Bambu luu file DA slice thanh
+// "<ten>.3mf" trong /cache chu khong phai ".gcode.3mf". Phai hoi server (server mo
+// zip xem co Metadata/plate_N.gcode khong). Hoi luoi khi cuon toi, roi cache.
+function statusHtml(p){
+  const s=META[p];
+  if(s===undefined) return ' · <span style="color:var(--mut)">đang kiểm tra…</span>';
+  if(s===null)      return ' · <span style="color:var(--red)">không đọc được file</span>';
+  return s ? ' · <span style="color:var(--acc)">đã slice — in được</span>'
+           : ' · <span style="color:var(--amb)">chưa slice (file dự án)</span>';
+}
+function paint(row){
+  const p=row.dataset.path;
+  row.querySelector(".fstat").innerHTML=statusHtml(p);
+  row.querySelector(".pbtn").disabled = BUSY || META[p]!==true;
+}
+async function checkMeta(row){
+  const p=row.dataset.path;
+  if(p in META){ paint(row); return; }
+  try{
+    const j=await (await fetch("/api/filemeta?path="+encodeURIComponent(p))).json();
+    META[p]= j.ok ? !!j.sliced : null;
+  }catch(e){ META[p]=null; }
+  paint(row);
+}
 function render(){
   const q=(document.getElementById("q").value||"").toLowerCase();
   const list=FILES.filter(f=>f.name.toLowerCase().includes(q));
@@ -990,15 +1073,20 @@ function render(){
   if(!list.length){ root.innerHTML='<div class="loading">Không có file khớp.</div>'; return; }
   let html="";
   for(const f of list){
-    const printable=f.name.toLowerCase().endsWith(".gcode.3mf");
-    const thumb=printable?'<img class="fthumb" loading="lazy" src="/api/filethumb?path='+encodeURIComponent(f.path)+'" onerror="this.style.display=\'none\'">':'';
-    html+='<div class="file">'+thumb+'<div class="fmeta"><div class="fname">'+f.name+'</div>'
+    html+='<div class="file" data-path="'+esc(f.path)+'">'
+      +'<img class="fthumb" loading="lazy" src="/api/filethumb?path='+encodeURIComponent(f.path)+'" onerror="this.style.visibility=\'hidden\'">'
+      +'<div class="fmeta"><div class="fname">'+esc(f.name)+'</div>'
       +'<div class="fsub"><span class="tag">'+folder(f.path)+'</span>'+fsize(f.size)
-      +(printable?'':' · <span style="color:var(--amb)">file dự án (cần slice)</span>')+'</div></div>'
-      +'<button class="pbtn" '+((BUSY||!printable)?'disabled':'')+' onclick="printFile('+JSON.stringify(f.name)+','+JSON.stringify(f.path)+')">'
+      +'<span class="fstat"></span></div></div>'
+      +'<button class="pbtn" disabled onclick="printFile('+JSON.stringify(f.name)+','+JSON.stringify(f.path)+')">'
       +'<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>In</button></div>';
   }
   root.innerHTML=html;
+  if(OBS) OBS.disconnect();
+  OBS=new IntersectionObserver(es=>{
+    for(const e of es) if(e.isIntersecting){ OBS.unobserve(e.target); checkMeta(e.target); }
+  },{rootMargin:"200px"});
+  root.querySelectorAll(".file").forEach(r=>{ paint(r); OBS.observe(r); });
 }
 async function load(){
   try{
@@ -1015,6 +1103,11 @@ load();
 class H(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
+
+    def _qs_path(self):
+        """Lay tham so ?path= da giai ma."""
+        from urllib.parse import urlparse, parse_qs, unquote
+        return unquote(parse_qs(urlparse(self.path).query).get("path", [""])[0])
 
     def _send(self, code, body, ctype):
         b = body.encode("utf-8") if isinstance(body, str) else body
@@ -1048,41 +1141,23 @@ class H(BaseHTTPRequestHandler):
         elif path.startswith("/api/files"):
             self._send(200, json.dumps({"files": get_files(), "busy": is_busy()}), "application/json; charset=utf-8")
         elif path.startswith("/api/filethumb"):
-            from urllib.parse import urlparse, parse_qs, unquote
-            fpath = unquote((parse_qs(urlparse(self.path).query).get("path", [""])[0]))
+            fpath = self._qs_path()
             if not fpath:
                 self._send(400, "no path", "text/plain")
                 return
-            key = _cache_key(os.path.basename(fpath))
-            png = os.path.join(CACHE_DIR, key + ".png")
-            thumb = None
-            if os.path.isfile(png):
-                try:
-                    with open(png, "rb") as f:
-                        thumb = f.read()
-                except OSError:
-                    thumb = None
-            else:
-                with THUMB_LOCK:
-                    if os.path.isfile(png):            # cuon khac vua tai xong
-                        with open(png, "rb") as f:
-                            thumb = f.read()
-                    else:
-                        try:
-                            thumb = filament_ftp.fetch_thumb_for(IP, CODE, fpath)
-                        except Exception as e:
-                            print("[thumb] loi:", e)
-                        if thumb:
-                            try:
-                                os.makedirs(CACHE_DIR, exist_ok=True)
-                                with open(png, "wb") as f:
-                                    f.write(thumb)
-                            except OSError:
-                                pass
+            thumb, _ = ensure_file_meta(fpath)
             if thumb:
                 self._send(200, thumb, "image/png")
             else:
                 self._send(404, "no thumb", "text/plain")
+        elif path.startswith("/api/filemeta"):
+            fpath = self._qs_path()
+            if not fpath:
+                self._send(400, json.dumps({"ok": False}), "application/json")
+                return
+            _, sliced = ensure_file_meta(fpath)
+            self._send(200, json.dumps({"ok": True, "sliced": bool(sliced)}),
+                       "application/json; charset=utf-8")
         elif path == "/a1.jpg":
             if A1_IMG:
                 self._send(200, A1_IMG, "image/jpeg")
