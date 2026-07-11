@@ -31,6 +31,7 @@ import paho.mqtt.client as mqtt
 import printer_config
 import filament_store
 import filament_ftp
+import slicer_cli
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PRINTER_NAME = "LongPham A1-3"
@@ -151,6 +152,52 @@ def cmd_project_file(name, path):
 
 FILES_CACHE = {"ts": 0, "data": []}
 THUMB_LOCK = threading.Lock()  # tai thumbnail tuan tu (Bambu FTP gioi han ket noi)
+
+# Slice tren may tinh (Bambu Studio CLI) khi user upload file CHUA slice.
+# Chi 1 job mot luc — CLI ngon RAM/CPU nhu mo ca app.
+SLICE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "slice_jobs")
+UPJOB = {"state": "idle", "name": None, "msg": "", "stats": None}
+UPJOB_LOCK = threading.Lock()
+
+
+def _slice_and_push(name, src_path):
+    """Chay nen: slice file du an -> day ket qua .gcode.3mf xuong may in.
+
+    Toan bo do 1 cu bam upload cua NGUOI DUNG khoi dong — day file chi la
+    luu tru vao the SD, KHONG phai lenh in (in van phai bam nut "In").
+    """
+    base = name[:-4] if name.lower().endswith(".3mf") else name
+    out_name = base + ".gcode.3mf"
+    try:
+        with UPJOB_LOCK:
+            UPJOB.update(state="slicing", name=name, msg="Đang slice trên máy tính…", stats=None)
+        ok, res, stats = slicer_cli.slice_3mf(src_path, SLICE_DIR)
+        if not ok:
+            with UPJOB_LOCK:
+                UPJOB.update(state="error", msg=res)
+            return
+        with UPJOB_LOCK:
+            UPJOB.update(state="pushing", msg="Slice xong — đang chuyển xuống máy in…", stats=stats)
+        with open(res, "rb") as f:
+            data = f.read()
+        with THUMB_LOCK:
+            ok2, msg2 = filament_ftp.upload_file(IP, CODE, data, out_name)
+        if ok2:
+            FILES_CACHE["ts"] = 0
+            with UPJOB_LOCK:
+                UPJOB.update(state="done", name=out_name,
+                             msg=f"Đã slice + chuyển xuống máy: {out_name}")
+        else:
+            with UPJOB_LOCK:
+                UPJOB.update(state="error", msg=f"Slice OK nhưng FTP lỗi: {msg2}")
+    except Exception as e:                              # noqa: BLE001 - bao len UI
+        with UPJOB_LOCK:
+            UPJOB.update(state="error", msg=f"Lỗi slice: {e}")
+    finally:
+        try:
+            os.remove(src_path)
+        except OSError:
+            pass
 
 
 def get_files():
@@ -980,7 +1027,9 @@ FILES_PAGE = r"""<!doctype html><html lang="vi"><head>
     </button>
   </div>
   <div class="ubar" id="ubar"><i id="ufill"></i></div>
-  <div class="uhint">Slice trong Bambu Studio / OrcaSlicer → <b>Export plate sliced file</b> (.gcode.3mf) → chọn ở đây. Truyền qua LAN (FTPS), không cần cloud.</div>
+  <div class="uhint">Nhận cả 2 loại: file <b>đã slice</b> (.gcode.3mf) → chuyển thẳng xuống máy in;
+  file <b>dự án thô</b> (.3mf) → máy tính tự slice bằng Bambu Studio (vài phút) rồi mới chuyển.
+  Tất cả qua LAN, không cần cloud. <span id="uhintx" style="color:var(--acc)"></span></div>
 </div>
 
 <input class="search" id="q" placeholder="Tìm file…" oninput="render()">
@@ -1026,9 +1075,10 @@ function upload(f){
                             : "Đang ghi vào máy in… (chờ máy xác nhận)";
   };
   xhr.onload=()=>{
+    let j={}; try{ j=JSON.parse(xhr.responseText); }catch(e){}
+    if(xhr.status===200 && j.ok && j.queued){ pollSlice(); return; }   // chua slice -> server dang slice
     btn.disabled=false; bar.style.display="none";
     lab.textContent="Đẩy file .3mf từ máy tính lên máy in";
-    let j={}; try{ j=JSON.parse(xhr.responseText); }catch(e){}
     if(xhr.status===200 && j.ok){ toast("Đã đẩy lên máy: "+j.name); load(); }
     else{ toast("Lỗi: "+(j.msg||("HTTP "+xhr.status))); }
   };
@@ -1039,6 +1089,34 @@ function upload(f){
   };
   lab.textContent="Đang đẩy… 0% ("+mb+" MB)";
   xhr.send(f);
+}
+function fmtStats(s){
+  if(!s) return "";
+  const p=[];
+  if(s.time) p.push("in "+s.time);
+  if(s.weight_g) p.push(s.weight_g.toFixed(0)+" g");
+  if(s.layers) p.push(s.layers+" lớp");
+  return p.join(" · ");
+}
+async function pollSlice(){
+  const btn=document.getElementById("ubtn"), lab=document.getElementById("ulabel");
+  const bar=document.getElementById("ubar"), fill=document.getElementById("ufill");
+  btn.disabled=true; bar.style.display="block"; fill.style.width="100%";
+  try{
+    const j=await (await fetch("/api/upstatus",{cache:"no-store"})).json();
+    if(j.state==="slicing"||j.state==="pushing"){
+      lab.textContent=j.msg||"Đang xử lý…";
+      setTimeout(pollSlice, 3000); return;
+    }
+    btn.disabled=false; bar.style.display="none";
+    lab.textContent="Đẩy file .3mf từ máy tính lên máy in";
+    if(j.state==="done"){
+      toast("✔ "+j.msg+(j.stats?(" — "+fmtStats(j.stats)):"")); load();
+      const hint=document.getElementById("uhintx");
+      if(hint&&j.stats) hint.textContent="Kết quả slice: "+fmtStats(j.stats);
+    }
+    else if(j.state==="error"){ toast("Lỗi: "+j.msg); }
+  }catch(e){ setTimeout(pollSlice, 4000); }
 }
 function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;"); }
 // Khong the doan "da slice" bang duoi ten file: Bambu luu file DA slice thanh
@@ -1150,6 +1228,9 @@ class H(BaseHTTPRequestHandler):
                 self._send(200, thumb, "image/png")
             else:
                 self._send(404, "no thumb", "text/plain")
+        elif path.startswith("/api/upstatus"):
+            with UPJOB_LOCK:
+                self._send(200, json.dumps(UPJOB), "application/json; charset=utf-8")
         elif path.startswith("/api/filemeta"):
             fpath = self._qs_path()
             if not fpath:
@@ -1230,15 +1311,52 @@ class H(BaseHTTPRequestHandler):
             self._send(400, json.dumps({"ok": False, "msg": f"Đọc file lỗi: {e}"}),
                        "application/json; charset=utf-8")
             return
-        with THUMB_LOCK:                # dung chung khoa FTP: khong tai/day song song
-            ok, msg = filament_ftp.upload_file(IP, CODE, data, name)
-        if ok:
-            FILES_CACHE["ts"] = 0       # ep lam moi danh sach file
-            self._send(200, json.dumps({"ok": True, "path": msg, "name": name}),
+
+        # Phan luong: file DA slice -> chuyen thang xuong may in nhu truoc.
+        # File CHUA slice (du an tho) -> slice bang Bambu Studio CLI truoc (chay nen).
+        os.makedirs(SLICE_DIR, exist_ok=True)
+        src = os.path.join(SLICE_DIR, "in_" + name)
+        try:
+            with open(src, "wb") as f:
+                f.write(data)
+        except OSError as e:
+            self._send(500, json.dumps({"ok": False, "msg": f"Ghi file tạm lỗi: {e}"}),
                        "application/json; charset=utf-8")
-        else:
-            self._send(502, json.dumps({"ok": False, "msg": f"FTP lỗi: {msg}"}),
-                       "application/json; charset=utf-8")
+            return
+
+        if filament_ftp.parse_is_sliced(src):
+            try:
+                os.remove(src)
+            except OSError:
+                pass
+            with THUMB_LOCK:            # dung chung khoa FTP: khong tai/day song song
+                ok, msg = filament_ftp.upload_file(IP, CODE, data, name)
+            if ok:
+                FILES_CACHE["ts"] = 0   # ep lam moi danh sach file
+                self._send(200, json.dumps({"ok": True, "path": msg, "name": name,
+                                            "sliced": True}),
+                           "application/json; charset=utf-8")
+            else:
+                self._send(502, json.dumps({"ok": False, "msg": f"FTP lỗi: {msg}"}),
+                           "application/json; charset=utf-8")
+            return
+
+        # Chua slice -> can CLI + chi 1 job mot luc
+        if not slicer_cli.find_exe():
+            self._send(501, json.dumps({"ok": False, "msg":
+                "File CHƯA slice và máy chủ không có Bambu Studio — hãy slice rồi upload lại"}),
+                "application/json; charset=utf-8")
+            return
+        with UPJOB_LOCK:
+            if UPJOB["state"] in ("slicing", "pushing"):
+                self._send(409, json.dumps({"ok": False, "msg":
+                    f"Đang slice file khác ({UPJOB['name']}) — chờ xong đã"}),
+                    "application/json; charset=utf-8")
+                return
+            UPJOB.update(state="slicing", name=name, msg="Bắt đầu slice…", stats=None)
+        threading.Thread(target=_slice_and_push, args=(name, src), daemon=True).start()
+        self._send(200, json.dumps({"ok": True, "queued": True, "name": name}),
+                   "application/json; charset=utf-8")
 
     def do_POST(self):
         if self.path == "/api/cmd/pause":

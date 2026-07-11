@@ -32,3 +32,6 @@ __pycache__/
 node_modules/
 *.gcode
 *.gcode.3mf
+
+# File tam cua pipeline slice tren server (upload -> CLI slice -> day xuong may)
+slice_jobs/

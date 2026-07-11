@@ -37,13 +37,28 @@ Dashboard xem/điều khiển máy in **Bambu Lab A1 + AMS Lite** qua **LAN**, m
    Đã test 4 case chặn (txt / thiếu tên / rỗng / traversal) → đều HTTP 400.
 4. **Tmp file trùng tên** — XONG: `_tmp_3mf()` dùng `tempfile.mkstemp` thay tên cố định.
 
+5. **Slice server-side tích hợp luồng upload** (2026-07-11 chiều). Upload phân luồng:
+   file đã slice → STOR thẳng; file dự án thô → `slicer_cli.slice_3mf()` (Bambu Studio CLI
+   headless, ~17s) chạy nền → STOR kết quả `.gcode.3mf`. UI poll `/api/upstatus` 3s, hiện
+   thời gian in + gam + số lớp. Skill mới: `.claude/skills/bambu-slice/SKILL.md` (quirk CLI
+   `-13/-3/-5`, fix treo `unwrap()`, lộ trình HTTPS production: Tailscale > Caddy+auth).
+6. **2 bug đã vá**: upload treo 100% (`storbinary` bỏ `unwrap()` — Bambu không trả
+   close_notify); nhận diện "đã slice" bằng nội dung zip thay vì đuôi tên.
+7. **Tối ưu makep.3mf bằng phân tích Hub**: 12h13m → **9h47m (−20%)**, 438.6g → 402.2g.
+   Thủ phạm: Variable Layer Height (TB 0.134mm = +280 lớp ẩn) + tốc độ vượt trần lưu lượng
+   (233 > 190 mm/s thật của PLA Lite 16mm³/s). Bài học xoay model: −45° cho overhang 0.59%
+   nhưng bám bàn = 0 cm² (đứng cạnh dao) → KHÔNG dùng, giữ tư thế gốc + support.
+
 ## Còn dở (ưu tiên phiên sau)
-1. **Test LIVE upload**: bấm nút "Đẩy file .3mf" trên `/files` → xem file có hiện trong danh sách.
-   Chưa test STOR thật (CỐ Ý: AI không đẩy file lên máy in, user tự bấm).
-   Nếu máy từ chối ghi vào `/`, đổi `remote_dir` sang `/cache` trong `upload_file()`.
+1. **USER TEST luồng upload+slice**: đẩy 1 file dự án thô trên `/files` → xem tự slice
+   → xuất hiện `<tên>.gcode.3mf` trong danh sách. (AI không tự STOR — user bấm.)
 2. **Test LIVE lệnh in** `cmd_project_file` (BETA). Nghi ngờ payload `url`: `file:///sdcard/...`
    có thể phải là `/mnt/sdcard/...` hoặc cần `ams_mapping`. Chỉ test khi máy RẢNH.
-3. Cache thumb theo `basename`, không hết hạn → file trùng tên đổi nội dung sẽ hiện ảnh cũ (phụ).
+3. **Production/HTTPS** (user muốn ra ngoài WiFi): làm theo skill bambu-slice mục 4 —
+   Tailscale trước, muốn public thì thêm auth token cho route POST + Caddy.
+4. Cache thumb theo `basename`, không hết hạn → file trùng tên đổi nội dung hiện ảnh cũ (phụ).
+5. AppData Bambu/Orca đã xoá sạch 2026-07-11 (352MB) do slicer crash; nếu bản cài mới vẫn
+   crash → nghi driver GPU (cả 2 slicer cùng chết 0xC0000005).
 
 ## Chạy
 ```
