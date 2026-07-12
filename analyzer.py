@@ -59,15 +59,22 @@ def mesh_stats(tris: list) -> dict:
     }
 
 
-def try_rotations(tris: list, angles=(-60, -45, -30, -15, 0, 15, 30, 45, 90, 180)) -> list:
-    """Quet goc xoay quanh X. Ghi CA overhang lan dien tich bam ban.
+def try_rotations(tris: list, x_angles=(-60, -45, -30, -15, 0, 15, 30, 45, 90, 180),
+                  y_angles=(-90, -45, 45, 90)) -> list:
+    """Quet xoay quanh X VA quanh Y -> phu du 6 mat up xuong + cac goc nghieng.
+    Ghi CA overhang lan dien tich bam ban, danh dau 'recommend' cho huong TOT NHAT.
 
     BAY: xoay 45deg co the bien day phang thanh mat doc 45deg -> thuat toan khong
     con dem la overhang (0.59%) nhung bam ban tut ve 0 -> dung tren canh dao, lop
     dau khong bam. Vi vay PHAI doc bed_cm2 cung luc, dung nhin moi overhang.
+
+    Diem xep hang huong (chi trong cac huong 'usable'):
+      1. overhang_pct nho nhat  — it support nhat (tien nhua + thoi gian + khoi got)
+      2. bed_cm2 lon nhat       — bam ban chac nhat (lop 1-2 song sot)
+      3. height thap nhat       — in nhanh + do rung dinh cao
     """
-    # Tien tinh 1 lan: dien tich + normal + (y,z) 3 dinh. Moi goc chi xoay normal
-    # va toa do z (phep quay quanh X khong dung x) -> nhanh ~3x so voi dung lai mesh.
+    # Tien tinh 1 lan: dien tich + normal + toa do 3 dinh; moi huong chi can
+    # thanh phan z sau xoay cua normal va dinh -> khong dung lai mesh.
     pre = []
     for p, q, r in tris:
         ux, uy, uz = q[0]-p[0], q[1]-p[1], q[2]-p[2]
@@ -76,19 +83,25 @@ def try_rotations(tris: list, angles=(-60, -45, -30, -15, 0, 15, 30, 45, 90, 180
         L = math.sqrt(nx*nx + ny*ny + nz*nz)
         if not L:
             continue
-        pre.append((L/2, ny/L, nz/L,
-                    p[1], p[2], q[1], q[2], r[1], r[2]))
+        pre.append((L/2, nx/L, ny/L, nz/L, p, q, r))
     tot = sum(x[0] for x in pre)
-    out = []
-    for ax in angles:
-        a = math.radians(ax)
+
+    def measure(axis: str, ang: float) -> dict:
+        a = math.radians(ang)
         ca, sa = math.cos(a), math.sin(a)
+        # Quay quanh X: z' = y*sin + z*cos.  Quay quanh Y: z' = -x*sin + z*cos.
+        if axis == "X":
+            nzf = lambda nx, ny, nz: ny*sa + nz*ca
+            zf = lambda v: v[1]*sa + v[2]*ca
+        else:
+            nzf = lambda nx, ny, nz: -nx*sa + nz*ca
+            zf = lambda v: -v[0]*sa + v[2]*ca
         zmin = zmax = None
         rows = []
-        for ar, ny, nz, py, pz, qy, qz, ry, rz in pre:
-            nz2 = ny*sa + nz*ca
-            ztop = max(py*sa + pz*ca, qy*sa + qz*ca, ry*sa + rz*ca)
-            zlo = min(py*sa + pz*ca, qy*sa + qz*ca, ry*sa + rz*ca)
+        for ar, nx, ny, nz, p, q, r in pre:
+            nz2 = nzf(nx, ny, nz)
+            zs = (zf(p), zf(q), zf(r))
+            ztop, zlo = max(zs), min(zs)
             if zmin is None or zlo < zmin:
                 zmin = zlo
             if zmax is None or ztop > zmax:
@@ -101,11 +114,88 @@ def try_rotations(tris: list, angles=(-60, -45, -30, -15, 0, 15, 30, 45, 90, 180
                     bed += ar
                 else:
                     over += ar
-        out.append({"angle_x": ax,
-                    "overhang_pct": round(over / tot * 100, 2) if tot else 0.0,
-                    "bed_cm2": round(bed / 100, 1),
-                    "height": round((zmax or 0) - (zmin or 0), 1),
-                    "usable": bed / 100 >= MIN_BED_CM2})
+        return {"axis": axis, "angle": ang, "angle_x": ang if axis == "X" else None,
+                "overhang_pct": round(over / tot * 100, 2) if tot else 0.0,
+                "bed_cm2": round(bed / 100, 1),
+                "height": round((zmax or 0) - (zmin or 0), 1),
+                "usable": bed / 100 >= MIN_BED_CM2}
+
+    out = [measure("X", ax) for ax in x_angles] + [measure("Y", ay) for ay in y_angles]
+    good = [x for x in out if x["usable"]]
+    if good:
+        best = min(good, key=lambda x: (x["overhang_pct"], -x["bed_cm2"], x["height"]))
+        best["recommend"] = True
+    return out
+
+
+def _rot_vertex(v, axis: str, ca: float, sa: float):
+    """Xoay 1 dinh quanh X hoac Y — CUNG cong thuc voi measure() trong try_rotations."""
+    x, y, z = v
+    if axis == "X":
+        return (x, y*ca - z*sa, y*sa + z*ca)
+    return (x*ca + z*sa, y, -x*sa + z*ca)
+
+
+def render_iso_svg(tris: list, axis: str = "X", ang: float = 0,
+                   size: int = 230, max_faces: int = 12000) -> str:
+    """Ve model da xoay thanh anh SVG isometric nho (painter's algorithm thuan Python).
+
+    Muc dich: user NHIN THAY model up mat nao xuong ban o huong de xuat — khong phai
+    doan tu con so goc. Mesh lon thi giu max_faces tam giac to nhat (du hinh dang)."""
+    a = math.radians(ang)
+    ca, sa = math.cos(a), math.sin(a)
+    C30, S30 = math.cos(math.radians(30)), math.sin(math.radians(30))
+    lx, ly, lz = 0.40, 0.30, 0.87                       # huong den (da chuan hoa ~1)
+    faces = []
+    for p, q, r in tris:
+        p2, q2, r2 = (_rot_vertex(v, axis, ca, sa) for v in (p, q, r))
+        ux, uy, uz = q2[0]-p2[0], q2[1]-p2[1], q2[2]-p2[2]
+        vx, vy, vz = r2[0]-p2[0], r2[1]-p2[1], r2[2]-p2[2]
+        nx, ny, nz = uy*vz-uz*vy, uz*vx-ux*vz, ux*vy-uy*vx
+        L = math.sqrt(nx*nx + ny*ny + nz*nz)
+        if not L:
+            continue
+        # camera iso nhin tu (+1,+1,+1): cull mat quay lung (n·cam <= 0)
+        if (nx + ny + nz) / L <= 0:
+            continue
+        shade = 0.35 + 0.65 * max(0.0, (nx*lx + ny*ly + nz*lz) / L)
+        pts = []
+        depth = 0.0
+        for x, y, z in (p2, q2, r2):
+            u = (x - y) * C30
+            w = (x + y) * S30 - z                       # truc man hinh huong xuong
+            pts.append((u, w))
+            depth += x + y + z
+        faces.append((depth / 3, L / 2, shade, pts))
+    if not faces:
+        return ""
+    if len(faces) > max_faces:                          # mesh khung: giu tam giac to
+        faces.sort(key=lambda f: -f[1])
+        faces = faces[:max_faces]
+    faces.sort(key=lambda f: f[0])                      # xa ve truoc (painter)
+    us = [u for _, _, _, pts in faces for u, _ in pts]
+    ws = [w for _, _, _, pts in faces for _, w in pts]
+    u0, u1, w0, w1 = min(us), max(us), min(ws), max(ws)
+    span = max(u1 - u0, w1 - w0) or 1.0
+    k = (size - 16) / span
+    parts = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{size}" height="{size}" '
+             f'viewBox="0 0 {size} {size}">']
+    for _, _, shade, pts in faces:
+        cr, cg, cb = int(233*shade), int(125*shade), int(62*shade)
+        d = " ".join(f"{(u-u0)*k+8:.1f},{(w-w0)*k+8:.1f}" for u, w in pts)
+        parts.append(f'<polygon points="{d}" fill="rgb({cr},{cg},{cb})"/>')
+    parts.append("</svg>")
+    return "".join(parts)
+
+
+def rot_preview(tris: list, rots: list) -> dict:
+    """Cap anh render 'hien tai' vs 'de xuat' — user NHIN de biet xoay the nao,
+    khong phai doan tu con so goc trong bang."""
+    out = {"current": render_iso_svg(tris, "X", 0)}
+    best = next((x for x in rots if x.get("recommend")), None)
+    if best and not (best["axis"] == "X" and best["angle"] == 0):
+        out["best"] = render_iso_svg(tris, best["axis"], best["angle"])
+        out["axis"], out["angle"] = best["axis"], best["angle"]
     return out
 
 
@@ -278,6 +368,7 @@ def analyze_3mf(path: str) -> dict:
                 res["faces"] = face_analysis(tris)
                 if len(tris) <= ROT_MAX_TRIS:
                     res["rotations"] = try_rotations(tris)
+                    res["rot_preview"] = rot_preview(tris, res["rotations"])
                 else:
                     res["tips"].append(f"Mesh {len(tris):,} tam giác vượt ngưỡng {ROT_MAX_TRIS:,} — bỏ quét xoay để không treo server.")
 
@@ -304,6 +395,7 @@ def analyze_stl(path: str) -> dict:
            "variable_layer": None, "flow": None}
     if len(tris) <= ROT_MAX_TRIS:
         res["rotations"] = try_rotations(tris)
+        res["rot_preview"] = rot_preview(tris, res["rotations"])
     else:
         res["tips"].append(f"Mesh {len(tris):,} tam giác vượt ngưỡng {ROT_MAX_TRIS:,} — bỏ quét xoay để không treo server.")
     _advise(res)
@@ -326,20 +418,23 @@ def _advise(r: dict) -> None:
 
     rots = r.get("rotations") or []
     if rots and m:
-        cur = next((x for x in rots if x["angle_x"] == 0), None)
-        good = [x for x in rots if x["usable"]]
-        best = min(good, key=lambda x: x["overhang_pct"]) if good else None
+        cur = next((x for x in rots if x["axis"] == "X" and x["angle"] == 0), None)
+        best = next((x for x in rots if x.get("recommend")), None)
         # Chi khuyen xoay khi VUA giam overhang VUA con bam ban du
-        if best and cur and best["angle_x"] != 0 and best["overhang_pct"] < cur["overhang_pct"] - 2:
+        if best and cur and not (best["axis"] == "X" and best["angle"] == 0) \
+                and best["overhang_pct"] < cur["overhang_pct"] - 2:
             r["tips"].append(
-                f"Xoay {best['angle_x']}° quanh trục X: overhang {cur['overhang_pct']}% → "
-                f"{best['overhang_pct']}% mà vẫn bám bàn {best['bed_cm2']} cm².")
+                f"★ ĐỀ XUẤT xoay {best['angle']}° quanh trục {best['axis']}: overhang "
+                f"{cur['overhang_pct']}% → {best['overhang_pct']}% (bớt support), bám bàn "
+                f"{best['bed_cm2']} cm², cao {best['height']}mm. Xếp theo: ít support nhất "
+                f"→ bám bàn nhiều nhất → thấp nhất.")
         trap = [x for x in rots if not x["usable"] and cur and x["overhang_pct"] < cur["overhang_pct"]]
         if trap:
             t = trap[0]
             r["issues"].append(
-                f"BẪY: xoay {t['angle_x']}° nhìn thì overhang chỉ {t['overhang_pct']}% "
-                f"nhưng bám bàn = {t['bed_cm2']} cm² (đứng trên cạnh dao) — KHÔNG dùng được.")
+                f"BẪY: xoay {t['angle']}° quanh {t['axis']} nhìn thì overhang chỉ "
+                f"{t['overhang_pct']}% nhưng bám bàn = {t['bed_cm2']} cm² "
+                f"(đứng trên cạnh dao) — KHÔNG dùng được.")
 
     vl = r.get("variable_layer")
     if vl and vl["extra_layers"] > VLH_WARN_LAYERS:

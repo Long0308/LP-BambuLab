@@ -1573,15 +1573,34 @@ function render(j){
     for(const t of j.tips) h+='<div class="tip">'+esc(t)+'</div>'; h+='</div>'; }
 
   if(j.rotations&&j.rotations.length){
-    h+='<div class="card"><h3 style="margin-top:0">Thử xoay quanh trục X</h3>'
-     +'<table><tr><th>Góc</th><th>Overhang</th><th>Bám bàn</th><th>Cao</th><th>Dùng được?</th></tr>';
+    h+='<div class="card"><h3 style="margin-top:0">Thử xoay 2 trục X + Y — tìm mặt úp tốt nhất</h3>'
+     +'<table><tr><th>Hướng</th><th>Overhang</th><th>Bám bàn</th><th>Cao</th><th>Dùng được?</th></tr>';
     for(const r of j.rotations){
-      const cur=r.angle_x===0?' style="background:rgba(56,189,248,.1)"':'';
-      h+='<tr'+cur+'><td>'+r.angle_x+'°'+(r.angle_x===0?' <span class="mut">(hiện tại)</span>':'')+'</td>'
+      const isCur=(r.axis==="X"||r.axis==null)&&(r.angle===0||r.angle_x===0);
+      const style=r.recommend?' style="background:rgba(34,197,94,.16)"':(isCur?' style="background:rgba(56,189,248,.1)"':'');
+      const ax=r.axis||"X", ang=(r.angle!=null?r.angle:r.angle_x);
+      h+='<tr'+style+'><td>'+ax+' '+ang+'°'
+       +(isCur?' <span class="mut">(hiện tại)</span>':'')
+       +(r.recommend?' <b style="color:#22c55e">★ ĐỀ XUẤT</b>':'')+'</td>'
        +'<td>'+r.overhang_pct+'%</td><td>'+r.bed_cm2+' cm²</td><td>'+r.height+' mm</td>'
        +'<td class="'+(r.usable?'good':'bad')+'">'+(r.usable?'OK':'bám bàn quá ít')+'</td></tr>';
     }
-    h+='</table><div class="mut" style="margin-top:8px">Overhang thấp mà bám bàn ~0 là BẪY: model đứng trên cạnh dao, lớp đầu không bám.</div></div>';
+    h+='</table><div class="mut" style="margin-top:8px">Xếp hạng: ít support nhất → bám bàn nhiều nhất → thấp nhất. '
+     +'Overhang thấp mà bám bàn ~0 là BẪY: model đứng trên cạnh dao, lớp đầu không bám.</div>';
+    // Anh render de user NHIN thay xoay the nao — khong phai doan tu con so
+    if(j.rot_preview&&j.rot_preview.current){
+      const pv=j.rot_preview;
+      h+='<div style="display:flex;gap:18px;flex-wrap:wrap;margin-top:12px;align-items:flex-start">'
+       +'<div style="text-align:center"><div class="mut" style="margin-bottom:4px">Hướng hiện tại</div>'+pv.current+'</div>';
+      if(pv.best)
+        h+='<div style="text-align:center"><div style="color:#22c55e;font-weight:700;margin-bottom:4px">★ Đề xuất: xoay '
+         +pv.angle+'° quanh trục '+pv.axis+'</div>'+pv.best
+         +'<div class="mut" style="margin-top:4px">Trong Bambu Studio: chọn model → phím R → nhập góc trục '+pv.axis+'</div></div>';
+      else
+        h+='<div class="tip" style="align-self:center">✓ Hướng hiện tại đã là tốt nhất — không cần xoay.</div>';
+      h+='</div>';
+    }
+    h+='</div>';
   }
 
   if(j.flow){ const f=j.flow; const ov=Object.entries(f.over_ceiling||{});
