@@ -174,9 +174,19 @@ def face_analysis(tris: list) -> dict:
             vbins[b] += a
         if ez > COS15 and (max(p[2], q[2], r[2]) - zmin) > 0.85 * h:   # mat phang tren dinh
             top_flat += a
+    # Do dac cho quyet dinh seam (wiki Bambu):
+    #   n_dirs        : so HUONG mat dung dang ke (bin >= 10% tong mat dung).
+    #                   Hop = 2-4, tru TRON = 7-8 (rai deu -> khong co goc sac).
+    #   vert_dom_ratio: mat dung lon nhat gap may lan trung binh cac mat khac.
+    #                   >= ~2 nghia la co 1 "mat lung" ro rang de hy sinh (kieu mat na).
+    vsum = sum(vbins)
+    nz = [b for b in vbins if b > 0]
+    n_dirs = sum(1 for b in vbins if vsum and b >= 0.10 * vsum)
     return {
         "flat_ratio": round(flat / tot, 3) if tot else 0,
         "vert_dom": round(max(vbins) / tot, 3) if tot else 0,
+        "n_dirs": n_dirs,
+        "vert_dom_ratio": round(max(vbins) / (vsum / len(nz)), 2) if nz and vsum else 1.0,
         "top_flat_pct": round(top_flat / tot * 100, 2) if tot else 0,
         "top_flat_cm2": round(top_flat / 100, 1),
     }
@@ -251,7 +261,8 @@ def analyze_3mf(path: str) -> dict:
             "printer_model", "layer_height", "wall_loops", "wall_generator", "wall_sequence",
             "sparse_infill_density", "sparse_infill_pattern", "enable_support", "support_type",
             "seam_position", "seam_slope_type", "outer_wall_speed", "inner_wall_speed",
-            "sparse_infill_speed", "top_shell_layers", "bottom_shell_layers")}
+            "sparse_infill_speed", "top_shell_layers", "bottom_shell_layers",
+            "filament_type")}   # filament_type: de tu phat hien cap PLA/PETG cho interface
 
         # mesh
         obj = [n for n in names if n.lower().endswith(".model") and "objects" in n.lower()]
@@ -350,9 +361,24 @@ def _advise(r: dict) -> None:
 
 MODES = {
     "fast":     {"label": "Nhanh",    "layer": 0.28, "infill": "8%",  "walls": 2, "outer": None},
-    "balanced": {"label": "Cân bằng", "layer": 0.20, "infill": "10%", "walls": 2, "outer": 150},
+    "balanced": {"label": "Cân bằng", "layer": 0.20, "infill": "10%", "walls": 3, "outer": 150},
     "quality":  {"label": "Đẹp",      "layer": 0.16, "infill": "12%", "walls": 3, "outer": 110},
 }
+
+# Tag tieng Anh cho ten preset co cau truc: LP-BamBu-A1-<Tag>-<layer>mm-<model>
+QUALITY_TAG = {"fast": "Fast", "balanced": "Balanced", "quality": "HighQuality"}
+
+
+def preset_name(mode: str, lh: float, model: str = "") -> str:
+    """Ten preset chuan: LP-BamBu-A1-HighQuality-0.2mm-<model>.
+
+    Prefix co dinh de user loc trong Bambu Studio; hau to model de preset cua
+    2 file khac nhau KHONG ghi de nhau (support/brim suy theo tung model).
+    """
+    tag = QUALITY_TAG.get(mode, mode.capitalize())
+    slug = re.sub(r"[^A-Za-z0-9_-]+", "", model)[:20]
+    base = f"LP-BamBu-A1-{tag}-{lh:g}mm"
+    return f"{base}-{slug}" if slug else base
 
 
 def make_preset(r: dict, name: str = "OPT", mode: str = "balanced") -> dict:
@@ -372,11 +398,16 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced") -> dict:
     # inherits khop theo layer height (base preset that cua A1), khong cung 1 gia tri
     base = {0.28: "0.28mm Extra Draft", 0.24: "0.24mm Draft", 0.20: "0.20mm Standard",
             0.16: "0.16mm Optimal", 0.12: "0.12mm Fine"}.get(lh, "0.20mm Standard")
+    pname = preset_name(mode, lh, name)
     p = {
         "from": "User",
         "inherits": f"{base} @BBL A1",
-        "name": f"A1 - {name} - {mode.upper()}",
-        "print_settings_id": f"A1 - {name} - {mode.upper()}",
+        "name": pname,
+        "print_settings_id": pname,
+        # 2 field extruder giong het hub HTML (processPresetJSON) — thieu thi Bambu
+        # Studio 2.x import duoc nhung co ban se khong gan duoc variant dau phun
+        "print_extruder_id": ["1"],
+        "print_extruder_variant": ["Direct Drive Standard"],
         "version": "2.7.0.8",
         "layer_height": str(lh),
         "wall_loops": str(M["walls"]),
@@ -426,6 +457,62 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced") -> dict:
                    f"Chỉ chống từ mặt bàn (không tì lên thân → khỏi rỗ mặt). "
                    f"Support TỐN thêm thời gian — đó là giá của bản in không lỗi.")
 
+    # 3b) SUPPORT INTERFACE — cai san LUON, ke ca khi support dang TAT: cac o nay chi
+    #     co tac dung khi support bat, nen de san gia tri dung de user bat support tay
+    #     trong Studio la an ngay (khong phai chinh 5 o). Trick: PLA-PETG khong dinh
+    #     nhau ve hoa hoc -> interface bang nhua doi ung thi Z distance = 0 van boc roi.
+    #     Luu y: cac o nay chi HIEN trong Studio khi bat toggle Advanced (gia tri van an).
+    sup_on = p["enable_support"] == "1"
+    ft = [str(t).upper() for t in ((r.get("config") or {}).get("filament_type") or [])]
+    body = ft[0] if ft else ""
+    partner = {"PLA": "PETG", "PETG": "PLA"}.get(body.split()[0] if body else "")
+    # AMS Lite chi co 4 KHAY THAT — file co the khai bao 5+ filament nhung slot >4
+    # khong ton tai tren may -> chi tim nhua doi ung trong slot 1-4.
+    slot = next((i + 1 for i, t in enumerate(ft[:4]) if partner and t.startswith(partner)), 0)
+    ghost = next((i + 1 for i, t in enumerate(ft) if partner and t.startswith(partner) and i >= 4), 0)
+    pre = "" if sup_on else " (cài sẵn — đang TẮT support, bật tay trong Studio là ăn ngay)"
+    if slot:
+        p["support_interface_filament"] = str(slot)
+        p["support_top_z_distance"] = "0"
+        p["support_bottom_z_distance"] = "0"
+        p["support_interface_spacing"] = "0"
+        p["support_interface_pattern"] = "rectilinear_interlaced"
+        p["independent_support_layer_height"] = "0"
+        why.append(f"TỰ ÁP mẹo gỡ support đẹp{pre}: file có {partner} ở slot {slot} trong khi "
+                   f"thân in {body} — 2 nhựa này không dính nhau nên interface {partner} ép khít "
+                   f"Z distance = 0 vẫn bóc rời, mặt dưới bóng như mặt trên. Đã set: "
+                   f"interface = nhựa {slot}, Top/Bottom Z = 0, spacing = 0, pattern = "
+                   f"Rectilinear Interlaced, tắt Independent support layer height. Các ô này "
+                   f"nằm trong tab Support, chỉ hiện khi bật toggle ADVANCED (giá trị vẫn ăn "
+                   f"kể cả không hiện). Đổi lại: tốn thời gian + nhựa purge mỗi lớp interface.")
+    elif ft:
+        # FALLBACK cung vat lieu: khong co nhua doi ung -> interface van la nhua than
+        # nhung tro ve DUNG slot than in + khe ho an toan 0.2 (0 la dinh chet).
+        body_slot = ft.index(body) + 1
+        p["support_interface_filament"] = str(body_slot)
+        p["support_top_z_distance"] = "0.2"
+        p["support_bottom_z_distance"] = "0.2"
+        p["support_interface_spacing"] = "0.5"
+        p["support_interface_pattern"] = "rectilinear_interlaced"
+        ghost_note = (f" File CÓ khai báo {partner} ở slot {ghost} nhưng AMS Lite chỉ có 4 khay "
+                      f"thật — chuyển {partner} vào khay 1-4 + sửa Project Filaments rồi upload "
+                      f"lại là hub tự áp Z = 0." if ghost else
+                      f" Muốn mặt dưới bóng như mặt trên: nạp thêm {partner or 'PETG'} vào AMS "
+                      f"(khay 1-4) + khai báo trong Project Filaments rồi upload lại.")
+        why.append(f"Support interface CÙNG vật liệu{pre} ({body} slot {body_slot} — không có "
+                   f"nhựa đối ứng trong 4 khay AMS): giữ khe Z distance 0.2mm để bóc được "
+                   f"(cùng nhựa mà ép 0 là dính chết), pattern Rectilinear Interlaced cho dễ "
+                   f"tách. Đổi interface sang khay {body} KHÁC cũng vô ích — cùng hóa học thì "
+                   f"dính như nhau, chỉ tốn purge đổi màu.{ghost_note}")
+    else:
+        why.append("MẸO gỡ support đẹp (cần AMS + PETG): đặt Support/raft interface = PETG, "
+                   "Top Z distance = 0, Top interface spacing = 0, Interface pattern = "
+                   "Rectilinear Interlaced, tắt Independent support layer height (tab Support, "
+                   "bật toggle ADVANCED mới hiện các ô này). PLA–PETG không dính nhau về hóa "
+                   "học nên khít 0mm vẫn bóc rời — mặt dưới bóng như mặt trên. Upload file .3mf "
+                   "có khai báo sẵn PETG trong Project Filaments là hub TỰ ÁP giúp bạn. "
+                   "CẢNH BÁO: cùng vật liệu thì KHÔNG được để Z distance 0 (dính chết vào model).")
+
     # 4) BRIM — quyet dinh bang NGUY CO LAT, khong phai bang cam giac
     #    Nguy co lat ~ chieu cao / canh vuong tuong duong cua mat day.
     #    Day rong + thap  -> KHONG can brim (brim ton thoi gian + phai got via).
@@ -434,21 +521,31 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced") -> dict:
     h_mm = m.get("height", 0)
     side = math.sqrt(bed * 100) if bed > 0 else 0.01      # cm2 -> mm2 -> canh vuong td
     ratio = h_mm / side if side else 99
-    if bed >= 20 and ratio <= 3:
+    #    Yeu to VAT LIEU (Simplify3D/Xometry): ABS/ASA co ngot manh -> venh mep du day
+    #    rong, van can brim. PLA/PETG tren PEI nham thi theo hinh hoc thuan tuy.
+    warpy = body.split()[0] in ("ABS", "ASA") if body else False
+    if bed >= 20 and ratio <= 3 and not warpy:
         p["brim_type"] = "no_brim"
         p["brim_width"] = "0"
         why.append(f"KHÔNG brim: đáy rộng {bed} cm² (cạnh ~{side:.0f}mm) so với cao {h_mm}mm "
                    f"→ tỉ lệ lật {ratio:.1f} (an toàn <3). Đáy dày/rộng thế này brim chỉ tốn "
                    f"thời gian và phải gọt via.")
-    elif bed >= 8:
+    elif bed >= 8 or (warpy and ratio <= 3):
         p["brim_type"] = "outer_only"
         p["brim_width"] = "5"
-        why.append(f"Brim 5mm: đáy {bed} cm², tỉ lệ lật {ratio:.1f} — bám thêm cho chắc.")
+        why.append(f"Brim 5mm: đáy {bed} cm², tỉ lệ lật {ratio:.1f}"
+                   + (f" — nhựa {body} co ngót mạnh, dễ vênh mép nên brim dù đáy rộng."
+                      if warpy else " — bám thêm cho chắc."))
     else:
         p["brim_type"] = "outer_only"
         p["brim_width"] = "8"
         why.append(f"Brim 8mm (BẮT BUỘC): đáy chỉ {bed} cm², tỉ lệ lật {ratio:.1f} — "
                    f"không brim thì lớp đầu bong / model đổ giữa chừng.")
+    # SKIRT: muc dich duy nhat la moi nhua (Simplify3D) — A1 tu moi bang purge line +
+    # wipe truoc moi lan in, skirt chi ton them thoi gian & nhua -> tat han.
+    p["skirt_loops"] = "0"
+    why.append("Skirt = 0 vòng: skirt chỉ để mồi nhựa, mà A1 đã tự mồi bằng purge line "
+               "trước mỗi lần in — vẽ thêm skirt là tốn thời gian vô ích.")
 
     # 5) TOP/BOTTOM SHELL — tinh theo quy tac do day (wiki OrcaSlicer), khong cung "4/3"
     infill_pct = float(re.sub(r"[^\d.]", "", M["infill"]) or 10)
@@ -460,39 +557,74 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced") -> dict:
     p["top_surface_pattern"] = "monotonicline"   # wiki: monotonic line dep nhat cho mat tren
     why.append(f"Mặt trên {tsl} lớp / đáy {bsl} lớp: {tsl_why}.")
 
-    # 6) SEAM — suy tu HINH HOC (boxy hay cong), theo wiki. Khong cung "aligned".
+    # 6) SEAM — quyet dinh theo BANG TRA wiki Bambu Studio (wiki.bambulab.com/.../Seam),
+    #    khong code cung theo cam tinh. Z-seam la diem bat dau moi vong in tren TUONG
+    #    DUNG nen khong the "giau xuong day". 3 truong hop theo wiki:
+    #    a) Aligned/Nearest tu san vi tri theo uu tien: dinh LOM (concave, khong hang)
+    #       > dinh loi > diem thuong > diem hang. => Model co GOC CANH SAC thi aligned
+    #       tu giau seam vao goc va xep thang hang doc.
+    #    b) Back: "seam dat sau model — muon mat TRUOC dep (vi du mat na Iron Man)".
+    #       => Chi dung khi co 1 mat dung LON vuot troi lam "mat lung" hy sinh duoc.
+    #    c) Scarf: Bambu chi ap khi be mat KHONG co goc du sac (nguyen van co che
+    #       "scarf application angle threshold") — tuc mat tron/cong trơn.
     flat_ratio = fa.get("flat_ratio", 0)
-    vert_dom = fa.get("vert_dom", 0)
-    if flat_ratio >= 0.55 and vert_dom >= 0.12:
-        # Hop/CAD co mat phang dung ro -> seam nem vao goc/canh (aligned), scarf tat
-        # (wiki: scarf kem hieu qua o goc nhon, con lam mo canh).
-        p["seam_position"] = "aligned"
+    n_dirs = fa.get("n_dirs", 0)
+    dom = fa.get("vert_dom_ratio", 1.0)
+    has_corners = flat_ratio >= 0.5 and 2 <= n_dirs <= 6   # tru tron rai deu 7-8 huong
+    if has_corners:
+        # Model hop/CAD -> BACK: ep 100% seam ve phia Y+ (wiki case b — "muon mat truoc
+        # dep"). Aligned tuy nap goc tung vong nhung model nhieu vong roi rac (nan, khe)
+        # van vuong seam ra mat nhin thay — Back gom het ve 1 mat de xoay ra sau.
+        p["seam_position"] = "back"
         p["seam_slope_type"] = "none"
-        why.append(f"Seam = Aligned, KHÔNG scarf: model dạng hộp (mặt phẳng {int(flat_ratio*100)}%, "
-                   f"có mặt đứng lớn) → dồn seam vào cạnh/góc là giấu tốt nhất; scarf làm mờ cạnh nhọn.")
+        extra = (f" Mặt đứng lớn nhất gấp {dom:.1f}× các mặt khác — ưu tiên xoay chính mặt đó "
+                 f"ra sau." if dom >= 1.8 else
+                 f" Các mặt to ngang nhau ({n_dirs} hướng, chênh {dom:.1f}×) — chọn mặt ít nhìn "
+                 f"thấy nhất xoay ra sau.")
+        why.append(f"Seam = Back (wiki Bambu: 'muốn mặt trước đẹp — như mặt nạ Iron Man'): dồn "
+                   f"100% mối nối về phía Y+ của bàn in, các mặt còn lại sạch seam.{extra} "
+                   f"Muốn seam nấp góc kiểu CAD cổ điển thì đổi lại Aligned; muốn chỉ định "
+                   f"đích xác từng mặt: Seam painting.")
     else:
-        # Cong/huu co -> khong co goc de giau -> scarf ramp (wiki: giau z-seam mat cong)
+        # Khong co goc sac (tron/huu co) -> dung dung co che scarf cua Bambu (wiki case c)
         p["seam_position"] = "aligned"
         p["seam_slope_type"] = "all"
-        why.append(f"Seam = Aligned + SCARF (ramp): model cong/hữu cơ (mặt phẳng chỉ "
-                   f"{int(flat_ratio*100)}%) không có góc giấu seam → scarf tán mối nối "
-                   f"trên mặt cong (theo wiki OrcaSlicer). Muốn giấu hẳn 1 mặt: dùng Seam painting.")
+        why.append(f"Seam = Aligned + SCARF: bề mặt không có góc đủ sắc để nấp "
+                   f"(phẳng {int(flat_ratio*100)}%, {n_dirs or 'rải đều'} hướng đứng) → theo đúng "
+                   f"cơ chế 'scarf application angle threshold' của Bambu: tán vát mối nối "
+                   f"trên mặt cong. Muốn giấu hẳn 1 mặt: dùng Seam painting.")
 
-    # 7) WALL ORDER — suy tu overhang, theo wiki (khong cung "inner/outer")
+    # 6b) MAT CONG MUOT — arc fitting mac dinh TAT trong Bambu (PrintConfig default 0):
+    #     bat len thi bien cong xuat G2/G3 arc lien mach thay vi da giac gay khuc (lo
+    #     facet doc theo tuong cong). resolution nho hon = duong bao min hon (cham slice).
+    #     Van NGANG theo lop (stair-step mat doc) thi CHI giam duoc bang layer nho
+    #     (che do Dep) hoac Variable Layer Height — VLH phai bat TAY tren object
+    #     (nam trong danh sach ignore cua PrintConfig, preset khong set duoc).
+    if not has_corners or mode == "quality":
+        p["enable_arc_fitting"] = "1"
+        p["resolution"] = "0.008"
+        why.append("Mặt cong mượt: BẬT Arc fitting (mặc định Bambu tắt) → biên cong chạy "
+                   "G2/G3 liền mạch thay vì đa giác gãy khúc, + resolution 0.008mm (mịn hơn "
+                   "mặc định 0.01). Vân NGANG theo lớp trên mặt dốc muốn hết hẳn phải bật "
+                   "Variable Layer Height bằng tay trên object trong Studio — preset không "
+                   "set được (Bambu ignore key này).")
+
+    # 7) WALL ORDER — phu thuoc SO THANH truoc, roi moi den overhang.
+    #    >=3 thanh: "inner-outer-inner wall" (sandwich) la toi uu tuyet doi — thanh ngoai
+    #    duoc 1 thanh trong do lung (seam gon, khong vong) NHUNG van in som (kich thuoc
+    #    chinh xac). Chi kha thi khi wall_loops >= 3 nen 2 thanh phai chon 1 trong 2.
     ov = m.get("overhang_pct", 0)
-    if ov >= 3.0:
-        p["wall_sequence"] = "inner wall/outer wall"
-        why.append(f"Thứ tự thành = Inner/Outer: overhang {ov}% đáng kể → thành ngoài cần thành "
-                   f"trong đỡ lưng (bớt võng), và wiki nói inner/outer cho seam đẹp hơn.")
-    elif flat_ratio >= 0.6 and ov < 1.0:
-        p["wall_sequence"] = "outer wall/inner wall"
-        why.append(f"Thứ tự thành = Outer/Inner: model dạng hộp chức năng (mặt phẳng {int(flat_ratio*100)}%, "
-                   f"gần như không overhang) → in thành ngoài trước cho lỗ/chốt CHÍNH XÁC kích thước. "
-                   f"Đổi lại seam hơi rõ hơn.")
+    if M["walls"] >= 3:
+        p["wall_sequence"] = "inner-outer-inner wall"
+        why.append(f"Thứ tự thành = Inner-Outer-Inner (sandwich): có {M['walls']} thành nên thành "
+                   f"ngoài được kẹp giữa — vừa có thành trong đỡ lưng (seam gọn, không võng "
+                   f"overhang) vừa in sớm (lỗ/chốt chính xác kích thước). Chỉ ≥3 thành mới dùng được.")
     else:
+        # 2 thanh khong du de sandwich -> Inner/Outer (wiki default: seam gon, mat min).
+        # KHONG dung Outer/Inner nua: loi kich thuoc chinh xac khong dang gia seam xau.
         p["wall_sequence"] = "inner wall/outer wall"
-        why.append("Thứ tự thành = Inner/Outer (mặc định wiki): thành ngoài in sau, tựa vào thành "
-                   "trong → bề mặt mịn + seam gọn.")
+        why.append("Thứ tự thành = Inner/Outer (mặc định wiki, chỉ 2 thành không sandwich được): "
+                   "thành ngoài in sau, tựa vào thành trong → bề mặt mịn + seam gọn.")
 
     # 8) INFILL pattern — theo muc tieu
     if mode == "quality":
@@ -514,6 +646,20 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced") -> dict:
     # 10) INFILL/WALL OVERLAP — wiki: 25% chong ho chan long giua ruot va vo
     p["infill_wall_overlap"] = "25%"
     p["seam_gap"] = "10%"                        # wiki: 0-15% khi PA tune tot
+
+    # 11) LOP DAU — giu 50 mm/s (so Bambu tune cho A1: PEI nham + input shaping);
+    #     ha toc do chi lam LAU chu khong bam hon. Bam kem thi tang DO DAY lop dau:
+    #     lop day hon = chiu do venh ban tot hon + bead rong hon -> diet tich bam lon hon.
+    p["initial_layer_speed"] = ["50"]
+    if bed < 8 or ratio > 3:
+        p["initial_layer_print_height"] = "0.24"
+        why.append(f"Lớp đầu DÀY 0.24mm (thay vì hạ tốc độ): đáy chỉ {bed} cm² / tỉ lệ lật "
+                   f"{ratio:.1f} — lớp dày hơn nuốt độ vênh bàn + bead bè rộng hơn → bám chắc "
+                   f"hơn mà KHÔNG chậm đi. Tốc độ giữ 50 mm/s chuẩn A1.")
+    else:
+        why.append(f"Lớp đầu giữ 50 mm/s / 0.2mm (chuẩn A1): đáy {bed} cm² bám thoải mái trên "
+                   f"bàn PEI nhám. 25 mm/s là số cũ cho máy bàn kính — chỉ chậm thêm chứ "
+                   f"không bám thêm.")
 
     vl = r.get("variable_layer")
     if vl and vl["extra_layers"] > VLH_WARN_LAYERS:

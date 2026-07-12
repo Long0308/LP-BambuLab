@@ -110,7 +110,7 @@ def load(argv: list[str] | None = None) -> tuple[str, str, str]:
 
     print("Chua co cau hinh may in. Chon MOT trong cac cach sau:")
     print("  1) Bien moi truong (khong luu file):")
-    print("       setx BAMBU_HOST 192.168.1.11")
+    print("       setx BAMBU_HOST 192.168.1.50")
     print("       setx BAMBU_SERIAL <SERIAL>")
     print("       setx BAMBU_ACCESS_CODE <CODE>")
     print(f"  2) File {ENV_NAME}  (chep tu .env.example)")

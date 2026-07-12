@@ -17,7 +17,10 @@ trí nhớ hay từ nhánh `master` trên GitHub (xem [NOTICE](NOTICE) — mục
 | `analyze_print.py` | Phân tích file in. |
 | `bambu_status.py` | Đọc trạng thái máy qua MQTT LAN (cổng 8883). |
 | `bambu_connect.py` | Sinh `printer.local.json` từ IP / Serial / Access Code. |
-| `bambu_web.py` | Web dashboard theo dõi + bảng điều khiển qua LAN (bạn bấm, không phải AI). |
+| `bambu_web.py` | Web dashboard theo dõi + bảng điều khiển qua LAN (bạn bấm, không phải AI). Kèm trang `/analyze`: upload STL/3MF → phân tích → sinh preset → slice → đẩy xuống máy. |
+| `analyzer.py` | Bộ suy luận preset từ mesh thật: seam / wall order / support / brim / lớp đầu / trần lưu lượng — mọi giá trị đều kèm dòng "vì sao". |
+| `optimize_e2e.py` | Slice THẬT baseline + 3 chế độ bằng Bambu Studio CLI để so sánh số thật. |
+| `slicer_cli.py` / `stl_to_3mf.py` | Gọi CLI slice + bọc STL trần thành `.3mf` mang config A1. |
 | `printer_config.py` | Đọc/ghi `printer.local.json` dùng chung cho các script. |
 | `boxson-PLAMatte-Decor-*.json` | Preset mẫu (process + filament) — import được. |
 | `*.cpp` | Mã nguồn Bambu Studio, dùng làm ground truth. AGPL-3.0 — xem [NOTICE](NOTICE). |
@@ -93,6 +96,28 @@ Thả file `.3mf` vào tab **Phân tích**, hub đọc `Metadata/project_setting
 - **Trần lưu lượng**: `v_max = max_volumetric_speed / (layer_height × line_width)`. Chỉ ra chỗ đặt
   tốc độ cao vô nghĩa, và chỗ còn dư trần ở vùng khuất (tăng tốc miễn phí, không đụng bề mặt).
 - Vân bậc thang, cong vênh đế lớn, `Inner/Outer/Inner` khi < 3 wall, `precise_outer_wall` bị bỏ qua…
+
+## Trang /analyze — preset suy luận 100%, không số bịa
+
+Upload `.3mf`/`.stl` lên `http://<IP-PC>:8787/analyze`. Analyzer đo mesh thật rồi suy ra
+từng thông số, tên preset có cấu trúc `LP-BamBu-A1-{Fast|Balanced|HighQuality}-{layer}mm-{model}`:
+
+- **Seam** (bảng tra wiki Bambu): model hộp/CAD → `back` (dồn 100% mối nối về mặt sau — xoay
+  mặt khuất ra Y+); mặt cong không góc sắc → `aligned + scarf` (đúng cơ chế *scarf application
+  angle threshold*). Đo bằng `n_dirs` (số hướng mặt đứng) + `vert_dom_ratio`, không ngưỡng cảm tính.
+- **Wall order**: ≥3 thành → `inner-outer-inner` (sandwich — thành ngoài được đỡ lưng mà vẫn
+  chính xác kích thước). Balanced/Quality mặc định 3 thành; Fast 2 thành → `inner/outer`.
+- **Lớp đầu**: giữ 50 mm/s chuẩn A1 (hạ tốc chỉ làm lâu, không bám hơn); đáy nhỏ / tỉ lệ lật
+  cao → tăng **độ dày** lớp đầu 0.2→0.24mm thay vì giảm tốc.
+- **Support interface tự áp** (mẹo "gỡ ra đẹp như mặt kính"): thân PLA + file có PETG (hoặc
+  ngược lại) → interface = nhựa đối ứng, Top/Bottom Z = 0, spacing = 0, Rectilinear Interlaced,
+  tắt Independent support layer height — PLA↔PETG không dính nhau nên ép khít vẫn bóc rời.
+  Không có nhựa đối ứng → fallback cùng vật liệu đúng slot, khe an toàn 0.2mm. Các key được
+  cài sẵn cả khi support tắt (bật tay trong Studio là ăn ngay; ô chỉ hiện khi bật Advanced).
+- **Brim** theo tỉ lệ lật (cao ÷ cạnh đáy) + vật liệu (ABS/ASA co ngót → brim dù đáy rộng);
+  **skirt = 0** vì A1 tự mồi nhựa bằng purge line.
+- **Slice + đẩy xuống máy** có dropdown chọn chế độ (Nhanh / Cân bằng / Đẹp / giữ config gốc).
+- Tài liệu mẹo PETG interface lưu cố định trong card "📚" cuối trang `/analyze`.
 
 ## Import preset
 

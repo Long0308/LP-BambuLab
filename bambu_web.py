@@ -166,6 +166,33 @@ ANJOB = {"state": "idle", "name": None, "msg": "", "result": None}
 ANJOB_LOCK = threading.Lock()
 
 
+def _ams_filament_presets():
+    """Sinh preset filament tu 4 khe AMS THAT (MQTT) — mau + loai + nhiet do that."""
+    with LOCK:
+        ams = (STATE["data"].get("ams") or {})
+    out = []
+    for u in ams.get("ams", []):
+        for t in (u.get("tray") or []):
+            sub = (t.get("tray_sub_brands") or t.get("tray_type") or "").strip()
+            color = (t.get("tray_color") or "")[:6]
+            if not sub or not color:
+                continue
+            slot = int(t.get("id", 0)) + 1
+            preset = {
+                "type": "filament",
+                "from": "User",
+                "inherits": f"Bambu {sub} @BBL A1",
+                "name": f"{sub} #{color} (AMS khe {slot})",
+                "filament_settings_id": [f"{sub} #{color} (AMS khe {slot})"],
+                "filament_colour": [f"#{color}"],
+                "version": "2.7.0.8",
+            }
+            if t.get("nozzle_temp_max"):
+                preset["nozzle_temperature"] = [str(t["nozzle_temp_max"])]
+            out.append({"slot": slot, "sub": sub, "color": f"#{color}", "preset": preset})
+    return out
+
+
 def _run_analyze(name, src_path):
     """Phan tich chay NEN — file lon (300k+ tam giac) mat 30-60s, khong the
     giu request HTTP mo lau vay (Tailscale/trinh duyet cat -> tuong treo)."""
@@ -173,6 +200,7 @@ def _run_analyze(name, src_path):
         res = analyzer.analyze(src_path)
         res["ok"] = True
         res["name"] = name
+        res["ams_filaments"] = _ams_filament_presets()   # preset filament tu AMS that
         with ANJOB_LOCK:
             ANJOB.update(state="done", msg="Xong", result=res)
     except Exception as e:                                # noqa: BLE001
@@ -207,7 +235,7 @@ def _run_optimize(name, src_path):
             pass
 
 
-def _slice_and_push(name, src_path):
+def _slice_and_push(name, src_path, mode=None):
     """Chay nen: slice file du an -> day ket qua .gcode.3mf xuong may in.
 
     Toan bo do 1 cu bam upload cua NGUOI DUNG khoi dong — day file chi la
@@ -225,6 +253,16 @@ def _slice_and_push(name, src_path):
             wrapped = src_path + ".3mf"
             mesh_info = stl_to_3mf.wrap(src_path, wrapped)
             src_path = wrapped
+        if mode:
+            # Slice theo CHE DO user chon: ap preset suy luan vao config nhung roi slice
+            with UPJOB_LOCK:
+                UPJOB.update(state="slicing", name=name,
+                             msg=f"Đang áp cấu hình chế độ + slice…", stats=None)
+            import optimize_e2e
+            an = analyzer.analyze(src_path, mode)
+            tuned = src_path + f".{mode}.3mf"
+            optimize_e2e.apply_preset(src_path, tuned, an["presets"][mode]["preset"])
+            src_path = tuned
         with UPJOB_LOCK:
             UPJOB.update(state="slicing", name=name, msg="Đang slice trên máy tính…", stats=None)
         ok, res, stats = slicer_cli.slice_3mf(src_path, SLICE_DIR)
@@ -1403,6 +1441,34 @@ ANALYZE_PAGE = r"""<!doctype html><html lang="vi"><head>
   Variable Layer Height · trần lưu lượng. <b>Chỉ tính toán — không đụng tới máy in.</b></div>
 </div>
 <div id="out"></div>
+
+<details class="card" style="margin-top:14px">
+  <summary style="cursor:pointer;font-weight:700;font-size:15px">📚 Mẹo gỡ support đẹp như mặt kính — PETG interface cho PLA</summary>
+  <div class="mut" style="margin-top:10px;line-height:1.7">
+  <b>Nguyên lý:</b> PLA và PETG <b>không dính nhau về hóa học</b>. Bình thường support cùng
+  vật liệu phải chừa khe 0.2mm (Top Z distance) để bóc ra — chính khe đó làm mặt dưới rỗ.
+  Đổi lớp tiếp xúc (interface) sang nhựa đối ứng thì ép khít <b>0mm</b> vẫn bóc rời →
+  mặt dưới bóng như mặt trên.<br><br>
+  <b>5 bước trong Bambu Studio (tab Support, bật Advanced):</b><br>
+  1️⃣ Filament for Supports → <b>Support/raft interface = PETG</b> (đúng slot AMS đang nạp)<br>
+  2️⃣ <b>Top Z distance = 0</b> · Bottom Z distance = 0<br>
+  3️⃣ <b>Top interface spacing = 0</b> (interface đặc 100%)<br>
+  4️⃣ Interface pattern = <b>Rectilinear Interlaced</b><br>
+  5️⃣ TẮT <b>Independent support layer height</b> (khỏi bị làm tròn lệch lớp)<br><br>
+  ✅ Hub <b>TỰ ÁP</b> bộ này khi bạn upload .3mf có khai báo PETG trong Project Filaments
+  (thân PLA) — hoặc ngược lại PLA làm interface cho thân PETG.<br>
+  🔁 Máy chỉ có 1 loại nhựa → hub fallback interface cùng vật liệu đúng slot thân in,
+  khe an toàn 0.2mm.<br>
+  ⚠️ <b>Cấm</b> để Z distance = 0 khi interface CÙNG vật liệu — support dính chết vào model.<br>
+  ⏱️ Giá phải trả: single-nozzle đổi nhựa mỗi lớp interface → tốn thời gian + nhựa purge.<br><br>
+  <b>An toàn trước khi in model lớn (case thất bại cộng đồng đã quét):</b><br>
+  🧪 Lần đầu dùng trick: in <b>thử 1 miếng nhỏ có overhang</b> (~20 phút) trước, đừng đặt cược model 8 tiếng.<br>
+  🔍 Import preset xong phải <b>chọn nó ở dropdown Process</b> — import KHÔNG tự áp; bóc không ra đa số do preset chưa được chọn, Z distance vẫn của preset cũ.<br>
+  💧 Giữ nguyên flush volume Bambu tự tính khi đổi PLA↔PETG — giảm flush quá tay thì vùng nhựa trộn có thể bám nhẹ.<br>
+  🔗 Kiểm chứng: forum.bambulab.com/t/5942 · 3djake.ie (PLA trick) · wiki.bambulab.com/en/software/bambu-studio/Seam
+  </div>
+</details>
+
 <div id="toast"></div>
 <script>
 let FILE=null;
@@ -1508,8 +1574,16 @@ function render(j){
   }
   h+='<button class="btn go" id="e2e" onclick="optimize()">So sánh 3 chế độ — slice thật 4 lần (~15s)</button>'
    +'<div id="e2eout"></div>'
-   +'<button class="btn go" onclick="slice()">Slice ngay + đẩy xuống máy in</button>'
-   +'<div class="mut" style="margin-top:7px;text-align:center">Gọi Bambu Studio CLI trên máy tính. Lệnh IN vẫn phải bạn bấm ở trang File.</div>';
+   +'<div class="card" style="margin-top:10px"><h3 style="margin-top:0">Slice + đẩy xuống máy in</h3>'
+   +'<select id="smode" style="width:100%;padding:10px;border-radius:10px;margin-bottom:9px;'
+   +'background:#0f172a;color:#e2e8f0;border:1px solid rgba(255,255,255,.15);font-size:14px">'
+   +'<option value="balanced" selected>Cân bằng — 0.20mm (khuyên dùng)</option>'
+   +'<option value="fast">Nhanh — 0.28mm</option>'
+   +'<option value="quality">Đẹp — 0.16mm</option>'
+   +'<option value="">Giữ nguyên config trong file (không áp preset)</option>'
+   +'</select>'
+   +'<button class="btn go" style="margin-top:0" onclick="slice()">Slice ngay + đẩy xuống máy in</button>'
+   +'<div class="mut" style="margin-top:7px;text-align:center">Gọi Bambu Studio CLI trên máy tính. Lệnh IN vẫn phải bạn bấm ở trang File.</div></div>';
   document.getElementById("out").innerHTML=h;
 }
 function optimize(){
@@ -1559,7 +1633,8 @@ function dlp(k){
   const d=window.__rep.modes[k];
   const blob=new Blob([JSON.stringify(d.preset,null,4)],{type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
-  a.download=(window.__rep.name||"file")+"-"+k+"-process.json"; a.click(); URL.revokeObjectURL(a.href);
+  a.download=((d.preset&&d.preset.name)||((window.__rep.name||"file")+"-"+k))+".json";
+  a.click(); URL.revokeObjectURL(a.href);
   toast("Đã tải — Bambu Studio → Process → Import");
 }
 function kv(k,v){ return '<div class="kv"><span>'+k+'</span><b>'+esc(v)+'</b></div>'; }
@@ -1567,14 +1642,15 @@ function dl(){
   const blob=new Blob([JSON.stringify(window.__preset,null,4)],{type:"application/json"});
   const a=document.createElement("a");
   a.href=URL.createObjectURL(blob);
-  a.download=window.__pname+"-OPT-process.json";
+  a.download=((window.__preset&&window.__preset.name)||(window.__pname+"-OPT-process"))+".json";
   a.click(); URL.revokeObjectURL(a.href);
   toast("Đã tải preset — Bambu Studio → Process → Import");
 }
 async function slice(){
   if(!FILE){ toast("Chọn lại file"); return; }
+  const m=(document.getElementById("smode")||{value:""}).value;
   const xhr=new XMLHttpRequest();
-  xhr.open("POST","/api/upload?name="+encodeURIComponent(FILE.name));
+  xhr.open("POST","/api/upload?name="+encodeURIComponent(FILE.name)+(m?"&mode="+m:""));
   xhr.onload=()=>{ let j={}; try{j=JSON.parse(xhr.responseText);}catch(e){}
     if(j.ok&&j.queued){ toast("Đang slice trên máy tính…"); poll(); }
     else if(j.ok){ toast("Đã đẩy xuống máy: "+j.name); }
@@ -1681,6 +1757,10 @@ class H(BaseHTTPRequestHandler):
                             json.dump({"sliced": bool(sliced)}, f)
                     except OSError:
                         pass
+                else:
+                    # May Bambu KHONG ho tro FTP REST (502) -> probe nhanh bat luc.
+                    # Roi ve tai DAY DU (cham lan dau, ensure_file_meta tu cache .json+.png)
+                    _, sliced = ensure_file_meta(fpath)
             if sliced is None:
                 self._send(200, json.dumps({"ok": False, "sliced": False}),
                            "application/json; charset=utf-8")
@@ -1804,7 +1884,10 @@ class H(BaseHTTPRequestHandler):
                     "application/json; charset=utf-8")
                 return
             UPJOB.update(state="slicing", name=name, msg="Bắt đầu slice…", stats=None)
-        threading.Thread(target=_slice_and_push, args=(name, src), daemon=True).start()
+        mode = unquote(parse_qs(urlparse(self.path).query).get("mode", [""])[0]).strip().lower()
+        if mode not in ("fast", "balanced", "quality"):
+            mode = None
+        threading.Thread(target=_slice_and_push, args=(name, src, mode), daemon=True).start()
         self._send(200, json.dumps({"ok": True, "queued": True, "name": name}),
                    "application/json; charset=utf-8")
 

@@ -35,10 +35,14 @@ SAFE_KEYS = (
     "top_shell_layers", "bottom_shell_layers",
     "enable_support", "support_type", "support_style",
     "support_on_build_plate_only", "support_threshold_angle",
+    "support_interface_filament", "support_top_z_distance", "support_bottom_z_distance",
+    "support_interface_spacing", "support_interface_pattern",
+    "independent_support_layer_height",
     "outer_wall_speed", "inner_wall_speed", "sparse_infill_speed",
     "internal_solid_infill_speed", "top_surface_speed",
-    "seam_position", "seam_slope_type", "brim_type", "brim_width",
-    "ironing_type", "infill_wall_overlap",
+    "seam_position", "seam_slope_type", "seam_gap", "brim_type", "brim_width", "skirt_loops",
+    "ironing_type", "infill_wall_overlap", "initial_layer_speed",
+    "initial_layer_print_height", "top_surface_pattern", "top_shell_thickness",
 )
 
 

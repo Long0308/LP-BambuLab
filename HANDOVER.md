@@ -18,7 +18,7 @@ Dashboard xem/điều khiển máy in **Bambu Lab A1 + AMS Lite** qua **LAN**, m
 ## Bảo mật (giữ nguyên, kiểm mỗi lần push)
 - **Gitignore** (đã xác nhận hoạt động): `.env`, `printer.local.json`, `filament.local.json`, `job_cache/`, `.mcp.json`.
 - `.env` chứa access_code + serial thật → **không bao giờ commit**.
-- Trước push: `git diff --cached | grep -E "0766fd90|104ba091|541bac4f|03900D650922452"` phải rỗng.
+- Trước push: `git diff --cached | grep -E "<BAMBU_ACCESS_CODE — xem .env>|104ba091|541bac4f|<BAMBU_SERIAL — xem .env>"` phải rỗng.
 
 ## Xong phiên này (commit 9cf49d2)
 1. **Thumbnail trang /files**: route `/api/filethumb?path=` (lazy + cache `job_cache/<key>.png`,
