@@ -212,7 +212,8 @@ def _rot_vertex(v, axis: str, ca: float, sa: float):
 
 
 def render_iso_svg(tris: list, axis: str = "X", ang: float = 0,
-                   size: int = 230, max_faces: int = 12000) -> str:
+                   size: int = 230, max_faces: int = 12000,
+                   rgb: tuple = (233, 125, 62)) -> str:
     """Ve model da xoay thanh anh SVG isometric nho (painter's algorithm thuan Python).
 
     Muc dich: user NHIN THAY model up mat nao xuong ban o huong de xuat — khong phai
@@ -256,20 +257,30 @@ def render_iso_svg(tris: list, axis: str = "X", ang: float = 0,
     parts = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{size}" height="{size}" '
              f'viewBox="0 0 {size} {size}">']
     for _, _, shade, pts in faces:
-        cr, cg, cb = int(233*shade), int(125*shade), int(62*shade)
+        cr, cg, cb = int(rgb[0]*shade), int(rgb[1]*shade), int(rgb[2]*shade)
         d = " ".join(f"{(u-u0)*k+8:.1f},{(w-w0)*k+8:.1f}" for u, w in pts)
         parts.append(f'<polygon points="{d}" fill="rgb({cr},{cg},{cb})"/>')
     parts.append("</svg>")
     return "".join(parts)
 
 
-def rot_preview(tris: list, rots: list) -> dict:
-    """Cap anh render 'hien tai' vs 'de xuat' — user NHIN de biet xoay the nao,
-    khong phai doan tu con so goc trong bang."""
-    out = {"current": render_iso_svg(tris, "X", 0)}
+def rot_preview(tris: list, rots: list, color: str | None = None) -> dict:
+    """Cap anh render 'hien tai' vs 'de xuat' — user NHIN de biet xoay the nao.
+    color: hex '#RRGGBB' cua khay AMS that (tu MQTT) -> render dung mau nhua."""
+    rgb = (233, 125, 62)
+    if color:
+        h = color.lstrip("#")
+        if len(h) >= 6:
+            try:
+                c = tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
+                # mau qua toi thi nang len de con thay khoi (shade nhan them 0.35-1.0)
+                rgb = tuple(max(v, 40) for v in c)
+            except ValueError:
+                pass
+    out = {"current": render_iso_svg(tris, "X", 0, rgb=rgb)}
     best = next((x for x in rots if x.get("recommend")), None)
     if best and not (best["axis"] == "X" and best["angle"] == 0):
-        out["best"] = render_iso_svg(tris, best["axis"], best["angle"])
+        out["best"] = render_iso_svg(tris, best["axis"], best["angle"], rgb=rgb)
         out["axis"], out["angle"] = best["axis"], best["angle"]
     return out
 
@@ -411,7 +422,7 @@ def top_shell_layers(lh: float, infill_pct: float, target_mm: float = 1.0) -> tu
     return n, reason
 
 
-def analyze_3mf(path: str) -> dict:
+def analyze_3mf(path: str, color: str | None = None) -> dict:
     """Phan tich 1 file .3mf (du an hoac da slice)."""
     res: dict = {"kind": "3mf", "issues": [], "tips": []}
     with zipfile.ZipFile(path) as z:
@@ -436,7 +447,7 @@ def analyze_3mf(path: str) -> dict:
             res["faces"] = face_analysis(tris)
             if len(tris) <= ROT_MAX_TRIS:
                 res["rotations"] = try_rotations(tris)
-                res["rot_preview"] = rot_preview(tris, res["rotations"])
+                res["rot_preview"] = rot_preview(tris, res["rotations"], color)
             else:
                 res["tips"].append(f"Mesh {len(tris):,} tam giác vượt ngưỡng {ROT_MAX_TRIS:,} — bỏ quét xoay để không treo server.")
 
@@ -449,7 +460,7 @@ def analyze_3mf(path: str) -> dict:
     return res
 
 
-def analyze_stl(path: str) -> dict:
+def analyze_stl(path: str, color: str | None = None) -> dict:
     """Phan tich STL tho (chua co cau hinh -> chi hinh hoc + xoay)."""
     import stl_to_3mf
     tris = stl_to_3mf.parse_stl(path)
@@ -463,15 +474,49 @@ def analyze_stl(path: str) -> dict:
            "variable_layer": None, "flow": None}
     if len(tris) <= ROT_MAX_TRIS:
         res["rotations"] = try_rotations(tris)
-        res["rot_preview"] = rot_preview(tris, res["rotations"])
+        res["rot_preview"] = rot_preview(tris, res["rotations"], color)
     else:
         res["tips"].append(f"Mesh {len(tris):,} tam giác vượt ngưỡng {ROT_MAX_TRIS:,} — bỏ quét xoay để không treo server.")
     _advise(res)
     return res
 
 
+def orientation_tips(rots: list) -> list:
+    """Tips xoay huong THONG MINH — chi xuat hien khi co de xuat xoay khac huong
+    hien tai, de user can nhac them cac tieu chi ma hinh hoc thuan khong do duoc.
+
+    Nguon: Protolabs/Hubs knowledge-base (part orientation: accuracy/strength/
+    time/finish) + kiem chung slice that tren hub (hop dung 698 lop NHANH hon
+    hop nam 510 lop ~10% vi moi lop nho hon — so lop KHONG quyet dinh thoi gian).
+    """
+    best = next((x for x in rots if x.get("recommend")), None)
+    cur = next((x for x in rots if x["axis"] == "X" and x["angle"] == 0), None)
+    if not best or not cur or best is cur:
+        return []
+    tips = []
+    d_ov = cur["overhang_pct"] - best["overhang_pct"]
+    if cur["usable"] and d_ov <= 8:
+        tips.append(
+            f"⚖️ Hướng hiện tại CŨNG in được (overhang chỉ hơn đề xuất {d_ov:.1f}%). "
+            "Xếp hạng hình học là DỰ ĐOÁN: thời gian in phụ thuộc diện tích mỗi lớp "
+            "nhiều hơn số lớp — hướng cao hơn có thể vẫn NHANH hơn. Muốn số thật, "
+            "chạy Tối ưu E2E slice cả hai hướng rồi so.")
+    tips.append(
+        "💪 Nếu chi tiết CHỊU LỰC: lớp FDM khỏe theo mặt phẳng XY gấp 4–5 lần phương Z "
+        "(Protolabs/Hubs) — ưu tiên hướng đặt đường lực NẰM TRONG mặt lớp; lực kéo dọc Z "
+        "dễ tách lớp, quan trọng hơn cả việc ít support.")
+    tips.append(
+        "👁 Mặt cần ĐẸP: mặt trên cùng mịn nhất (mỏ đùn ủi qua), mặt úp bàn ăn vân PEI, "
+        "mặt tựa support XẤU nhất — xoay mặt thẩm mỹ lên trên hoặc úp xuống bàn.")
+    tips.append(
+        "⭕ Lỗ tròn/trụ chính xác nhất khi trục thẳng ĐỨNG (lớp đồng tâm, không bậc thang) — "
+        "nếu model có lỗ lắp ghép, ưu tiên tiêu chí này hơn overhang (Hubs).")
+    return tips
+
+
 def _advise(r: dict) -> None:
     """Sinh canh bao + khuyen nghi tu so lieu (khong doan bua)."""
+    r["tips"] = (r.get("tips") or []) + orientation_tips(r.get("rotations") or [])
     m = r.get("mesh") or {}
     if m:
         if m["need_support"]:
@@ -904,10 +949,12 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced") -> dict:
     return {"preset": p, "why": why, "mode": mode, "mode_label": M["label"]}
 
 
-def analyze(path: str, mode: str = "balanced", ams: list | None = None) -> dict:
+def analyze(path: str, mode: str = "balanced", ams: list | None = None,
+            color: str | None = None) -> dict:
     """ams: loai nhua THAT trong khay AMS (tu MQTT, vd ['PLA LITE','PETG BASIC']).
     None/[] = khong sync duoc may -> chi suy theo khai bao trong file."""
-    r = analyze_stl(path) if path.lower().endswith(".stl") else analyze_3mf(path)
+    r = (analyze_stl(path, color) if path.lower().endswith(".stl")
+         else analyze_3mf(path, color))
     r["ams"] = [str(t).upper() for t in (ams or []) if t]
     import os as _os
     nm = _os.path.splitext(_os.path.basename(path))[0][:20]

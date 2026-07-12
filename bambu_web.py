@@ -193,6 +193,13 @@ def _ams_filament_presets():
     return out
 
 
+def _ams_first_color():
+    """Mau hex cua khay AMS dau tien co nhua — de render preview dung mau that."""
+    for f in _ams_filament_presets():
+        return f["color"]
+    return None
+
+
 def _ams_tray_types():
     """Loai nhua THAT dang nam trong 4 khay AMS Lite (MQTT cache) — cung nguon voi
     panel AMS tren dashboard. Tra ['PLA LITE','PLA MATTE',...] theo khe 1-4;
@@ -212,7 +219,7 @@ def _run_analyze(name, src_path):
     """Phan tich chay NEN — file lon (300k+ tam giac) mat 30-60s, khong the
     giu request HTTP mo lau vay (Tailscale/trinh duyet cat -> tuong treo)."""
     try:
-        res = analyzer.analyze(src_path, ams=_ams_tray_types())
+        res = analyzer.analyze(src_path, ams=_ams_tray_types(), color=_ams_first_color())
         res["ok"] = True
         res["name"] = name
         res["ams_filaments"] = _ams_filament_presets()   # preset filament tu AMS that
