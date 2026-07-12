@@ -115,9 +115,25 @@ từng thông số, tên preset có cấu trúc `LP-BamBu-A1-{Fast|Balanced|High
   Không có nhựa đối ứng → fallback cùng vật liệu đúng slot, khe an toàn 0.2mm. Các key được
   cài sẵn cả khi support tắt (bật tay trong Studio là ăn ngay; ô chỉ hiện khi bật Advanced).
 - **Brim** theo tỉ lệ lật (cao ÷ cạnh đáy) + vật liệu (ABS/ASA co ngót → brim dù đáy rộng);
-  **skirt = 0** vì A1 tự mồi nhựa bằng purge line.
+  **skirt = 0** vì A1 tự mồi nhựa bằng purge line. Chi phí đã đo thật (slice Bambu CLI): brim 5mm
+  = +1.9% thời gian/nhựa, 8mm = +3.4% — rẻ hơn nhiều so với một lần in hỏng lớp đầu.
+- **Lỗ/khe đục trên shell** (`ceiling_bridges`): trần có nhịp ≤ 10mm là **bridge** — A1 bắc cầu
+  được, **trừ khỏi diện tích cần support** trước khi quyết bật/tắt (nguồn: Hydra Research design
+  rules). Đây là lý do model có nhiều khe hẹp không cần support dù overhang% cao.
+- **Thành mỏng** (`thin_walls`, ray-cast mẫu): cảnh báo khi bề dày < 1.2mm (2 perimeter); < 0.8mm
+  (2 đường nozzle) là không in đặc được; chịu lực nên ≥ 1.5mm (nguồn: Wikifactory / LayerX / 3D Demand).
+- **Support normal vs tree** (đã calibrate bằng slice thật): `flat_ratio ≥ 0.5` → `normal(auto)`
+  (giàn giáo đều — số liệu: model phẳng flat 0.76–0.85 in normal nhanh hơn tree ~18% thời gian,
+  ~10% nhựa); model cong/hữu cơ → `tree(auto)`, và cao > 150mm → `tree_strong` (nhánh to khỏi lắc).
 - **Slice + đẩy xuống máy** có dropdown chọn chế độ (Nhanh / Cân bằng / Đẹp / giữ config gốc).
 - Tài liệu mẹo PETG interface lưu cố định trong card "📚" cuối trang `/analyze`.
+
+## Đổi kết nối máy in ngay trên web (không cần sửa code)
+
+Nút **⚙ Kết nối** trên dashboard → nhập IP / Serial / Access Code (như Bambu Studio) → lưu vào
+`.env` + `printer.local.json` (đều gitignore) rồi tự kết nối lại MQTT trong ~5 giây. Access code
+đổi mỗi lần máy reset WLAN — chỉ cần gõ 8 ký tự mới. Endpoint có **chống CSRF** (kiểm Origin),
+không trả ký tự thật của code/serial ra API, đổi IP bắt buộc nhập lại code (chống trỏ nhầm).
 
 ## Import preset
 

@@ -55,7 +55,7 @@ def _mesh_tris(xml: str, mats: list) -> list:
     return [(V[i], V[j], V[k]) for i, j, k in T if i < len(V) and j < len(V) and k < len(V)]
 
 
-def load_3mf_tris(z: zipfile.ZipFile, names: list) -> list:
+def load_3mf_tris(z: zipfile.ZipFile, names: list, notes: list | None = None) -> list:
     """Doc TOAN BO mesh trong .3mf va ap transform xoay/di chuyen cua Bambu Studio.
 
     Bambu luu phep xoay o <component transform> + <item transform> trong
@@ -72,7 +72,11 @@ def load_3mf_tris(z: zipfile.ZipFile, names: list) -> list:
     items = {}                       # objectid goc -> ma tran <item> (hoac None)
     for it in re.finditer(r'<item\b[^>]*objectid="(\d+)"[^>]*/?>', xml):
         tm = re.search(r'transform="([^"]+)"', it.group(0))
-        items[it.group(1)] = _mat(tm.group(1)) if tm else None
+        mat = _mat(tm.group(1)) if tm else None
+        if tm and mat is None and notes is not None:
+            notes.append("⚠ Không đọc được ma trận xoay trong .3mf — phân tích có thể "
+                         "KHÔNG khớp hướng đặt thật trong Bambu Studio.")
+        items[it.group(1)] = mat
 
     tris: list = []
     for om in re.finditer(r'<object\b[^>]*\bid="(\d+)"[^>]*>(.*?)</object>', xml, re.S):
@@ -96,6 +100,9 @@ def load_3mf_tris(z: zipfile.ZipFile, names: list) -> list:
     if tris:
         return tris
     # fallback: khong doc duoc gi tu root -> hanh vi cu (file Objects dau tien, khong transform)
+    if notes is not None:
+        notes.append("⚠ File .3mf không theo cấu trúc Bambu chuẩn — đọc mesh thô, BỎ QUA "
+                     "transform xoay (nếu có). Kiểm tra lại hướng đặt trước khi tin đề xuất.")
     obj = [n for n in models if "objects" in n.lower()]
     return _mesh_tris(z.read(obj[0]).decode("utf-8", "ignore"), []) if obj else []
 
@@ -441,10 +448,13 @@ def analyze_3mf(path: str, color: str | None = None) -> dict:
             "filament_type")}   # filament_type: de tu phat hien cap PLA/PETG cho interface
 
         # mesh — doc qua load_3mf_tris de AP TRANSFORM xoay cua Bambu Studio
-        tris = load_3mf_tris(z, names)
+        tris = load_3mf_tris(z, names, notes=res["tips"])
         if tris:
             res["mesh"] = mesh_stats(tris)
             res["faces"] = face_analysis(tris)
+            if len(tris) <= ROT_MAX_TRIS:
+                res["bridges"] = ceiling_bridges(tris)
+                res["thin"] = thin_walls(tris)
             if len(tris) <= ROT_MAX_TRIS:
                 res["rotations"] = try_rotations(tris)
                 res["rot_preview"] = rot_preview(tris, res["rotations"], color)
@@ -472,6 +482,9 @@ def analyze_stl(path: str, color: str | None = None) -> dict:
     res = {"kind": "stl", "sliced": False, "issues": [], "tips": [],
            "mesh": mesh_stats(tris), "faces": face_analysis(tris), "config": None,
            "variable_layer": None, "flow": None}
+    if len(tris) <= ROT_MAX_TRIS:
+        res["bridges"] = ceiling_bridges(tris)
+        res["thin"] = thin_walls(tris)
     if len(tris) <= ROT_MAX_TRIS:
         res["rotations"] = try_rotations(tris)
         res["rot_preview"] = rot_preview(tris, res["rotations"], color)
@@ -517,6 +530,16 @@ def orientation_tips(rots: list) -> list:
 def _advise(r: dict) -> None:
     """Sinh canh bao + khuyen nghi tu so lieu (khong doan bua)."""
     r["tips"] = (r.get("tips") or []) + orientation_tips(r.get("rotations") or [])
+    th = r.get("thin") or {}
+    # Chi canh bao khi >=8% mat mau la thanh mong VA mong that (0.3-1.2mm) — duoi
+    # nguong nay la nhieu ray-cast, khong keu bao dong gia.
+    if th.get("thin_frac", 0) >= 0.08 and (th.get("min_mm") or 9) <= WALL_SOFT_MM:
+        r["issues"].append(
+            f"THÀNH MỎNG: ~{int(th['thin_frac']*100)}% bề mặt (mẫu) có bề dày < {WALL_SOFT_MM}mm "
+            f"(mỏng nhất {th['min_mm']}mm). Dưới {WALL_HARD_MM}mm (2 đường nozzle 0.4) là "
+            f"KHÔNG in đặc được (Wikifactory); 1.2mm = 2 perimeter khuyến nghị (LayerX); "
+            f"chịu lực nên ≥1.5mm (3D Demand). Arachne (đã bật) cứu được phần nào, nhưng "
+            f"triệt để phải dày hóa trong CAD hoặc scale model lên.")
     m = r.get("mesh") or {}
     if m:
         if m["need_support"]:
@@ -565,6 +588,145 @@ def _advise(r: dict) -> None:
             f"{fl['layer_height']}mm tốc độ tối đa thật là {fl['v_max']} mm/s, nhưng đang đặt "
             f"{lst} mm/s. Máy tự hãm — các số này chỉ là ảo.")
         r["tips"].append(f"Hạ tốc độ về ≤{fl['v_max']} mm/s cho đúng thực tế.")
+
+
+
+BRIDGE_MM = 10.0    # span tran <= 10mm -> bac cau khong can support (Hydra Research design rules)
+WALL_HARD_MM = 0.8  # 2 duong nozzle 0.4 — duoi muc nay thanh KHONG in dac duoc (Wikifactory)
+WALL_SOFT_MM = 1.2  # 2 perimeter khuyen nghi (LayerX); 1.5mm neu chiu luc (3D Demand)
+
+
+def ceiling_bridges(tris: list, bridge_mm: float = BRIDGE_MM) -> dict:
+    """Do TRAN LO/KHE: patch mat up xuong gan ngang, lo lung tren khong.
+
+    Loc tam giac nz < -0.9 (up xuong, nghieng <~26 do so voi ngang) khong cham ban,
+    gom patch theo dinh chung (union-find), span = canh NGAN cua bbox patch (khe
+    8x100mm chi can bac cau 8mm). span <= bridge_mm -> A1 bac cau duoc, khong can
+    support; lon hon -> tran that, phai do.
+    """
+    zmin = min(v[2] for t in tris for v in t)
+    down = []
+    for p, q, r in tris:
+        ux, uy, uz = q[0]-p[0], q[1]-p[1], q[2]-p[2]
+        vx, vy, vz = r[0]-p[0], r[1]-p[1], r[2]-p[2]
+        nx, ny, nz = uy*vz-uz*vy, uz*vx-ux*vz, ux*vy-uy*vx
+        L = math.sqrt(nx*nx+ny*ny+nz*nz)
+        if not L or nz/L > -0.9:
+            continue
+        if min(p[2], q[2], r[2]) - zmin <= BED_EPS:
+            continue                       # cham ban -> khong phai tran
+        down.append((L/2, p, q, r))
+    if not down:
+        return {"patches": 0, "bridge_cm2": 0.0, "ceil_cm2": 0.0, "max_span": 0.0}
+
+    key = lambda v: (round(v[0], 1), round(v[1], 1), round(v[2], 1))
+    parent = {}
+    def find(a):
+        while parent[a] != a:
+            parent[a] = parent[parent[a]]
+            a = parent[a]
+        return a
+    def union(a, b):
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[ra] = rb
+    for _, p, q, r in down:
+        for v in (p, q, r):
+            parent.setdefault(key(v), key(v))
+        union(key(p), key(q)); union(key(p), key(r))
+    groups = {}
+    for i, (ar, p, q, r) in enumerate(down):
+        groups.setdefault(find(key(p)), []).append(i)
+
+    bridge = ceil = 0.0
+    max_span = 0.0
+    for idxs in groups.values():
+        xs = [v[0] for i in idxs for v in down[i][1:]]
+        ys = [v[1] for i in idxs for v in down[i][1:]]
+        span = min(max(xs)-min(xs), max(ys)-min(ys))
+        area = sum(down[i][0] for i in idxs)
+        max_span = max(max_span, span)
+        if span <= bridge_mm:
+            bridge += area
+        else:
+            ceil += area
+    return {"patches": len(groups), "bridge_cm2": round(bridge/100, 1),
+            "ceil_cm2": round(ceil/100, 1), "max_span": round(max_span, 1)}
+
+
+def thin_walls(tris: list, soft: float = WALL_SOFT_MM,
+               max_samples: int = 4000) -> dict:
+    """Do THANH MONG bang ray-cast mau: tu trong tam mat ban tia nguoc normal,
+    gap mat doi dien gan hon `soft` mm -> thanh mong (Moller-Trumbore, hash o 2mm).
+
+    Heuristic lay mau (khong quet 100% mat) — du de canh bao, khong thay duoc CAD.
+    """
+    n = len(tris)
+    step = max(1, n // max_samples)
+    cell = 2.0
+    grid = {}
+    pre = []
+    for i, (p, q, r) in enumerate(tris):
+        ux, uy, uz = q[0]-p[0], q[1]-p[1], q[2]-p[2]
+        vx, vy, vz = r[0]-p[0], r[1]-p[1], r[2]-p[2]
+        nx, ny, nz = uy*vz-uz*vy, uz*vx-ux*vz, ux*vy-uy*vx
+        L = math.sqrt(nx*nx+ny*ny+nz*nz)
+        if not L:
+            pre.append(None); continue
+        cx, cy, cz = (p[0]+q[0]+r[0])/3, (p[1]+q[1]+r[1])/3, (p[2]+q[2]+r[2])/3
+        pre.append((L/2, nx/L, ny/L, nz/L, cx, cy, cz))
+        grid.setdefault((int(cx//cell), int(cy//cell), int(cz//cell)), []).append(i)
+
+    def hit_dist(i):
+        ar, nx, ny, nz, cx, cy, cz = pre[i]
+        dx, dy, dz = -nx, -ny, -nz
+        ck = (int(cx//cell), int(cy//cell), int(cz//cell))
+        best = None
+        for ox in (-1, 0, 1):
+            for oy in (-1, 0, 1):
+                for oz in (-1, 0, 1):
+                    for j in grid.get((ck[0]+ox, ck[1]+oy, ck[2]+oz), ()):
+                        if j == i or pre[j] is None:
+                            continue
+                        if pre[j][1]*nx + pre[j][2]*ny + pre[j][3]*nz > -0.6:
+                            continue           # can mat DOI DIEN gan song song (normal nguoc chieu ro rang)
+                        p2, q2, r2 = tris[j]
+                        e1 = (q2[0]-p2[0], q2[1]-p2[1], q2[2]-p2[2])
+                        e2 = (r2[0]-p2[0], r2[1]-p2[1], r2[2]-p2[2])
+                        hx, hy, hz = dy*e2[2]-dz*e2[1], dz*e2[0]-dx*e2[2], dx*e2[1]-dy*e2[0]
+                        a = e1[0]*hx + e1[1]*hy + e1[2]*hz
+                        if abs(a) < 1e-9:
+                            continue
+                        f = 1.0/a
+                        s = (cx-p2[0], cy-p2[1], cz-p2[2])
+                        u = f*(s[0]*hx + s[1]*hy + s[2]*hz)
+                        if u < 0 or u > 1:
+                            continue
+                        qv = (s[1]*e1[2]-s[2]*e1[1], s[2]*e1[0]-s[0]*e1[2], s[0]*e1[1]-s[1]*e1[0])
+                        v = f*(dx*qv[0] + dy*qv[1] + dz*qv[2])
+                        if v < 0 or u+v > 1:
+                            continue
+                        t = f*(e2[0]*qv[0] + e2[1]*qv[1] + e2[2]*qv[2])
+                        # floor 0.3mm: duoi muc nay la tam giac ke grazing / nhieu mesh,
+                        # KHONG phai thanh in duoc (1 duong nozzle ~0.4mm la mong nhat that).
+                        if 0.3 < t <= soft + 0.1 and (best is None or t < best):
+                            best = t
+        return best
+
+    thin_n = samp_n = 0
+    tmin = None
+    for i in range(0, n, step):
+        if pre[i] is None:
+            continue
+        samp_n += 1
+        d = hit_dist(i)
+        if d is not None:
+            thin_n += 1
+            tmin = d if tmin is None else min(tmin, d)
+    # Bao cao theo TI LE mat mau (khong nhan scale — tranh thoi phong dien tich ao).
+    frac = thin_n / samp_n if samp_n else 0.0
+    return {"thin_frac": round(frac, 3), "thin_n": thin_n, "sampled": samp_n,
+            "min_mm": round(tmin, 2) if tmin else None}
 
 
 MODES = {
@@ -656,10 +818,21 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced") -> dict:
     # 3) SUPPORT — tu nhan dinh theo dien tich hang THAT, khong theo cam tinh
     ov = m.get("overhang_pct", 0)
     ov_cm2 = m.get("overhang_cm2", 0)
-    if ov_cm2 < 2.0 or ov < 0.5:
+    br = r.get("bridges") or {}
+    bridge_cm2 = br.get("bridge_cm2", 0)
+    # LO/KHE DUC TREN SHELL: tran patch span <= 10mm la BRIDGE — A1 bac cau khong can
+    # support (Hydra Research design rules) -> TRU khoi dien tich hang truoc khi quyet.
+    eff_cm2 = max(0.0, ov_cm2 - bridge_cm2)
+    if bridge_cm2 >= 0.5:
+        why.append(f"Lỗ/khe đục trên shell: {br.get('patches', 0)} mảng trần, trong đó "
+                   f"{bridge_cm2} cm² có nhịp ≤ {BRIDGE_MM:g}mm — A1 BẮC CẦU được, đã TRỪ "
+                   f"khỏi diện tích cần support (nguồn: Hydra Research, bridge ≤10mm). "
+                   f"Nhịp dài nhất: {br.get('max_span', 0)}mm.")
+    if eff_cm2 < 2.0 or ov < 0.5:
         p["enable_support"] = "0"
-        why.append(f"TẮT support: chỉ {ov_cm2} cm² mặt hẫng >45° ({ov}%) — quá nhỏ, "
-                   f"máy bắc cầu (bridging) qua được. Tiết kiệm thời gian + nhựa + khỏi gọt.")
+        why.append(f"TẮT support: {ov_cm2} cm² mặt hẫng >45° nhưng {bridge_cm2} cm² là trần "
+                   f"lỗ/khe bridge được → chỉ còn {eff_cm2:.1f} cm² thật sự cần đỡ — quá nhỏ. "
+                   f"Tiết kiệm thời gian + nhựa + khỏi gọt.")
     else:
         # KIEU support theo HINH HOC + CHIEU CAO (dong thuan cong dong/forum Bambu):
         #  - Mat hang PHANG (model boxy) -> NORMAL: gian giao do DEU toan mat, be mat
@@ -681,14 +854,14 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced") -> dict:
         if (r.get("faces") or {}).get("flat_ratio", 0) >= 0.5:
             p["support_type"] = "normal(auto)"
             p["support_style"] = "default"
-            why.append(f"BẬT support THƯỜNG (giàn giáo đều): {ov_cm2} cm² mặt hẫng >45° ({ov}%) "
+            why.append(f"BẬT support THƯỜNG (giàn giáo đều): {eff_cm2:.1f} cm² hẫng >45° cần đỡ thật ({ov}% tổng) "
                        f"trên model dạng hộp — mặt hẫng PHẲNG cần đỡ ĐỀU toàn mặt; support cây "
                        f"nhánh mọc lệch, chỗ có chỗ không → võng giữa các nhánh, và càng cao "
                        f"càng lắc. Chỉ chống từ mặt bàn (không tì lên thân).")
         else:
             p["support_type"] = "tree(auto)"
             p["support_style"] = "tree_strong" if h_sup > 150 else "tree_hybrid"
-            why.append(f"BẬT support CÂY: {ov_cm2} cm² mặt hẫng >45° ({ov}%) trên model "
+            why.append(f"BẬT support CÂY: {eff_cm2:.1f} cm² hẫng >45° cần đỡ thật ({ov}% tổng) trên model "
                        f"cong/chi tiết — tree chạm điểm, ít sẹo mặt, tiết kiệm nhựa. "
                        + (f"Model cao {h_sup:.0f}mm → dùng tree_strong (nhánh to, khỏi lắc). "
                           if h_sup > 150 else "")
@@ -790,7 +963,7 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced") -> dict:
         p["brim_width"] = "5"
         why.append(f"Brim 5mm (đáy BO CONG/VÁT): chỉ {int(bed_frac*100)}% footprint chạm bàn "
                    f"({bed} cm² / {foot:.0f} cm²) — mép ngoài đáy cong hớt lên, lớp 1-2 ở mép "
-                   f"là dải mỏng in hờ → xù mép, bong, kéo sợi. Brim neo mép cong xuống bàn. "
+                   f"là dải mỏng in hờ → xù mép, bong, kéo sợi. Brim neo mép cong xuống bàn "f"(giá đo thật: +1.9% thời gian, +1.9% nhựa — quá rẻ so với hỏng lớp đầu). "
                    f"Triệt để hơn: úp mặt đáy phẳng nhất xuống bàn khi sắp xếp.")
     elif bed >= 20 and ratio <= 3 and not warpy:
         p["brim_type"] = "no_brim"
@@ -803,12 +976,13 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced") -> dict:
         p["brim_width"] = "5"
         why.append(f"Brim 5mm: đáy {bed} cm², tỉ lệ lật {ratio:.1f}"
                    + (f" — nhựa {body} co ngót mạnh, dễ vênh mép nên brim dù đáy rộng."
-                      if warpy else " — bám thêm cho chắc."))
+                      if warpy else " — bám thêm cho chắc (giá đo thật: +1.9% thời gian/nhựa)."))
     else:
         p["brim_type"] = "outer_only"
         p["brim_width"] = "8"
         why.append(f"Brim 8mm (BẮT BUỘC): đáy chỉ {bed} cm², tỉ lệ lật {ratio:.1f} — "
-                   f"không brim thì lớp đầu bong / model đổ giữa chừng.")
+                   f"không brim thì lớp đầu bong / model đổ giữa chừng (giá đo thật brim 8mm: "
+                   f"+3.4% thời gian, +3.1% nhựa — rẻ hơn 1 lần in hỏng).")
     # SKIRT + DRAFT SHIELD: skirt chi de moi nhua (A1 tu moi bang purge line -> tat).
     # RIENG nhua co ngot (ABS/ASA) tren may khung HO nhu A1: draft_shield bien skirt
     # thanh tuong chan gio cao bang model. Bambu AN o nay khoi UI (Tab.cpp comment

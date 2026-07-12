@@ -551,13 +551,15 @@ def mqtt_loop():
                 c = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1)
             except Exception:
                 c = mqtt.Client()
-            c.username_pw_set("bblp", CODE)
+            with LOCK:               # snapshot (ip, code) NGUYEN KHOI — tranh cap ip-moi/code-cu
+                _ip, _code = IP, CODE
+            c.username_pw_set("bblp", _code)
             c.tls_set(cert_reqs=ssl.CERT_NONE, tls_version=ssl.PROTOCOL_TLS_CLIENT)
             c.tls_insecure_set(True)
             c.on_connect = on_connect
             c.on_disconnect = on_disconnect
             c.on_message = on_message
-            c.connect(IP, 8883, 30)
+            c.connect(_ip, 8883, 30)
             MQTT["client"] = c
 
             def repush():
@@ -582,13 +584,15 @@ def update_printer_config(host: str, serial: str, code: str) -> None:
     cap nhat globals roi ngat MQTT — mqtt_loop tu tao client moi voi thong so moi.
     Khong can restart server, khong can sua code."""
     global IP, SERIAL, CODE, REPORT, REQUEST
-    IP, SERIAL, CODE = host, serial, code
-    REPORT = f"device/{serial}/report"
-    REQUEST = f"device/{serial}/request"
-    for k, v in zip(printer_config.ENV_KEYS, (host, serial, code)):
-        os.environ[k] = v            # nguon uu tien 2 (environ) cung phai khop
+    # Ghi FILE truoc — neu ghi loi thi global GIU NGUYEN (state va file khong lech nhau)
     printer_config.update_env(host, serial, code)
     printer_config.save(host, serial, code)
+    with LOCK:                       # doc/ghi bo (IP,CODE) nguyen khoi — mqtt_loop snapshot cung LOCK
+        IP, SERIAL, CODE = host, serial, code
+        REPORT = f"device/{serial}/report"
+        REQUEST = f"device/{serial}/request"
+    for k, v in zip(printer_config.ENV_KEYS, (host, serial, code)):
+        os.environ[k] = v            # nguon uu tien 2 (environ) cung phai khop
     c = MQTT.get("client")
     if c:
         try:
@@ -830,8 +834,8 @@ PAGE = r"""<!doctype html><html lang="vi"><head>
 async function loadCfg(){
   try{ const r=await fetch("/api/printer-config"); const j=await r.json();
     document.getElementById("cfgHost").value=j.host||"";
-    document.getElementById("cfgSerial").placeholder=j.serial_hint||"chưa có";
-    document.getElementById("cfgCode").placeholder=j.code_hint||"chưa có";
+    document.getElementById("cfgSerial").placeholder=j.serial_set?"đã cấu hình (trống = giữ nguyên)":"chưa có";
+    document.getElementById("cfgCode").placeholder=j.code_set?"••••••••  (trống = giữ nguyên)":"chưa có";
     document.getElementById("cfgHint").textContent=j.connected?"Đang kết nối OK với cấu hình hiện tại.":"⚠ Chưa kết nối được — kiểm tra IP/Access Code (mã đổi khi máy reset WLAN).";
   }catch(e){}
 }
@@ -1857,8 +1861,8 @@ class H(BaseHTTPRequestHandler):
                 conn = STATE.get("connected", False)
             self._send(200, json.dumps({
                 "host": IP,
-                "serial_hint": (SERIAL[:4] + "…" + SERIAL[-3:]) if SERIAL and len(SERIAL) > 8 else "",
-                "code_hint": ("••••••" + CODE[-2:]) if CODE and len(CODE) >= 4 else "",
+                "serial_set": bool(SERIAL),      # chi bao CO/CHUA — khong lo ky tu that
+                "code_set": bool(CODE),
                 "connected": conn,
             }), "application/json; charset=utf-8")
         elif path.startswith("/api/anstatus"):
@@ -2095,7 +2099,21 @@ class H(BaseHTTPRequestHandler):
         self._send(200, json.dumps({"ok": True, "queued": True}),
                    "application/json; charset=utf-8")
 
+    def _same_origin(self) -> bool:
+        """Chan CSRF: trinh duyet LUON gui Origin voi cross-site POST fetch —
+        khac Host la request tu trang web la, tu choi. curl/script noi bo khong
+        gui Origin -> cho qua (khong phai vector CSRF)."""
+        raw = self.headers.get("Origin") or self.headers.get("Referer") or ""
+        if not raw:
+            return True
+        from urllib.parse import urlparse
+        return urlparse(raw).netloc == (self.headers.get("Host") or "")
+
     def do_POST(self):
+        if not self._same_origin():
+            self._send(403, json.dumps({"ok": False, "msg": "Origin không khớp — chặn CSRF"}),
+                       "application/json; charset=utf-8")
+            return
         if self.path.startswith("/api/optimize"):
             self._do_optimize(); return
         if self.path.startswith("/api/analyze"):
@@ -2127,8 +2145,21 @@ class H(BaseHTTPRequestHandler):
             body = self._read_json()
             host = (body.get("host") or "").strip() or IP
             serial = (body.get("serial") or "").strip() or SERIAL
-            code = (body.get("code") or "").strip() or CODE
-            if not re.fullmatch(r"\d{1,3}(\.\d{1,3}){3}|[A-Za-z0-9][A-Za-z0-9.-]{0,63}", host or ""):
+            code = (body.get("code") or "").strip()
+            # Doi HOST bat buoc nhap lai access code — chan viec lai hub tro sang server
+            # la roi tu dong dem code cu theo (phat hien boi code-review CSRF).
+            if host != IP and not code:
+                self._send(400, json.dumps({"ok": False, "msg": "Đổi IP thì phải nhập lại Access Code (chống trỏ nhầm/tấn công)"}), "application/json; charset=utf-8")
+                return
+            code = code or CODE
+            if re.fullmatch(r"[\d.]+", host or ""):
+                import ipaddress
+                try:
+                    ipaddress.ip_address(host)
+                except ValueError:
+                    self._send(400, json.dumps({"ok": False, "msg": "IP không hợp lệ (octet 0-255)"}), "application/json; charset=utf-8")
+                    return
+            elif not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9.-]{0,63}", host or ""):
                 self._send(400, json.dumps({"ok": False, "msg": "IP/host không hợp lệ"}), "application/json; charset=utf-8")
                 return
             if not re.fullmatch(r"[A-Za-z0-9]{8}", code or ""):
@@ -2137,7 +2168,11 @@ class H(BaseHTTPRequestHandler):
             if not re.fullmatch(r"[A-Za-z0-9]{10,20}", serial or ""):
                 self._send(400, json.dumps({"ok": False, "msg": "Serial không hợp lệ (10-20 ký tự chữ/số)"}), "application/json; charset=utf-8")
                 return
-            update_printer_config(host, serial, code)
+            try:
+                update_printer_config(host, serial, code)
+            except Exception as e:                       # noqa: BLE001 — ghi file loi (quyen/dia)
+                self._send(500, json.dumps({"ok": False, "msg": f"Lưu cấu hình lỗi: {e}"}), "application/json; charset=utf-8")
+                return
             self._send(200, json.dumps({"ok": True, "msg": "Đã lưu vào .env — đang kết nối lại máy in..."}), "application/json; charset=utf-8")
             return
         elif self.path == "/api/filament":
