@@ -51,6 +51,34 @@ def save(host: str, serial: str, access_code: str) -> str:
     return config_path()
 
 
+def update_env(host: str, serial: str, access_code: str) -> str:
+    """Ghi/cap nhat BAMBU_* trong .env, GIU nguyen moi dong khac (comment, key la).
+
+    Cho phep user doi access code tu web UI ma khong can sua file/du build lai.
+    .env nam trong .gitignore — khong bao gio duoc commit.
+    """
+    vals = dict(zip(ENV_KEYS, (host, serial, access_code)))
+    lines: list[str] = []
+    try:
+        with open(env_path(), encoding="utf-8") as f:
+            lines = f.read().splitlines()
+    except OSError:
+        pass
+    out, seen = [], set()
+    for line in lines:
+        s = line.strip()
+        key = s.partition("=")[0].strip() if ("=" in s and not s.startswith("#")) else None
+        if key in vals:
+            out.append(f"{key}={vals[key]}")
+            seen.add(key)
+        else:
+            out.append(line)
+    out += [f"{k}={vals[k]}" for k in ENV_KEYS if k not in seen]
+    with open(env_path(), "w", encoding="utf-8") as f:
+        f.write("\n".join(out) + "\n")
+    return env_path()
+
+
 def _valid(host: str | None) -> bool:
     return bool(host) and "REPLACE" not in str(host)
 

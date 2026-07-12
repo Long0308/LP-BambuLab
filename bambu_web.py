@@ -577,6 +577,26 @@ def mqtt_loop():
             time.sleep(5)
 
 
+def update_printer_config(host: str, serial: str, code: str) -> None:
+    """Doi IP/serial/access-code NONG: ghi .env + printer.local.json (deu gitignore),
+    cap nhat globals roi ngat MQTT — mqtt_loop tu tao client moi voi thong so moi.
+    Khong can restart server, khong can sua code."""
+    global IP, SERIAL, CODE, REPORT, REQUEST
+    IP, SERIAL, CODE = host, serial, code
+    REPORT = f"device/{serial}/report"
+    REQUEST = f"device/{serial}/request"
+    for k, v in zip(printer_config.ENV_KEYS, (host, serial, code)):
+        os.environ[k] = v            # nguon uu tien 2 (environ) cung phai khop
+    printer_config.update_env(host, serial, code)
+    printer_config.save(host, serial, code)
+    c = MQTT.get("client")
+    if c:
+        try:
+            c.disconnect()           # loop_forever thoat -> vong while tao client moi
+        except Exception:
+            pass
+
+
 # ---------- Ghep du lieu nhua (AMS + store cuc bo) ----------
 def build_filament():
     with LOCK:
@@ -790,9 +810,46 @@ PAGE = r"""<!doctype html><html lang="vi"><head>
 </style></head><body>
 <div id="connbar" class="cb wait">Đang kiểm tra kết nối máy in…</div>
 <h1><span id="dot" class="dot"></span> Bambu A1 · <span id="name">—</span>
-  <button id="sndBtn" class="sndbtn" onclick="enableSound()"><svg viewBox="0 0 24 24"><path d="M12 3a1 1 0 0 0-1 1v.28C8.5 4.9 7 7.1 7 9.7V13l-1.7 2.5A1 1 0 0 0 6.1 17h11.8a1 1 0 0 0 .8-1.5L17 13V9.7c0-2.6-1.5-4.8-4-5.42V4a1 1 0 0 0-1-1zm0 18a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 21z"/></svg><span>Bật âm</span></button></h1>
+  <button id="sndBtn" class="sndbtn" onclick="enableSound()"><svg viewBox="0 0 24 24"><path d="M12 3a1 1 0 0 0-1 1v.28C8.5 4.9 7 7.1 7 9.7V13l-1.7 2.5A1 1 0 0 0 6.1 17h11.8a1 1 0 0 0 .8-1.5L17 13V9.7c0-2.6-1.5-4.8-4-5.42V4a1 1 0 0 0-1-1zm0 18a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 21z"/></svg><span>Bật âm</span></button>
+  <button class="sndbtn" onclick="toggleCfg()" title="Kết nối máy in"><svg viewBox="0 0 24 24"><path d="M19.4 13a7.6 7.6 0 0 0 .1-1l2-1.6a.5.5 0 0 0 .1-.6l-1.9-3.3a.5.5 0 0 0-.6-.2l-2.4 1a7.5 7.5 0 0 0-1.7-1l-.4-2.6a.5.5 0 0 0-.5-.4h-3.8a.5.5 0 0 0-.5.4l-.4 2.6a7.5 7.5 0 0 0-1.7 1l-2.4-1a.5.5 0 0 0-.6.2L2.4 9.8a.5.5 0 0 0 .1.6l2 1.6a7.6 7.6 0 0 0 0 2l-2 1.6a.5.5 0 0 0-.1.6l1.9 3.3c.1.2.4.3.6.2l2.4-1c.5.4 1.1.8 1.7 1l.4 2.6c0 .3.3.4.5.4h3.8c.2 0 .5-.1.5-.4l.4-2.6c.6-.2 1.2-.6 1.7-1l2.4 1c.2.1.5 0 .6-.2l1.9-3.3a.5.5 0 0 0-.1-.6l-2-1.6zM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7z"/></svg><span>Kết nối</span></button></h1>
 
 <div id="alert" onclick="dismissAlert()"><svg viewBox="0 0 24 24"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg><span id="alertmsg"></span></div>
+
+<div class="card" id="cfgcard" style="display:none">
+  <h3 style="margin-top:0">⚙ Kết nối máy in (LAN) — như Bambu Studio</h3>
+  <div class="mut" style="font-size:12px;margin-bottom:8px">Xem trên màn hình máy in: <b>Cài đặt → WLAN</b> có IP + Access Code (đổi mỗi lần máy reset WLAN). Lưu vào <code>.env</code> trên server — không nằm trong git, không cần build lại code.</div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end">
+    <label style="font-size:12px">IP máy in<br><input id="cfgHost" placeholder="192.168.x.x" style="width:140px;padding:7px;border-radius:8px;border:1px solid #334;background:#0f1523;color:#e8ecf4"></label>
+    <label style="font-size:12px">Serial (giữ trống = giữ nguyên)<br><input id="cfgSerial" placeholder="" style="width:170px;padding:7px;border-radius:8px;border:1px solid #334;background:#0f1523;color:#e8ecf4"></label>
+    <label style="font-size:12px">Access Code (8 ký tự)<br><input id="cfgCode" placeholder="" maxlength="8" style="width:120px;padding:7px;border-radius:8px;border:1px solid #334;background:#0f1523;color:#e8ecf4"></label>
+    <button class="btn" onclick="saveCfg()" id="cfgSave" style="padding:9px 16px">Lưu &amp; kết nối lại</button>
+  </div>
+  <div class="mut" id="cfgHint" style="font-size:12px;margin-top:8px"></div>
+</div>
+<script>
+async function loadCfg(){
+  try{ const r=await fetch("/api/printer-config"); const j=await r.json();
+    document.getElementById("cfgHost").value=j.host||"";
+    document.getElementById("cfgSerial").placeholder=j.serial_hint||"chưa có";
+    document.getElementById("cfgCode").placeholder=j.code_hint||"chưa có";
+    document.getElementById("cfgHint").textContent=j.connected?"Đang kết nối OK với cấu hình hiện tại.":"⚠ Chưa kết nối được — kiểm tra IP/Access Code (mã đổi khi máy reset WLAN).";
+  }catch(e){}
+}
+function toggleCfg(){ const c=document.getElementById("cfgcard");
+  const show=c.style.display==="none"; c.style.display=show?"block":"none"; if(show) loadCfg(); }
+async function saveCfg(){
+  const b=document.getElementById("cfgSave"); b.disabled=true;
+  try{
+    const r=await fetch("/api/printer-config",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({host:document.getElementById("cfgHost").value,
+                           serial:document.getElementById("cfgSerial").value,
+                           code:document.getElementById("cfgCode").value})});
+    const j=await r.json(); toast(j.msg||(j.ok?"Đã lưu":"Lỗi"));
+    if(j.ok){ document.getElementById("cfgCode").value=""; setTimeout(loadCfg,4000); }
+  }catch(e){ toast("Mất kết nối server"); }
+  b.disabled=false;
+}
+</script>
 
 <div class="card hero">
   <div class="stagebox">
@@ -1795,6 +1852,15 @@ class H(BaseHTTPRequestHandler):
                 self._send(200, thumb, "image/png")
             else:
                 self._send(404, "no thumb", "text/plain")
+        elif path.startswith("/api/printer-config"):
+            with LOCK:
+                conn = STATE.get("connected", False)
+            self._send(200, json.dumps({
+                "host": IP,
+                "serial_hint": (SERIAL[:4] + "…" + SERIAL[-3:]) if SERIAL and len(SERIAL) > 8 else "",
+                "code_hint": ("••••••" + CODE[-2:]) if CODE and len(CODE) >= 4 else "",
+                "connected": conn,
+            }), "application/json; charset=utf-8")
         elif path.startswith("/api/anstatus"):
             with ANJOB_LOCK:
                 self._send(200, json.dumps(ANJOB, ensure_ascii=False),
@@ -2056,6 +2122,23 @@ class H(BaseHTTPRequestHandler):
             return
         elif self.path.startswith("/api/upload"):
             self._do_upload()
+            return
+        elif self.path == "/api/printer-config":
+            body = self._read_json()
+            host = (body.get("host") or "").strip() or IP
+            serial = (body.get("serial") or "").strip() or SERIAL
+            code = (body.get("code") or "").strip() or CODE
+            if not re.fullmatch(r"\d{1,3}(\.\d{1,3}){3}|[A-Za-z0-9][A-Za-z0-9.-]{0,63}", host or ""):
+                self._send(400, json.dumps({"ok": False, "msg": "IP/host không hợp lệ"}), "application/json; charset=utf-8")
+                return
+            if not re.fullmatch(r"[A-Za-z0-9]{8}", code or ""):
+                self._send(400, json.dumps({"ok": False, "msg": "Access code phải đúng 8 ký tự chữ/số (xem màn hình máy in: Cài đặt → WLAN)"}), "application/json; charset=utf-8")
+                return
+            if not re.fullmatch(r"[A-Za-z0-9]{10,20}", serial or ""):
+                self._send(400, json.dumps({"ok": False, "msg": "Serial không hợp lệ (10-20 ký tự chữ/số)"}), "application/json; charset=utf-8")
+                return
+            update_printer_config(host, serial, code)
+            self._send(200, json.dumps({"ok": True, "msg": "Đã lưu vào .env — đang kết nối lại máy in..."}), "application/json; charset=utf-8")
             return
         elif self.path == "/api/filament":
             body = self._read_json()
