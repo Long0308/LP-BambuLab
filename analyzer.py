@@ -25,6 +25,81 @@ VLH_WARN_LAYERS = 20   # variable layer height cong them qua nguong nay moi dang
 ROT_MAX_TRIS = 200_000  # tren nguong nay bo quet xoay (10 vong O(n) thuan Python ~>60s)
 
 
+# ---------- doc mesh 3mf (co ap transform) ----------
+def _mat(s: str | None) -> list | None:
+    """Chuoi transform 3MF '12 so' -> list[12], sai dinh dang -> None (bo qua)."""
+    try:
+        f = [float(x) for x in (s or "").split()]
+    except ValueError:
+        return None
+    return f if len(f) == 12 else None
+
+
+def _xf(v, m):
+    """Ap ma tran 3MF (row-vector: v' = v @ M) len 1 dinh."""
+    x, y, z = v
+    return (x * m[0] + y * m[3] + z * m[6] + m[9],
+            x * m[1] + y * m[4] + z * m[7] + m[10],
+            x * m[2] + y * m[5] + z * m[8] + m[11])
+
+
+def _mesh_tris(xml: str, mats: list) -> list:
+    """Doc vertex/triangle tu 1 file .model roi ap lan luot cac ma tran trong mats."""
+    V = [(float(a), float(b), float(c)) for a, b, c in re.findall(
+        r'<vertex[^>]*x="([-\d.eE]+)"[^>]*y="([-\d.eE]+)"[^>]*z="([-\d.eE]+)"', xml)]
+    for m in mats:
+        if m:
+            V = [_xf(v, m) for v in V]
+    T = [(int(a), int(b), int(c)) for a, b, c in re.findall(
+        r'<triangle[^>]*v1="(\d+)"[^>]*v2="(\d+)"[^>]*v3="(\d+)"', xml)]
+    return [(V[i], V[j], V[k]) for i, j, k in T if i < len(V) and j < len(V) and k < len(V)]
+
+
+def load_3mf_tris(z: zipfile.ZipFile, names: list) -> list:
+    """Doc TOAN BO mesh trong .3mf va ap transform xoay/di chuyen cua Bambu Studio.
+
+    Bambu luu phep xoay o <component transform> + <item transform> trong
+    3D/3dmodel.model goc — toa do dinh trong 3D/Objects/*.model KHONG doi.
+    Doc dinh tho ma bo qua transform thi xoay kieu gi ket qua cung nhu cu.
+    """
+    models = [n for n in names if n.lower().endswith(".model")]
+    root = next((n for n in models if "objects" not in n.lower()), None)
+    if not root:
+        obj = [n for n in models if "objects" in n.lower()]
+        return _mesh_tris(z.read(obj[0]).decode("utf-8", "ignore"), []) if obj else []
+
+    xml = z.read(root).decode("utf-8", "ignore")
+    items = {}                       # objectid goc -> ma tran <item> (hoac None)
+    for it in re.finditer(r'<item\b[^>]*objectid="(\d+)"[^>]*/?>', xml):
+        tm = re.search(r'transform="([^"]+)"', it.group(0))
+        items[it.group(1)] = _mat(tm.group(1)) if tm else None
+
+    tris: list = []
+    for om in re.finditer(r'<object\b[^>]*\bid="(\d+)"[^>]*>(.*?)</object>', xml, re.S):
+        oid, body = om.group(1), om.group(2)
+        if oid not in items:
+            continue                 # object khong duoc build -> bo qua
+        if "<mesh" in body:          # mesh nhung truc tiep trong root (3mf ngoai Bambu)
+            tris += _mesh_tris(body, [items[oid]])
+        for cm in re.finditer(r'<component\b[^>]*/?>', body):
+            tag = cm.group(0)
+            pm = re.search(r'(?:\w+:)?path="([^"]+)"', tag)
+            tm = re.search(r'transform="([^"]+)"', tag)
+            cmat = _mat(tm.group(1)) if tm else None
+            if not pm:               # component tro toi object cung file -> hiem, bo qua
+                continue
+            want = pm.group(1).lstrip("/").lower()
+            src = next((n for n in models if n.lower() == want), None)
+            if src:
+                tris += _mesh_tris(z.read(src).decode("utf-8", "ignore"),
+                                   [cmat, items[oid]])
+    if tris:
+        return tris
+    # fallback: khong doc duoc gi tu root -> hanh vi cu (file Objects dau tien, khong transform)
+    obj = [n for n in models if "objects" in n.lower()]
+    return _mesh_tris(z.read(obj[0]).decode("utf-8", "ignore"), []) if obj else []
+
+
 # ---------- hinh hoc ----------
 def mesh_stats(tris: list) -> dict:
     """tris = [(v1,v2,v3), ...]. Tra kich thuoc + overhang + dien tich bam ban."""
@@ -354,23 +429,16 @@ def analyze_3mf(path: str) -> dict:
             "sparse_infill_speed", "top_shell_layers", "bottom_shell_layers",
             "filament_type")}   # filament_type: de tu phat hien cap PLA/PETG cho interface
 
-        # mesh
-        obj = [n for n in names if n.lower().endswith(".model") and "objects" in n.lower()]
-        if obj:
-            xml = z.read(obj[0]).decode("utf-8", "ignore")
-            V = [(float(a), float(b), float(c)) for a, b, c in re.findall(
-                r'<vertex[^>]*x="([-\d.eE]+)"[^>]*y="([-\d.eE]+)"[^>]*z="([-\d.eE]+)"', xml)]
-            T = [(int(a), int(b), int(c)) for a, b, c in re.findall(
-                r'<triangle[^>]*v1="(\d+)"[^>]*v2="(\d+)"[^>]*v3="(\d+)"', xml)]
-            if V and T:
-                tris = [(V[i], V[j], V[k]) for i, j, k in T]
-                res["mesh"] = mesh_stats(tris)
-                res["faces"] = face_analysis(tris)
-                if len(tris) <= ROT_MAX_TRIS:
-                    res["rotations"] = try_rotations(tris)
-                    res["rot_preview"] = rot_preview(tris, res["rotations"])
-                else:
-                    res["tips"].append(f"Mesh {len(tris):,} tam giác vượt ngưỡng {ROT_MAX_TRIS:,} — bỏ quét xoay để không treo server.")
+        # mesh — doc qua load_3mf_tris de AP TRANSFORM xoay cua Bambu Studio
+        tris = load_3mf_tris(z, names)
+        if tris:
+            res["mesh"] = mesh_stats(tris)
+            res["faces"] = face_analysis(tris)
+            if len(tris) <= ROT_MAX_TRIS:
+                res["rotations"] = try_rotations(tris)
+                res["rot_preview"] = rot_preview(tris, res["rotations"])
+            else:
+                res["tips"].append(f"Mesh {len(tris):,} tam giác vượt ngưỡng {ROT_MAX_TRIS:,} — bỏ quét xoay để không treo server.")
 
         nominal = float(cfg.get("layer_height") or 0.2)
         h = res.get("mesh", {}).get("height") or 0
