@@ -20,6 +20,9 @@ import zipfile
 
 COS45 = math.cos(math.radians(45))
 BED_EPS = 0.3          # mm — coi nhu dang nam tren ban
+MIN_BED_CM2 = 5.0      # duoi nguong nay lop dau kho bam (canh vuong <22mm)
+VLH_WARN_LAYERS = 20   # variable layer height cong them qua nguong nay moi dang canh bao
+ROT_MAX_TRIS = 200_000  # tren nguong nay bo quet xoay (10 vong O(n) thuan Python ~>60s)
 
 
 # ---------- hinh hoc ----------
@@ -63,15 +66,46 @@ def try_rotations(tris: list, angles=(-60, -45, -30, -15, 0, 15, 30, 45, 90, 180
     con dem la overhang (0.59%) nhung bam ban tut ve 0 -> dung tren canh dao, lop
     dau khong bam. Vi vay PHAI doc bed_cm2 cung luc, dung nhin moi overhang.
     """
+    # Tien tinh 1 lan: dien tich + normal + (y,z) 3 dinh. Moi goc chi xoay normal
+    # va toa do z (phep quay quanh X khong dung x) -> nhanh ~3x so voi dung lai mesh.
+    pre = []
+    for p, q, r in tris:
+        ux, uy, uz = q[0]-p[0], q[1]-p[1], q[2]-p[2]
+        vx, vy, vz = r[0]-p[0], r[1]-p[1], r[2]-p[2]
+        nx, ny, nz = uy*vz-uz*vy, uz*vx-ux*vz, ux*vy-uy*vx
+        L = math.sqrt(nx*nx + ny*ny + nz*nz)
+        if not L:
+            continue
+        pre.append((L/2, ny/L, nz/L,
+                    p[1], p[2], q[1], q[2], r[1], r[2]))
+    tot = sum(x[0] for x in pre)
     out = []
     for ax in angles:
         a = math.radians(ax)
         ca, sa = math.cos(a), math.sin(a)
-        rot = [tuple((v[0], v[1]*ca - v[2]*sa, v[1]*sa + v[2]*ca) for v in t) for t in tris]
-        s = mesh_stats(rot)
-        out.append({"angle_x": ax, "overhang_pct": s["overhang_pct"],
-                    "bed_cm2": s["bed_cm2"], "height": s["height"],
-                    "usable": s["bed_cm2"] >= 5.0})       # <5cm2 bam ban = khong in duoc
+        zmin = zmax = None
+        rows = []
+        for ar, ny, nz, py, pz, qy, qz, ry, rz in pre:
+            nz2 = ny*sa + nz*ca
+            ztop = max(py*sa + pz*ca, qy*sa + qz*ca, ry*sa + rz*ca)
+            zlo = min(py*sa + pz*ca, qy*sa + qz*ca, ry*sa + rz*ca)
+            if zmin is None or zlo < zmin:
+                zmin = zlo
+            if zmax is None or ztop > zmax:
+                zmax = ztop
+            rows.append((ar, nz2, ztop))
+        over = bed = 0.0
+        for ar, nz2, ztop in rows:
+            if nz2 < -COS45:
+                if ztop - zmin <= BED_EPS:
+                    bed += ar
+                else:
+                    over += ar
+        out.append({"angle_x": ax,
+                    "overhang_pct": round(over / tot * 100, 2) if tot else 0.0,
+                    "bed_cm2": round(bed / 100, 1),
+                    "height": round((zmax or 0) - (zmin or 0), 1),
+                    "usable": bed / 100 >= MIN_BED_CM2})
     return out
 
 
@@ -81,14 +115,19 @@ def variable_layer(zf: zipfile.ZipFile, height: float, nominal: float) -> dict |
     names = [n for n in zf.namelist() if "layer_heights_profile" in n.lower()]
     if not names:
         return None
-    raw = zf.read(names[0]).decode("utf-8", "ignore")
-    body = raw.split("|", 1)[1] if "|" in raw else raw
-    vals = [float(x) for x in body.split(";") if x.strip()]
+    try:
+        raw = zf.read(names[0]).decode("utf-8", "ignore")
+        body = raw.split("|", 1)[1] if "|" in raw else raw
+        vals = [float(x) for x in body.split(";") if x.strip()]
+    except (ValueError, KeyError, OSError):
+        return None                          # file hong -> coi nhu khong co VLH
     zsc, hs = vals[0::2], vals[1::2]
+    n = min(len(zsc), len(hs))               # so phan tu le -> cat cho khop
+    zsc, hs = zsc[:n], hs[:n]
     if len(hs) < 2:
         return None
     n_var = 0.0
-    for i in range(1, len(zsc)):
+    for i in range(1, n):
         dz = zsc[i] - zsc[i-1]
         h = (hs[i] + hs[i-1]) / 2
         if h > 0:
@@ -164,6 +203,8 @@ def flow_ceiling(cfg: dict) -> dict | None:
     except (TypeError, ValueError, IndexError):
         return None
     nz, lw = _nozzle_lw(cfg)
+    if lh <= 0 or lw <= 0 or mvs <= 0:      # config hong -> bo qua, dung chia 0
+        return None
     vmax = mvs / (lh * lw)
 
     def spd(k):
@@ -224,8 +265,10 @@ def analyze_3mf(path: str) -> dict:
                 tris = [(V[i], V[j], V[k]) for i, j, k in T]
                 res["mesh"] = mesh_stats(tris)
                 res["faces"] = face_analysis(tris)
-                if len(tris) <= 200_000:
+                if len(tris) <= ROT_MAX_TRIS:
                     res["rotations"] = try_rotations(tris)
+                else:
+                    res["tips"].append(f"Mesh {len(tris):,} tam giác vượt ngưỡng {ROT_MAX_TRIS:,} — bỏ quét xoay để không treo server.")
 
         nominal = float(cfg.get("layer_height") or 0.2)
         h = res.get("mesh", {}).get("height") or 0
@@ -240,11 +283,18 @@ def analyze_stl(path: str) -> dict:
     """Phan tich STL tho (chua co cau hinh -> chi hinh hoc + xoay)."""
     import stl_to_3mf
     tris = stl_to_3mf.parse_stl(path)
+    if not tris:
+        return {"kind": "stl", "sliced": False, "config": None, "mesh": None,
+                "faces": None, "variable_layer": None, "flow": None,
+                "issues": ["File STL rỗng hoặc hỏng — không đọc được tam giác nào."],
+                "tips": []}
     res = {"kind": "stl", "sliced": False, "issues": [], "tips": [],
            "mesh": mesh_stats(tris), "faces": face_analysis(tris), "config": None,
            "variable_layer": None, "flow": None}
-    if len(tris) <= 200_000:
+    if len(tris) <= ROT_MAX_TRIS:
         res["rotations"] = try_rotations(tris)
+    else:
+        res["tips"].append(f"Mesh {len(tris):,} tam giác vượt ngưỡng {ROT_MAX_TRIS:,} — bỏ quét xoay để không treo server.")
     _advise(res)
     return res
 
@@ -259,7 +309,7 @@ def _advise(r: dict) -> None:
                 f"({m['overhang_pct']}% tổng diện tích).")
         else:
             r["tips"].append("Không cần support — hầu như không có mặt hẫng quá 45°.")
-        if m["bed_cm2"] < 5:
+        if m["bed_cm2"] < MIN_BED_CM2:
             r["issues"].append(
                 f"Bám bàn chỉ {m['bed_cm2']} cm² — lớp đầu dễ bong. Cần brim/raft.")
 
@@ -281,7 +331,7 @@ def _advise(r: dict) -> None:
                 f"nhưng bám bàn = {t['bed_cm2']} cm² (đứng trên cạnh dao) — KHÔNG dùng được.")
 
     vl = r.get("variable_layer")
-    if vl and vl["extra_layers"] > 20:
+    if vl and vl["extra_layers"] > VLH_WARN_LAYERS:
         r["issues"].append(
             f"Variable Layer Height đang bật (mỏng nhất {vl['min']}mm, TB {vl['avg']}mm) → "
             f"{vl['layers_actual']} lớp thay vì {vl['layers_flat']} lớp phẳng, "
@@ -345,7 +395,8 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced") -> dict:
     # 2) TOC DO — tran luu luong PHU THUOC layer height, phai tinh lai
     mvs = fl.get("mvs")
     if mvs:
-        vmax = int(mvs / (lh * 0.42))
+        lw = fl.get("line_width") or 0.42    # suy tu nozzle THAT trong flow_ceiling
+        vmax = int(mvs / (lh * lw))
         safe = int(vmax * 0.97)
         p["inner_wall_speed"] = [str(safe)]
         p["sparse_infill_speed"] = [str(safe)]
@@ -465,7 +516,7 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced") -> dict:
     p["seam_gap"] = "10%"                        # wiki: 0-15% khi PA tune tot
 
     vl = r.get("variable_layer")
-    if vl and vl["extra_layers"] > 20:
+    if vl and vl["extra_layers"] > VLH_WARN_LAYERS:
         why.append(f"Gỡ Variable Layer Height: nó đang âm thầm cộng {vl['extra_layers']} lớp "
                    f"(+{vl['extra_pct']}%). Server tự gỡ khi slice — không nhét được vào preset "
                    f"vì nó gắn theo vật thể trong .3mf.")

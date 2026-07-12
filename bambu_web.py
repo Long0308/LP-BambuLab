@@ -162,6 +162,27 @@ UPJOB = {"state": "idle", "name": None, "msg": "", "stats": None}
 UPJOB_LOCK = threading.Lock()
 OPTJOB = {"state": "idle", "name": None, "msg": "", "report": None}
 OPTJOB_LOCK = threading.Lock()
+ANJOB = {"state": "idle", "name": None, "msg": "", "result": None}
+ANJOB_LOCK = threading.Lock()
+
+
+def _run_analyze(name, src_path):
+    """Phan tich chay NEN — file lon (300k+ tam giac) mat 30-60s, khong the
+    giu request HTTP mo lau vay (Tailscale/trinh duyet cat -> tuong treo)."""
+    try:
+        res = analyzer.analyze(src_path)
+        res["ok"] = True
+        res["name"] = name
+        with ANJOB_LOCK:
+            ANJOB.update(state="done", msg="Xong", result=res)
+    except Exception as e:                                # noqa: BLE001
+        with ANJOB_LOCK:
+            ANJOB.update(state="error", msg=f"Lỗi phân tích: {e}", result=None)
+    finally:
+        try:
+            os.remove(src_path)
+        except OSError:
+            pass
 
 
 def _run_optimize(name, src_path):
@@ -1387,19 +1408,45 @@ ANALYZE_PAGE = r"""<!doctype html><html lang="vi"><head>
 let FILE=null;
 function toast(m){const t=document.getElementById("toast");t.textContent=m;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),3500);}
 function esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;");}
-async function go(){
+function reset(msg){
+  const bt=document.getElementById("bt"), lb=document.getElementById("lb");
+  bt.disabled=false; lb.textContent="Chọn file .3mf / .stl để phân tích";
+  if(msg) toast(msg);
+}
+function go(){
   const inp=document.getElementById("fp"); FILE=inp.files&&inp.files[0]; inp.value="";
   if(!FILE) return;
   const bt=document.getElementById("bt"), lb=document.getElementById("lb");
-  bt.disabled=true; lb.textContent="Đang phân tích "+FILE.name+"…";
+  bt.disabled=true;
   document.getElementById("out").innerHTML="";
+  const mb=(FILE.size/1048576).toFixed(1);
+  const xhr=new XMLHttpRequest();
+  xhr.open("POST","/api/analyze?name="+encodeURIComponent(FILE.name));
+  xhr.upload.onprogress=e=>{
+    if(!e.lengthComputable) return;
+    const p=Math.round(e.loaded/e.total*100);
+    lb.textContent = p<100 ? ("Đang gửi… "+p+"% ("+mb+" MB)") : "Đã gửi — server bắt đầu phân tích…";
+  };
+  xhr.onload=()=>{
+    let j={}; try{ j=JSON.parse(xhr.responseText); }catch(e){}
+    if(xhr.status===200 && j.ok && j.queued){ pollAn(); }
+    else reset("Lỗi: "+(j.msg||("HTTP "+xhr.status)));
+  };
+  xhr.onerror=()=>reset("Mất kết nối khi gửi file");
+  lb.textContent="Đang gửi… 0% ("+mb+" MB)";
+  xhr.send(FILE);
+}
+async function pollAn(){
+  const lb=document.getElementById("lb");
   try{
-    const r=await fetch("/api/analyze?name="+encodeURIComponent(FILE.name),{method:"POST",body:FILE});
-    const j=await r.json();
-    if(!j.ok){ toast("Lỗi: "+(j.msg||r.status)); }
-    else render(j);
-  }catch(e){ toast("Lỗi: "+e); }
-  bt.disabled=false; lb.textContent="Chọn file .3mf / .stl để phân tích";
+    const j=await (await fetch("/api/anstatus",{cache:"no-store"})).json();
+    if(j.state==="running"){
+      lb.textContent=(j.msg||"Đang phân tích…")+" ("+(j.name||"")+")";
+      setTimeout(pollAn, 2000); return;
+    }
+    if(j.state==="done" && j.result){ reset(); render(j.result); }
+    else reset("Lỗi: "+(j.msg||"không rõ"));
+  }catch(e){ setTimeout(pollAn, 3000); }
 }
 function render(j){
   const m=j.mesh||{}; let h="";
@@ -1598,6 +1645,10 @@ class H(BaseHTTPRequestHandler):
                 self._send(200, thumb, "image/png")
             else:
                 self._send(404, "no thumb", "text/plain")
+        elif path.startswith("/api/anstatus"):
+            with ANJOB_LOCK:
+                self._send(200, json.dumps(ANJOB, ensure_ascii=False),
+                           "application/json; charset=utf-8")
         elif path.startswith("/api/optstatus"):
             with OPTJOB_LOCK:
                 self._send(200, json.dumps(OPTJOB, ensure_ascii=False),
@@ -1610,9 +1661,32 @@ class H(BaseHTTPRequestHandler):
             if not fpath:
                 self._send(400, json.dumps({"ok": False}), "application/json")
                 return
-            _, sliced = ensure_file_meta(fpath)
-            self._send(200, json.dumps({"ok": True, "sliced": bool(sliced)}),
-                       "application/json; charset=utf-8")
+            # NHANH: doc 96KB cuoi file qua FTP REST (muc luc zip) thay vi tai ca file
+            # 30MB. Cache .json de lan sau tuc thi. Thumb van tai day du o /api/filethumb.
+            key = _cache_key(os.path.basename(fpath))
+            meta = os.path.join(CACHE_DIR, key + ".json")
+            sliced = None
+            if os.path.isfile(meta):
+                try:
+                    with open(meta, encoding="utf-8") as f:
+                        sliced = json.load(f).get("sliced")
+                except (OSError, ValueError):
+                    pass
+            if sliced is None:
+                sliced = filament_ftp.probe_sliced(IP, CODE, fpath)
+                if sliced is not None:
+                    try:
+                        os.makedirs(CACHE_DIR, exist_ok=True)
+                        with open(meta, "w", encoding="utf-8") as f:
+                            json.dump({"sliced": bool(sliced)}, f)
+                    except OSError:
+                        pass
+            if sliced is None:
+                self._send(200, json.dumps({"ok": False, "sliced": False}),
+                           "application/json; charset=utf-8")
+            else:
+                self._send(200, json.dumps({"ok": True, "sliced": bool(sliced)}),
+                           "application/json; charset=utf-8")
         elif path == "/a1.jpg":
             if A1_IMG:
                 self._send(200, A1_IMG, "image/jpeg")
@@ -1735,7 +1809,7 @@ class H(BaseHTTPRequestHandler):
                    "application/json; charset=utf-8")
 
     def _do_analyze(self):
-        """Phan tich file user gui len — CHI tinh toan, khong dung toi may in."""
+        """Nhan file -> tra ve NGAY (queued) -> thread nen phan tich -> UI poll."""
         from urllib.parse import urlparse, parse_qs, unquote
         raw = unquote(parse_qs(urlparse(self.path).query).get("name", [""])[0])
         name = os.path.basename(raw.replace("\\", "/")).strip()
@@ -1751,24 +1825,28 @@ class H(BaseHTTPRequestHandler):
             self._send(400, json.dumps({"ok": False, "msg": "File rỗng hoặc quá lớn"}),
                        "application/json; charset=utf-8")
             return
+        with ANJOB_LOCK:
+            if ANJOB["state"] == "running":
+                self._send(409, json.dumps({"ok": False, "msg":
+                    f"Đang phân tích file khác ({ANJOB['name']}) — chờ chút"}),
+                    "application/json; charset=utf-8")
+                return
+            ANJOB.update(state="running", name=name,
+                         msg="Đang đọc mesh + tính toán…", result=None)
         os.makedirs(SLICE_DIR, exist_ok=True)
         tmp = os.path.join(SLICE_DIR, "an_" + name)
         try:
             with open(tmp, "wb") as f:
                 f.write(self.rfile.read(n))
-            res = analyzer.analyze(tmp)
-            res["ok"] = True
-            res["name"] = name
-            self._send(200, json.dumps(res, ensure_ascii=False),
+        except OSError as e:
+            with ANJOB_LOCK:
+                ANJOB.update(state="error", msg=str(e))
+            self._send(500, json.dumps({"ok": False, "msg": f"Ghi file lỗi: {e}"}),
                        "application/json; charset=utf-8")
-        except Exception as e:                          # noqa: BLE001 - bao len UI
-            self._send(500, json.dumps({"ok": False, "msg": f"Lỗi phân tích: {e}"},
-                                       ensure_ascii=False), "application/json; charset=utf-8")
-        finally:
-            try:
-                os.remove(tmp)
-            except OSError:
-                pass
+            return
+        threading.Thread(target=_run_analyze, args=(name, tmp), daemon=True).start()
+        self._send(200, json.dumps({"ok": True, "queued": True}),
+                   "application/json; charset=utf-8")
 
     def _do_optimize(self):
         from urllib.parse import urlparse, parse_qs, unquote

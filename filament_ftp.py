@@ -18,7 +18,13 @@ import re
 import ssl
 import sys
 import tempfile
+import threading
 import zipfile
+
+# May in Bambu chi chiu ~1 ket noi FTPS mot luc. Khoa DAT TAI DAY (tang module)
+# de moi ham mo ket noi tu tuan tu hoa — khong phu thuoc ky luat cua caller.
+# (Truoc day chi 2/5 diem goi qua THUMB_LOCK ben bambu_web -> co the mo 2 ket noi.)
+FTP_LOCK = threading.Lock()
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")
@@ -86,16 +92,19 @@ def _candidates(gcode_file: str) -> list[str]:
 def _download(host: str, code: str, gcode_file: str) -> bytes | None:
     ftp = None
     try:
-        ftp = _connect(host, code)
-        for path in _candidates(gcode_file):
-            buf = io.BytesIO()
-            try:
-                ftp.retrbinary("RETR " + path, buf.write)
-                data = buf.getvalue()
-                if data:
-                    return data
-            except ftplib.error_perm:
-                continue
+        with FTP_LOCK:
+            ftp = _connect(host, code)
+            for path in _candidates(gcode_file):
+                buf = io.BytesIO()
+                try:
+                    ftp.retrbinary("RETR " + path, buf.write)
+                    data = buf.getvalue()
+                    if data:
+                        return data
+                except ftplib.error_perm:
+                    continue
+            return None
+    except Exception:                       # may in tat / sai code -> None, dung crash
         return None
     finally:
         if ftp:
@@ -151,6 +160,14 @@ def parse_weight(zip_bytes_or_path) -> float | None:
 
 def list_files(host: str, code: str) -> list:
     """Liet ke cac file .3mf tren may (root + /cache). Chi doc, khong tai."""
+    try:
+        with FTP_LOCK:
+            return _list_files_locked(host, code)
+    except Exception:                       # may in tat -> danh sach rong, dung crash
+        return []
+
+
+def _list_files_locked(host: str, code: str) -> list:
     ftp = None
     out = []
     seen = set()
@@ -323,10 +340,11 @@ def _download_exact(host: str, code: str, path: str) -> bytes | None:
     """Tai dung 1 duong dan file (khong doan candidate)."""
     ftp = None
     try:
-        ftp = _connect(host, code)
-        buf = io.BytesIO()
-        ftp.retrbinary("RETR " + path, buf.write)
-        return buf.getvalue()
+        with FTP_LOCK:
+            ftp = _connect(host, code)
+            buf = io.BytesIO()
+            ftp.retrbinary("RETR " + path, buf.write)
+            return buf.getvalue()
     except Exception:
         return None
     finally:
@@ -375,6 +393,34 @@ def fetch_thumb_for(host: str, code: str, path: str) -> bytes | None:
     return fetch_file_meta(host, code, path).get("thumb")
 
 
+def probe_sliced(host: str, code: str, path: str, tail: int = 96 * 1024) -> bool | None:
+    """Kiem tra 'da slice chua' bang cach doc DUOI file qua FTP REST.
+
+    Zip luu muc luc (central directory, chua TEN entry dang plain text) o CUOI file
+    -> chi can tai ~96KB cuoi roi tim 'Metadata/plate_N.gcode', thay vi tai ca file
+    30MB chi de tra loi 1 bit. Tra None neu khong doc duoc (UI hien 'khong ro').
+    """
+    ftp = None
+    try:
+        with FTP_LOCK:
+            ftp = _connect(host, code)
+            ftp.voidcmd("TYPE I")            # SIZE/REST can binary mode
+            size = ftp.size(path)
+            if not size:
+                return None
+            buf = io.BytesIO()
+            ftp.retrbinary("RETR " + path, buf.write, rest=max(0, size - tail))
+            return bool(re.search(rb"Metadata/plate_\d+\.gcode", buf.getvalue()))
+    except Exception:
+        return None
+    finally:
+        if ftp:
+            try:
+                ftp.quit()
+            except Exception:
+                pass
+
+
 def upload_file(host: str, code: str, data: bytes, remote_name: str,
                 remote_dir: str = "/") -> tuple[bool, str]:
     """Day 1 file .3mf len the SD cua may qua FTPS (STOR).
@@ -385,14 +431,15 @@ def upload_file(host: str, code: str, data: bytes, remote_name: str,
     """
     ftp = None
     try:
-        ftp = _connect(host, code, timeout=180.0)   # file vai chuc MB qua wifi
-        try:
-            ftp.cwd(remote_dir)
-        except ftplib.error_perm:
-            remote_dir = "/"
-            ftp.cwd("/")
-        ftp.storbinary("STOR " + remote_name, io.BytesIO(data))
-        return True, remote_dir.rstrip("/") + "/" + remote_name
+        with FTP_LOCK:
+            ftp = _connect(host, code, timeout=180.0)   # file vai chuc MB qua wifi
+            try:
+                ftp.cwd(remote_dir)
+            except ftplib.error_perm:
+                remote_dir = "/"
+                ftp.cwd("/")
+            ftp.storbinary("STOR " + remote_name, io.BytesIO(data))
+            return True, remote_dir.rstrip("/") + "/" + remote_name
     except Exception as e:                          # noqa: BLE001 - bao loi len UI
         return False, str(e)
     finally:

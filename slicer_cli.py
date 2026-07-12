@@ -17,7 +17,13 @@ import json
 import os
 import re
 import subprocess
+import threading
 import zipfile
+
+# CLI ngon RAM/CPU nhu mo ca Bambu Studio. UPJOB va OPTJOB la 2 khoa RIENG o tang web
+# -> co the kich 2 job cung luc. Khoa DAT TAI DAY dam bao chi 1 tien trinh CLI chay,
+# bat ke ai goi.
+CLI_LOCK = threading.Lock()
 
 EXE_CANDIDATES = (
     r"D:\Bambu Studio\bambu-studio.exe",
@@ -82,10 +88,11 @@ def slice_3mf(src: str, workdir: str, timeout: int = 1800) -> tuple[bool, str, d
     except OSError:
         pass
     try:
-        subprocess.run(
-            [exe, "--slice", "0", "--export-3mf", out_name,
-             "--outputdir", workdir, src],
-            capture_output=True, timeout=timeout, check=False)
+        with CLI_LOCK:
+            subprocess.run(
+                [exe, "--slice", "0", "--export-3mf", out_name,
+                 "--outputdir", workdir, src],
+                capture_output=True, timeout=timeout, check=False)
     except subprocess.TimeoutExpired:
         return False, f"Slice qua {timeout // 60} phut — huy", {}
     except OSError as e:

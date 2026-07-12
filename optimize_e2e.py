@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import zipfile
 
 import analyzer
@@ -63,24 +64,23 @@ def apply_preset(src: str, dst: str, preset: dict, drop_vlh: bool = True) -> Non
     Phai sua config nhung, KHONG dung --load-settings: CLI doi 3 file config FULL
     tach roi, sai la segfault (BambuStudio issue #9968).
     """
-    zin = zipfile.ZipFile(src)
-    cfg = json.loads(zin.read(CFG).decode("utf-8", "ignore"))
-    for k, v in preset.items():
-        if k not in SAFE_KEYS:
-            continue
-        old = cfg.get(k)
-        if isinstance(old, list) and not isinstance(v, list):
-            v = [v] * len(old)          # giu dung so phan tu (theo so extruder)
-        cfg[k] = v
-    with zipfile.ZipFile(dst, "w", zipfile.ZIP_DEFLATED) as zout:
-        for it in zin.infolist():
-            if drop_vlh and it.filename.lower() == VLH:
-                continue                # go Variable Layer Height
-            if it.filename == CFG:
-                zout.writestr(it, json.dumps(cfg, indent=4, ensure_ascii=False))
-            else:
-                zout.writestr(it, zin.read(it.filename))
-    zin.close()
+    with zipfile.ZipFile(src) as zin:        # with: khong leak handle khi json/KeyError
+        cfg = json.loads(zin.read(CFG).decode("utf-8", "ignore"))
+        for k, v in preset.items():
+            if k not in SAFE_KEYS:
+                continue
+            old = cfg.get(k)
+            if isinstance(old, list) and not isinstance(v, list):
+                v = [v] * max(len(old), 1)   # list rong (config la) -> van set 1 phan tu
+            cfg[k] = v
+        with zipfile.ZipFile(dst, "w", zipfile.ZIP_DEFLATED) as zout:
+            for it in zin.infolist():
+                if drop_vlh and it.filename.lower() == VLH:
+                    continue                # go Variable Layer Height
+                if it.filename == CFG:
+                    zout.writestr(it, json.dumps(cfg, indent=4, ensure_ascii=False))
+                else:
+                    zout.writestr(it, zin.read(it.filename))
 
 
 def run_modes(src: str, workdir: str, modes=("fast", "balanced", "quality")) -> dict:
@@ -95,8 +95,7 @@ def run_modes(src: str, workdir: str, modes=("fast", "balanced", "quality")) -> 
         rep["mesh_from_stl"] = stl_to_3mf.wrap(src, base)
     else:
         base = os.path.join(workdir, name + "__base.3mf")
-        with open(src, "rb") as f, open(base, "wb") as g:
-            g.write(f.read())
+        shutil.copyfile(src, base)
 
     ok, res, st = slicer_cli.slice_3mf(base, os.path.join(workdir, "b0"))
     if not ok:
@@ -141,8 +140,7 @@ def run(src: str, workdir: str) -> dict:
         rep["steps"].append("STL → bọc vào khung 3MF (config AUTO-balanced-0.20mm)")
     else:
         base_3mf = os.path.join(workdir, name + "__base.3mf")
-        with open(src, "rb") as f, open(base_3mf, "wb") as g:
-            g.write(f.read())
+        shutil.copyfile(src, base_3mf)
         rep["steps"].append("Dùng config có sẵn trong file .3mf")
 
     # --- 2. Slice VONG 1: BASELINE ---
