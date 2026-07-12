@@ -18,7 +18,7 @@ Dung:
   python bambu_web.py 8080
 Yeu cau: pip install --user paho-mqtt ; may bat LAN Only. Access Code lay qua /bambu-check.
 """
-import sys, os, ssl, json, time, threading
+import sys, os, re, ssl, json, time, threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 try:
@@ -166,12 +166,23 @@ def _slice_and_push(name, src_path):
     Toan bo do 1 cu bam upload cua NGUOI DUNG khoi dong — day file chi la
     luu tru vao the SD, KHONG phai lenh in (in van phai bam nut "In").
     """
-    base = name[:-4] if name.lower().endswith(".3mf") else name
+    base = re.sub(r"\.(3mf|stl)$", "", name, flags=re.I)
     out_name = base + ".gcode.3mf"
     try:
+        mesh_info = None
+        if name.lower().endswith(".stl"):
+            with UPJOB_LOCK:
+                UPJOB.update(state="slicing", name=name,
+                             msg="Đang phân tích STL + bọc cấu hình A1…", stats=None)
+            import stl_to_3mf
+            wrapped = src_path + ".3mf"
+            mesh_info = stl_to_3mf.wrap(src_path, wrapped)
+            src_path = wrapped
         with UPJOB_LOCK:
             UPJOB.update(state="slicing", name=name, msg="Đang slice trên máy tính…", stats=None)
         ok, res, stats = slicer_cli.slice_3mf(src_path, SLICE_DIR)
+        if mesh_info:
+            stats = {**(stats or {}), **mesh_info}
         if not ok:
             with UPJOB_LOCK:
                 UPJOB.update(state="error", msg=res)
@@ -703,10 +714,10 @@ PAGE = r"""<!doctype html><html lang="vi"><head>
 </div>
 
 <div class="up" id="up">
-  <input type="file" id="fpick" accept=".3mf" style="display:none" onchange="pick()">
+  <input type="file" id="fpick" accept=".3mf,.stl" style="display:none" onchange="pick()">
   <button class="ubtn" id="ubtn" onclick="document.getElementById('fpick').click()">
     <svg viewBox="0 0 24 24"><path d="M5 20h14v-2H5v2zM12 2L6.5 9.5h4V16h3V9.5h4L12 2z"/></svg>
-    <span id="ulabel">Đẩy file .3mf lên máy in — chưa slice cũng được</span>
+    <span id="ulabel">Đẩy file .3mf / .stl lên máy in — chưa slice cũng được</span>
   </button>
   <div class="ubar" id="ubar"><i id="ufill"></i></div>
   <div class="uhint">File <b>đã slice</b> → chuyển thẳng xuống máy. File <b>dự án thô</b> → máy tính tự slice
@@ -840,7 +851,7 @@ function pick(){
   const inp=document.getElementById("fpick"), f=inp.files&&inp.files[0];
   inp.value="";
   if(!f) return;
-  if(!f.name.toLowerCase().endsWith(".3mf")){ toast("Chỉ nhận file .3mf"); return; }
+  if(!/\.(3mf|stl)$/i.test(f.name)){ toast("Chỉ nhận file .3mf hoặc .stl"); return; }
   upload(f);
 }
 function upload(f){
@@ -860,13 +871,13 @@ function upload(f){
     let j={}; try{ j=JSON.parse(xhr.responseText); }catch(e){}
     if(xhr.status===200 && j.ok && j.queued){ pollSlice(); return; }
     btn.disabled=false; bar.style.display="none";
-    lab.textContent="Đẩy file .3mf lên máy in — chưa slice cũng được";
+    lab.textContent="Đẩy file .3mf / .stl lên máy in — chưa slice cũng được";
     if(xhr.status===200 && j.ok){ toast("Đã đẩy lên máy: "+j.name); }
     else{ toast("Lỗi: "+(j.msg||("HTTP "+xhr.status))); }
   };
   xhr.onerror=()=>{
     btn.disabled=false; bar.style.display="none";
-    lab.textContent="Đẩy file .3mf lên máy in — chưa slice cũng được";
+    lab.textContent="Đẩy file .3mf / .stl lên máy in — chưa slice cũng được";
     toast("Mất kết nối khi đẩy file");
   };
   lab.textContent="Đang đẩy… 0% ("+mb+" MB)";
@@ -878,6 +889,8 @@ function fmtStats(s){
   if(s.time) p.push("in "+s.time);
   if(s.weight_g) p.push(s.weight_g.toFixed(0)+" g");
   if(s.layers) p.push(s.layers+" lớp");
+  if(s.dims) p.push(s.dims.join("×")+" mm");
+  if(s.overhang_pct>0) p.push("overhang "+s.overhang_pct+"%");
   return p.join(" · ");
 }
 async function pollSlice(){
@@ -891,7 +904,7 @@ async function pollSlice(){
       setTimeout(pollSlice, 3000); return;
     }
     btn.disabled=false; bar.style.display="none";
-    lab.textContent="Đẩy file .3mf lên máy in — chưa slice cũng được";
+    lab.textContent="Đẩy file .3mf / .stl lên máy in — chưa slice cũng được";
     if(j.state==="done"){
       toast("✔ "+j.msg+(j.stats?(" — "+fmtStats(j.stats)):""));
       const hint=document.getElementById("uhintx");
@@ -1119,10 +1132,10 @@ FILES_PAGE = r"""<!doctype html><html lang="vi"><head>
 
 <div class="up" id="up">
   <div class="uprow">
-    <input type="file" id="fpick" accept=".3mf" style="display:none" onchange="pick()">
+    <input type="file" id="fpick" accept=".3mf,.stl" style="display:none" onchange="pick()">
     <button class="ubtn" id="ubtn" onclick="document.getElementById('fpick').click()">
       <svg viewBox="0 0 24 24"><path d="M5 20h14v-2H5v2zM12 2L6.5 9.5h4V16h3V9.5h4L12 2z"/></svg>
-      <span id="ulabel">Đẩy file .3mf từ máy tính lên máy in</span>
+      <span id="ulabel">Đẩy file .3mf / .stl từ máy tính lên máy in</span>
     </button>
   </div>
   <div class="ubar" id="ubar"><i id="ufill"></i></div>
@@ -1154,7 +1167,7 @@ function pick(){
   const inp=document.getElementById("fpick"), f=inp.files&&inp.files[0];
   inp.value="";                                  // cho phep chon lai cung file
   if(!f) return;
-  if(!f.name.toLowerCase().endsWith(".3mf")){ toast("Chỉ nhận file .3mf"); return; }
+  if(!/\.(3mf|stl)$/i.test(f.name)){ toast("Chỉ nhận file .3mf hoặc .stl"); return; }
   upload(f);
 }
 function upload(f){
@@ -1177,13 +1190,13 @@ function upload(f){
     let j={}; try{ j=JSON.parse(xhr.responseText); }catch(e){}
     if(xhr.status===200 && j.ok && j.queued){ pollSlice(); return; }   // chua slice -> server dang slice
     btn.disabled=false; bar.style.display="none";
-    lab.textContent="Đẩy file .3mf từ máy tính lên máy in";
+    lab.textContent="Đẩy file .3mf / .stl từ máy tính lên máy in";
     if(xhr.status===200 && j.ok){ toast("Đã đẩy lên máy: "+j.name); load(); }
     else{ toast("Lỗi: "+(j.msg||("HTTP "+xhr.status))); }
   };
   xhr.onerror=()=>{
     btn.disabled=false; bar.style.display="none";
-    lab.textContent="Đẩy file .3mf từ máy tính lên máy in";
+    lab.textContent="Đẩy file .3mf / .stl từ máy tính lên máy in";
     toast("Mất kết nối khi đẩy file");
   };
   lab.textContent="Đang đẩy… 0% ("+mb+" MB)";
@@ -1195,6 +1208,8 @@ function fmtStats(s){
   if(s.time) p.push("in "+s.time);
   if(s.weight_g) p.push(s.weight_g.toFixed(0)+" g");
   if(s.layers) p.push(s.layers+" lớp");
+  if(s.dims) p.push(s.dims.join("×")+" mm");
+  if(s.overhang_pct>0) p.push("overhang "+s.overhang_pct+"%");
   return p.join(" · ");
 }
 async function pollSlice(){
@@ -1208,7 +1223,7 @@ async function pollSlice(){
       setTimeout(pollSlice, 3000); return;
     }
     btn.disabled=false; bar.style.display="none";
-    lab.textContent="Đẩy file .3mf từ máy tính lên máy in";
+    lab.textContent="Đẩy file .3mf / .stl từ máy tính lên máy in";
     if(j.state==="done"){
       toast("✔ "+j.msg+(j.stats?(" — "+fmtStats(j.stats)):"")); load();
       const hint=document.getElementById("uhintx");
@@ -1394,8 +1409,8 @@ class H(BaseHTTPRequestHandler):
             self._send(400, json.dumps({"ok": False, "msg": "Thiếu tên file"}),
                        "application/json; charset=utf-8")
             return
-        if not name.lower().endswith(".3mf"):
-            self._send(400, json.dumps({"ok": False, "msg": "Chỉ nhận file .3mf (đã slice)"}),
+        if not name.lower().endswith((".3mf", ".stl")):
+            self._send(400, json.dumps({"ok": False, "msg": "Chỉ nhận file .3mf hoặc .stl"}),
                        "application/json; charset=utf-8")
             return
         try:
