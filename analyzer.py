@@ -1010,6 +1010,26 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced") -> dict:
     p["top_surface_pattern"] = "monotonicline"   # wiki: monotonic line dep nhat cho mat tren
     why.append(f"Mặt trên {tsl} lớp / đáy {bsl} lớp: {tsl_why}.")
 
+    # 5b) MAT TREN LẤM TẤM / LỖ LI TI / VÂN THƯA — dong thuan forum Bambu (thread
+    #     "Top surface has tiny holes and gaps", 14.7k views): thu pham la duong in
+    #     tron dau, cac khuc queo + dau mut de lai khe. Bo cach ha theo thu tu tac dong:
+    #       1. bề rộng đường mặt trên hẹp lại (0.25 cho nozzle 0.4) — de nhet kin khe
+    #       2. monotonic line (da bat) + Arachne (da bat: bien thien do rong nhet goc nhon)
+    #       3. cham lai o mat tren (da co: top_surface_speed <= 150)
+    #       4. hieu chinh Flow + PA cho tung cuon (KHONG phai key preset — phai calib that)
+    nz = fl.get("nozzle") or 0.4
+    tslw = round(nz * 0.62, 2)              # ~0.25 cho nozzle 0.4 (forum: 0.25/0.4)
+    p["top_surface_line_width"] = str(tslw)
+    why.append(f"Mặt trên đường in HẸP {tslw}mm (mặc định {round(nz*1.05,2)}mm): fix lấm tấm / "
+               f"lỗ li ti / vân thưa — đường mảnh nhét kín khe ở khúc queo và đầu mút, kết hợp "
+               f"monotonic line + Arachne (đã bật). Nguồn: đồng thuận forum Bambu (thread top "
+               f"surface tiny holes). Root cause thật là chưa hiệu chỉnh Flow/PA — xem tip.")
+    r["tips"].append(
+        "🔧 Mặt trên còn lấm tấm sau khi in? Nguyên nhân GỐC thường là dòng chảy chưa chuẩn — "
+        "chạy Calibration ▸ Flow Dynamics (PA) + Flow Rate cho ĐÚNG cuộn nhựa đang dùng (mỗi "
+        "cuộn/màu một giá trị). Preset chỉ giảm được lỗ; calib mới hết hẳn (forum Bambu). "
+        "Muốn phẳng bóng tuyệt đối: bật Ironing = 'Top surfaces' (đánh đổi thêm thời gian).")
+
     # 6) SEAM — quyet dinh theo BANG TRA wiki Bambu Studio (wiki.bambulab.com/.../Seam),
     #    khong code cung theo cam tinh. Z-seam la diem bat dau moi vong in tren TUONG
     #    DUNG nen khong the "giau xuong day". 3 truong hop theo wiki:
