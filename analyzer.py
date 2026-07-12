@@ -541,11 +541,22 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced") -> dict:
         p["brim_width"] = "8"
         why.append(f"Brim 8mm (BẮT BUỘC): đáy chỉ {bed} cm², tỉ lệ lật {ratio:.1f} — "
                    f"không brim thì lớp đầu bong / model đổ giữa chừng.")
-    # SKIRT: muc dich duy nhat la moi nhua (Simplify3D) — A1 tu moi bang purge line +
-    # wipe truoc moi lan in, skirt chi ton them thoi gian & nhua -> tat han.
-    p["skirt_loops"] = "0"
-    why.append("Skirt = 0 vòng: skirt chỉ để mồi nhựa, mà A1 đã tự mồi bằng purge line "
-               "trước mỗi lần in — vẽ thêm skirt là tốn thời gian vô ích.")
+    # SKIRT + DRAFT SHIELD: skirt chi de moi nhua (A1 tu moi bang purge line -> tat).
+    # RIENG nhua co ngot (ABS/ASA) tren may khung HO nhu A1: draft_shield bien skirt
+    # thanh tuong chan gio cao bang model. Bambu AN o nay khoi UI (Tab.cpp comment
+    # dong draft_shield) — CHI set duoc qua preset, phai di kem skirt_loops > 0.
+    if warpy:
+        p["skirt_loops"] = "2"
+        p["draft_shield"] = "enabled"
+        why.append(f"DRAFT SHIELD bật + skirt 2 vòng: {body} co ngót mạnh mà A1 là máy khung hở "
+                   f"— tường skirt cao bằng model chắn gió lùa, đỡ vênh/tách lớp. Ô này Bambu "
+                   f"ẨN khỏi giao diện Studio, chỉ preset mới set được — đừng tìm trong tab "
+                   f"Others, nó không có ở đó.")
+    else:
+        p["skirt_loops"] = "0"
+        why.append("Skirt = 0 vòng: skirt chỉ để mồi nhựa, mà A1 đã tự mồi bằng purge line "
+                   "trước mỗi lần in — vẽ thêm skirt là tốn thời gian vô ích. (PLA/PETG không "
+                   "cần draft shield chắn gió.)")
 
     # 5) TOP/BOTTOM SHELL — tinh theo quy tac do day (wiki OrcaSlicer), khong cung "4/3"
     infill_pct = float(re.sub(r"[^\d.]", "", M["infill"]) or 10)

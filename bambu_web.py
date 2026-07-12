@@ -1459,8 +1459,15 @@ ANALYZE_PAGE = r"""<!doctype html><html lang="vi"><head>
   (thân PLA) — hoặc ngược lại PLA làm interface cho thân PETG.<br>
   🔁 Máy chỉ có 1 loại nhựa → hub fallback interface cùng vật liệu đúng slot thân in,
   khe an toàn 0.2mm.<br>
-  ⚠️ <b>Cấm</b> để Z distance = 0 khi interface CÙNG vật liệu — support dính chết vào model.<br>
-  ⏱️ Giá phải trả: single-nozzle đổi nhựa mỗi lớp interface → tốn thời gian + nhựa purge.<br><br>
+  ⚠️ <b>Cấm</b> để Z distance = 0 khi interface CÙNG vật liệu — support dính chết vào model.<br><br>
+  <b>Cả 4 khay đều PLA (không có nhựa đối ứng) thì set thế này:</b><br>
+  • Support/raft interface = <b>Default</b> (hoặc đúng khay thân in)<br>
+  • <b>Top Z distance = 0.2mm</b> (vẫn khó bóc → tăng 0.25; đây là khe hở sống còn)<br>
+  • Bottom Z distance = 0.2 · Top interface spacing = <b>0.5</b> (KHÔNG để 0)<br>
+  • Interface pattern = Rectilinear Interlaced · Top interface layers = 2-3<br>
+  → Bóc được nhưng mặt dưới hơi rỗ — đó là giới hạn vật lý của cùng nhựa; muốn bóng
+  như mặt trên bắt buộc phải có nhựa đối ứng. Hub tự set đúng bộ này khi phân tích file.<br><br>
+  ⏱️ Giá phải trả (trick PETG): single-nozzle đổi nhựa mỗi lớp interface → tốn thời gian + nhựa purge.<br><br>
   <b>An toàn trước khi in model lớn (case thất bại cộng đồng đã quét):</b><br>
   🧪 Lần đầu dùng trick: in <b>thử 1 miếng nhỏ có overhang</b> (~20 phút) trước, đừng đặt cược model 8 tiếng.<br>
   🔍 Import preset xong phải <b>chọn nó ở dropdown Process</b> — import KHÔNG tự áp; bóc không ra đa số do preset chưa được chọn, Z distance vẫn của preset cũ.<br>
@@ -1569,7 +1576,12 @@ function render(j){
   if(j.export){ const e=j.export;
     h+='<div class="card"><h3 style="margin-top:0">Cấu hình tối ưu — sinh từ chính các vấn đề trên</h3>';
     for(const w of e.why) h+='<div class="tip">'+esc(w)+'</div>';
-    h+='<button class="btn" style="margin-top:10px" onclick="dl()">Tải preset .json (import vào Bambu Studio)</button></div>';
+    h+='<button class="btn" style="margin-top:10px" onclick="dl()">Tải preset .json (import vào Bambu Studio)</button>'
+     +'<div class="mut" style="margin-top:9px;line-height:1.6">✅ <b>Checklist sau khi import</b> (File ▸ Import ▸ Import Configs):<br>'
+     +'1️⃣ <b>CHỌN preset ở dropdown Process</b> — import xong Studio KHÔNG tự áp, đây là lỗi số 1.<br>'
+     +'2️⃣ Có dùng support: tab Support bật <b>Advanced</b> → kiểm Support/raft interface = đúng khay, Top Z distance đúng như dòng giải thích ở trên.<br>'
+     +'3️⃣ Bấm in: map khay AMS đúng nhựa/màu như file khai báo.<br>'
+     +'4️⃣ Slice → Preview: kéo thanh lớp, nhìn lớp interface đổi màu ngay dưới mặt hẫng là chuẩn.</div></div>';
     window.__preset=e.preset; window.__pname=(j.name||"file").replace(/\.[^.]+$/,"");
   }
   h+='<button class="btn go" id="e2e" onclick="optimize()">So sánh 3 chế độ — slice thật 4 lần (~15s)</button>'
@@ -1635,7 +1647,7 @@ function dlp(k){
   const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
   a.download=((d.preset&&d.preset.name)||((window.__rep.name||"file")+"-"+k))+".json";
   a.click(); URL.revokeObjectURL(a.href);
-  toast("Đã tải — Bambu Studio → Process → Import");
+  toast("Đã tải — Import xong nhớ CHỌN preset ở dropdown Process (không tự áp)");
 }
 function kv(k,v){ return '<div class="kv"><span>'+k+'</span><b>'+esc(v)+'</b></div>'; }
 function dl(){
@@ -1644,7 +1656,7 @@ function dl(){
   a.href=URL.createObjectURL(blob);
   a.download=((window.__preset&&window.__preset.name)||(window.__pname+"-OPT-process"))+".json";
   a.click(); URL.revokeObjectURL(a.href);
-  toast("Đã tải preset — Bambu Studio → Process → Import");
+  toast("Đã tải — Import xong nhớ CHỌN preset ở dropdown Process (không tự áp)");
 }
 async function slice(){
   if(!FILE){ toast("Chọn lại file"); return; }

@@ -41,6 +41,7 @@ SAFE_KEYS = (
     "outer_wall_speed", "inner_wall_speed", "sparse_infill_speed",
     "internal_solid_infill_speed", "top_surface_speed",
     "seam_position", "seam_slope_type", "seam_gap", "brim_type", "brim_width", "skirt_loops",
+    "draft_shield", "enable_arc_fitting", "resolution",
     "ironing_type", "infill_wall_overlap", "initial_layer_speed",
     "initial_layer_print_height", "top_surface_pattern", "top_shell_thickness",
 )
