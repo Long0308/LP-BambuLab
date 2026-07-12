@@ -1787,7 +1787,9 @@ function render(j){
    +'<button class="btn" style="margin-top:0;flex:1;min-width:180px;background:linear-gradient(160deg,#a78bfa,#7c3aed)" onclick="slice(true)">Slice để TẢI VỀ (.gcode.3mf)</button>'
    +'</div>'
    +'<div id="dlbox" style="margin-top:8px"></div>'
-   +'<div class="mut" style="margin-top:7px;text-align:center">Cả hai dùng cấu hình máy A1 thật + khay AMS. <b>Tải về</b>: mở trong Bambu Studio/Handy để xem trước rồi tự bấm in — không đẩy thẳng xuống máy.</div></div>';
+   +'<div class="mut" style="margin-top:7px;line-height:1.6">Cả hai dùng cấu hình máy A1 thật + khay AMS. <b>File .gcode.3mf đã slice sẵn (chứa G-code)</b>:<br>'
+   +'• <b>In thẳng KHÔNG slice lại</b>: mở bằng <b>Bambu Handy</b> (điện thoại) hoặc copy vào thẻ SD/gửi LAN — máy chạy G-code có sẵn.<br>'
+   +'• Mở trong <b>Bambu Studio (desktop)</b>: Studio nạp lại thành project để CHỈNH SỬA nên nút "Slice plate" sáng lại — đây là bản chất của Studio (không dùng G-code ngoài làm bản in cuối). Cấu hình đã nhúng nên bấm Slice lại ra <b>y hệt</b>, chỉ mất thời gian slice. Muốn khỏi slice lại thì in qua Handy/thẻ SD.</div></div>';
   document.getElementById("out").innerHTML=h;
 }
 function optimize(){

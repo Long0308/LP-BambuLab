@@ -796,6 +796,8 @@ BS_LOC = {
     "ironing_type":                   ("Quality",  "Ironing",            "Ironing Type"),
     "wall_generator":                 ("Quality",  "Wall generator",     "Wall generator"),
     "wall_sequence":                  ("Quality",  "Advanced",           "Order of walls"),
+    "bridge_flow":                    ("Quality",  "Advanced",           "Bridge flow"),
+    "bridge_speed":                   ("Speed",    "Other layers speed", "Bridge"),
     "wall_loops":                     ("Strength", "Walls",              "Wall loops"),
     "top_shell_layers":               ("Strength", "Top/bottom shells",  "Top shell layers"),
     "top_shell_thickness":            ("Strength", "Top/bottom shells",  "Top shell thickness"),
@@ -860,6 +862,8 @@ def _guide_reason(key: str, val: str, r: dict, lh: float = 0.2) -> str:
         "ironing_type": lambda: (f"ủi mặt trên: {fa.get('top_flat_cm2')}cm² phẳng hướng lên"
                                  if val == "top" else "không ủi (mặt phẳng trên nhỏ / không phải chế độ Đẹp)"),
         "wall_generator": lambda: "Arachne: đường biến thiên độ rộng → nhét góc nhọn, chi tiết nhỏ",
+        "bridge_flow": lambda: f"{val} (mặc định 1.0): sợi bắc cầu nở ra dính nhau → bridge/overhang mịn không cần support + lấp internal bridge (wiki Bambu, PLA 1.4-1.7)",
+        "bridge_speed": lambda: f"{val} mm/s chậm: sợi bắc cầu kịp nguội, bớt võng (wiki Bambu)",
         "wall_sequence": lambda: ("≥3 thành → sandwich: ngoài kẹp giữa (seam gọn + kích thước chuẩn)"
                                   if "inner-outer-inner" in val else "2 thành → inner/outer"),
         "wall_loops": lambda: f"{val} thành theo chế độ",
@@ -1239,6 +1243,40 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced",
             "chạy Calibration ▸ Flow Dynamics (PA) + Flow Rate cho ĐÚNG cuộn nhựa đang dùng (mỗi "
             "cuộn/màu một giá trị). Preset chỉ giảm được lỗ; calib mới hết hẳn (forum Bambu). "
             "Muốn phẳng bóng tuyệt đối: bật Ironing = 'Top surfaces' (đánh đổi thêm thời gian).")
+
+    # 5c) BRIDGE — dong thuan wiki chinh thuc Bambu (wiki.bambulab.com/.../parameter/bridge,
+    #     dua tren thi nghiem "unsupported bridge" cua Make Wonderful Things tren MakerWorld):
+    #     mac dinh bridge flow 1.0 lam soi bridge tron, KHONG cham nhau -> khe/vong. Nang
+    #     flow 1.4-1.7 (PLA) cho soi no ra dinh nhau -> mat bridge min + LAP DAY internal
+    #     bridge (lop solid dau tien bac qua ruot thua) = mat tren bot lam tam. Bridge cham
+    #     lai cho soi kip nguoi (wiki chot 1.5@40mm/s la can bang tot). Ap MOI che do vi
+    #     internal bridge co o moi model co mat tren tren ruot thua.
+    # THEO LOAI NHUA — gia tri THANG BAMBU (bridge_flow default 1.0), tra cong dong:
+    #   PLA : 1.5  — wiki Bambu (1.4-1.7) + FB maker xac nhan before/after
+    #   PETG: 1.05 — FB maker: PETG chay/von cuc khi flow cao -> chi nhich TREN default 1.0
+    #   ABS/ASA: 1.0 (GIU mac dinh) — Prusa con GIAM flow cho ABS; bridge ABS kem la do
+    #            CO NGOT + lam mat (A1 khung ho), KHONG phai do flow -> tang cooling/giam
+    #            toc thay vi tang flow. (Luu y: thang Prusa 0.8 != thang Bambu 1.0.)
+    #   Khac/STL khong ro: gia dinh PLA 1.5 + note.
+    BFLOW = {"PLA":  ("1.5",  "wiki Bambu 1.4–1.7 + maker xác nhận (thang Bambu, default 1.0)"),
+             "PETG": ("1.05", "FB maker: PETG vón cục khi flow cao → chỉ nhích trên default 1.0, TEST 1.0–1.1"),
+             "ABS":  ("1.0",  "GIỮ mặc định: ABS bridge kém do co ngót/làm mát chứ không phải flow (Prusa còn giảm); sửa bằng tăng quạt + giảm tốc, TEST"),
+             "ASA":  ("1.0",  "GIỮ mặc định: ASA bridge kém do co ngót/làm mát chứ không phải flow; sửa bằng tăng quạt + giảm tốc, TEST")}
+    bflow, bnote = BFLOW.get(fam, ("1.5", "giả định PLA (file không khai báo nhựa) — TEST nếu nhựa khác"))
+    bspeed = "25" if fam in ("", "PLA", "PETG") else "20"   # nhua co ngot: cham hon chut cho kip nguoi
+    p["bridge_flow"] = bflow
+    p["bridge_speed"] = [bspeed]
+    why.append(f"Bridge flow {bflow} + tốc độ bridge {bspeed} mm/s ({'nhựa '+fam if fam else 'STL — giả định PLA'}): "
+               f"flow cao cho sợi bắc cầu nở ra DÍNH NHAU → mặt bridge/overhang mịn KHÔNG cần support, và "
+               f"lấp đầy internal bridge (lớp solid bắc qua ruột thưa) → mặt trên bớt lấm tấm; tốc độ chậm "
+               f"cho sợi kịp nguội, bớt võng. Cơ sở: {bnote}. Nguồn: wiki chính thức Bambu (thí nghiệm "
+               f"unsupported-bridge). Vị trí: Bridge flow → Quality ▸ Advanced; Bridge speed → Speed (dưới Overhang speed).")
+    if emit_tips:
+        r["tips"].append(
+            f"🌉 Bridge flow {bflow} đặt theo nhựa {fam or '(giả định PLA)'} — wiki Bambu CẢNH BÁO: giá trị tốt "
+            f"phụ thuộc NHỰA + máy + làm mát, 'chỉnh đại hiếm khi đẹp'. Bridge còn võng/khe? Mở model test "
+            f"'Unsupported Bridge Experiments' (MakerWorld), in dải flow 1.4–1.7 (PLA) hoặc 1.1–1.4 (PETG/ABS) "
+            f"bằng CHÍNH cuộn nhựa của bạn rồi chọn ô mịn nhất. Bridge dài >10mm vẫn có thể võng dù chỉnh đúng.")
 
     # 6) SEAM — quyet dinh theo BANG TRA wiki Bambu Studio (wiki.bambulab.com/.../Seam),
     #    khong code cung theo cam tinh. Z-seam la diem bat dau moi vong in tren TUONG

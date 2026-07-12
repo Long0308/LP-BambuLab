@@ -44,7 +44,7 @@ SAFE_KEYS = (
     "draft_shield", "enable_arc_fitting", "resolution",
     "ironing_type", "infill_wall_overlap", "initial_layer_speed",
     "initial_layer_print_height", "top_surface_pattern", "top_shell_thickness",
-    "top_surface_line_width",
+    "top_surface_line_width", "bridge_flow", "bridge_speed",
 )
 
 
