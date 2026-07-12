@@ -1550,7 +1550,7 @@ function renderE2E(r){
     const d=(r.modes||{})[k]; if(!d||d.error) continue;
     h+='<div class="card"><h3 style="margin-top:0">'+esc(d.label)+' — vì sao</h3>';
     for(const w of d.why) h+='<div class="tip">'+esc(w)+'</div>';
-    h+='<button class="btn" style="margin-top:9px" onclick='dlp("'+k+'")'>Tải preset '+esc(d.label)+' (.json)</button></div>';
+    h+='<button class="btn" style="margin-top:9px" onclick="dlp(\''+k+'\')">Tải preset '+esc(d.label)+' (.json)</button></div>';
   }
   window.__rep=r;
   document.getElementById("e2eout").innerHTML=h;
