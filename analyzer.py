@@ -285,20 +285,26 @@ def rot_preview(tris: list, rots: list, color: str | None = None) -> dict:
             except ValueError:
                 pass
     out = {"current": render_iso_svg(tris, "X", 0, rgb=rgb)}
-    best = next((x for x in rots if x.get("recommend")), None)
-    if best and not (best["axis"] == "X" and best["angle"] == 0):
-        out["best"] = render_iso_svg(tris, best["axis"], best["angle"], rgb=rgb)
-        out["axis"], out["angle"] = best["axis"], best["angle"]
 
-    # 1-2 GOI Y MEM (khong cung): cac huong DUNG DUOC khac, xep hang, KHAC huong
-    # hien tai va khac nhau -> user tu can nhac. Ke ca khi huong hien tai da tot nhat,
-    # van dua 1-2 phuong an thay the de user thay lua chon, khong bi ep 1 dap an.
+    # 1-2 GOI Y XOAY — CHI khi THUC SU dang can nhac, khong bia phuong an te hon:
+    #   - overhang phai THAP HON ro rang (>=0.3%) -> co ly do de xoay (bot support)
+    #   - bam ban du CHAC ve tuyet doi (>=20cm2, canh vuong ~45mm) VA khong sut qua
+    #     nua so voi hien tai -> tranh "bay canh dao" (vd 7.9cm2) ma header canh bao.
+    # Huong hien tai da it overhang nhat + bam tot -> options rong -> "da tot nhat".
+    cur = next((x for x in rots if x["axis"] == "X" and x["angle"] == 0), None)
+    cur_ov = cur["overhang_pct"] if cur else 999.0
+    cur_bed = cur["bed_cm2"] if cur else 0.0
+    bed_floor = max(20.0, 0.5 * cur_bed)
     ranked = sorted((x for x in rots if x.get("usable")),
                     key=lambda x: (x["overhang_pct"], -x["bed_cm2"], x["height"]))
     opts, seen = [], set()
     for x in ranked:
         if x["axis"] == "X" and x["angle"] == 0:
             continue                                   # bo huong hien tai
+        if x["overhang_pct"] > cur_ov - 0.3:
+            continue                                   # khong bot support -> vo nghia
+        if x["bed_cm2"] < bed_floor:
+            continue                                   # bam qua it/tut manh -> bay canh dao
         key = (x["axis"], x["angle"])
         if key in seen:
             continue
@@ -309,10 +315,10 @@ def rot_preview(tris: list, rots: list, color: str | None = None) -> dict:
         if len(opts) >= 2:
             break
     out["options"] = opts
-    cur = next((x for x in rots if x["axis"] == "X" and x["angle"] == 0), None)
     out["current_meta"] = ({"overhang_pct": cur["overhang_pct"], "bed_cm2": cur["bed_cm2"],
                             "height": cur["height"]} if cur else None)
-    out["current_is_best"] = bool(best and best["axis"] == "X" and best["angle"] == 0)
+    # "tot nhat" = KHONG con phuong an xoay AN TOAN nao tot hon (khop voi options)
+    out["current_is_best"] = not opts
     return out
 
 
