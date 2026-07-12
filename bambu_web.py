@@ -18,7 +18,7 @@ Dung:
   python bambu_web.py 8080
 Yeu cau: pip install --user paho-mqtt ; may bat LAN Only. Access Code lay qua /bambu-check.
 """
-import sys, os, re, ssl, json, time, threading
+import sys, os, re, ssl, json, time, threading, shutil
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 try:
@@ -160,6 +160,7 @@ THUMB_LOCK = threading.Lock()  # tai thumbnail tuan tu (Bambu FTP gioi han ket n
 SLICE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "slice_jobs")
 UPJOB = {"state": "idle", "name": None, "msg": "", "stats": None}
 UPJOB_LOCK = threading.Lock()
+LAST_SLICED = {"path": None, "name": None}   # file .gcode.3mf slice gan nhat -> cho tai ve
 OPTJOB = {"state": "idle", "name": None, "msg": "", "report": None}
 OPTJOB_LOCK = threading.Lock()
 ANJOB = {"state": "idle", "name": None, "msg": "", "result": None}
@@ -257,11 +258,12 @@ def _run_optimize(name, src_path):
             pass
 
 
-def _slice_and_push(name, src_path, mode=None):
-    """Chay nen: slice file du an -> day ket qua .gcode.3mf xuong may in.
+def _slice_and_push(name, src_path, mode=None, push=True):
+    """Chay nen: slice file du an (config A1 that + khay AMS) -> day .gcode.3mf
+    xuong may in (push=True) HOAC giu lai cho user TAI VE (push=False).
 
-    Toan bo do 1 cu bam upload cua NGUOI DUNG khoi dong — day file chi la
-    luu tru vao the SD, KHONG phai lenh in (in van phai bam nut "In").
+    push=False: user mo file trong Bambu Studio/Handy de REVIEW roi tu bam in —
+    khong tu day xuong may. Toan bo do 1 cu bam upload cua NGUOI DUNG khoi dong.
     """
     base = re.sub(r"\.(3mf|stl)$", "", name, flags=re.I)
     out_name = base + ".gcode.3mf"
@@ -294,6 +296,16 @@ def _slice_and_push(name, src_path, mode=None):
             with UPJOB_LOCK:
                 UPJOB.update(state="error", msg=res)
             return
+        if not push:
+            # CHI SLICE DE TAI VE — giu file .gcode.3mf lai, KHONG day xuong may.
+            keep = os.path.join(SLICE_DIR, out_name)
+            if os.path.abspath(res) != os.path.abspath(keep):
+                shutil.copyfile(res, keep)
+            with UPJOB_LOCK:
+                LAST_SLICED.update(path=keep, name=out_name)
+                UPJOB.update(state="done", name=out_name, download=out_name,
+                             msg=f"Đã slice xong: {out_name} — bấm Tải về để mở/in trong Bambu Studio/Handy")
+            return
         with UPJOB_LOCK:
             UPJOB.update(state="pushing", msg="Slice xong — đang chuyển xuống máy in…", stats=stats)
         with open(res, "rb") as f:
@@ -302,8 +314,15 @@ def _slice_and_push(name, src_path, mode=None):
             ok2, msg2 = filament_ftp.upload_file(IP, CODE, data, out_name)
         if ok2:
             FILES_CACHE["ts"] = 0
+            keep = os.path.join(SLICE_DIR, out_name)      # giu ban sao de user cung tai duoc
+            if os.path.abspath(res) != os.path.abspath(keep):
+                try:
+                    shutil.copyfile(res, keep)
+                except OSError:
+                    keep = res
             with UPJOB_LOCK:
-                UPJOB.update(state="done", name=out_name,
+                LAST_SLICED.update(path=keep, name=out_name)
+                UPJOB.update(state="done", name=out_name, download=out_name,
                              msg=f"Đã slice + chuyển xuống máy: {out_name}")
         else:
             with UPJOB_LOCK:
@@ -1681,15 +1700,25 @@ function render(j){
     // Anh render de user NHIN thay xoay the nao — khong phai doan tu con so
     if(j.rot_preview&&j.rot_preview.current){
       const pv=j.rot_preview;
+      const cm=pv.current_meta;
+      const cmeta=cm?('overhang '+cm.overhang_pct+'% · bám '+cm.bed_cm2+'cm² · cao '+cm.height+'mm'):'';
       h+='<div style="display:flex;gap:18px;flex-wrap:wrap;margin-top:12px;align-items:flex-start">'
-       +'<div style="text-align:center"><div class="mut" style="margin-bottom:4px">Hướng hiện tại</div>'+pv.current+'</div>';
-      if(pv.best)
-        h+='<div style="text-align:center"><div style="color:#22c55e;font-weight:700;margin-bottom:4px">★ Đề xuất: xoay '
-         +pv.angle+'° quanh trục '+pv.axis+'</div>'+pv.best
-         +'<div class="mut" style="margin-top:4px">Trong Bambu Studio: chọn model → phím R → nhập góc trục '+pv.axis+'</div></div>';
-      else
-        h+='<div class="tip" style="align-self:center">✓ Hướng hiện tại đã là tốt nhất — không cần xoay.</div>';
+       +'<div style="text-align:center"><div class="mut" style="margin-bottom:4px">Hướng hiện tại'
+       +(pv.current_is_best?' <span style="color:#22c55e">✓ tốt nhất</span>':'')+'</div>'+pv.current
+       +(cmeta?'<div class="mut" style="font-size:11px;margin-top:2px">'+cmeta+'</div>':'')+'</div>';
+      // 1-2 GOI Y MEM — user tu chon, khong ep. Vien xanh cho phuong an tot hon hien tai.
+      const opts=pv.options||[];
+      for(let i=0;i<opts.length;i++){ const o=opts[i];
+        const better=cm&&(o.overhang_pct<cm.overhang_pct-0.3);
+        h+='<div style="text-align:center"><div style="font-weight:700;margin-bottom:4px;color:'
+         +(better?'#22c55e':'#93c5fd')+'">'+(better?'★ ':'')+'Gợi ý '+(i+1)+': xoay '+o.angle+'° trục '+o.axis+'</div>'
+         +'<div style="border:2px solid '+(better?'rgba(34,197,94,.5)':'rgba(147,197,253,.35)')+';border-radius:10px;display:inline-block">'+o.svg+'</div>'
+         +'<div class="mut" style="font-size:11px;margin-top:2px">overhang '+o.overhang_pct+'% · bám '+o.bed_cm2+'cm² · cao '+o.height+'mm</div></div>';
+      }
       h+='</div>';
+      h+='<div class="mut" style="font-size:12px;margin-top:8px">'
+       +(pv.current_is_best?'✓ Hướng hiện tại đang tốt nhất theo số liệu — 1-2 gợi ý trên chỉ để bạn CÂN NHẮC (vd cần mặt đẹp/chịu lực khác), không bắt buộc xoay. ':'Cân nhắc 1-2 gợi ý trên — chọn cái hợp mục đích (ít support / mặt đẹp / chịu lực). ')
+       +'Trong Bambu Studio: chọn model → phím <b>R</b> → nhập góc quanh trục tương ứng.</div>';
     }
     h+='</div>';
   }
@@ -1753,8 +1782,12 @@ function render(j){
    +'<option value="quality">Đẹp — 0.16mm</option>'
    +'<option value="">Giữ nguyên config trong file (không áp preset)</option>'
    +'</select>'
-   +'<button class="btn go" style="margin-top:0" onclick="slice()">Slice ngay + đẩy xuống máy in</button>'
-   +'<div class="mut" style="margin-top:7px;text-align:center">Gọi Bambu Studio CLI trên máy tính. Lệnh IN vẫn phải bạn bấm ở trang File.</div></div>';
+   +'<div style="display:flex;gap:8px;flex-wrap:wrap">'
+   +'<button class="btn go" style="margin-top:0;flex:1;min-width:180px" onclick="slice(false)">Slice + đẩy xuống máy in</button>'
+   +'<button class="btn" style="margin-top:0;flex:1;min-width:180px;background:linear-gradient(160deg,#a78bfa,#7c3aed)" onclick="slice(true)">Slice để TẢI VỀ (.gcode.3mf)</button>'
+   +'</div>'
+   +'<div id="dlbox" style="margin-top:8px"></div>'
+   +'<div class="mut" style="margin-top:7px;text-align:center">Cả hai dùng cấu hình máy A1 thật + khay AMS. <b>Tải về</b>: mở trong Bambu Studio/Handy để xem trước rồi tự bấm in — không đẩy thẳng xuống máy.</div></div>';
   document.getElementById("out").innerHTML=h;
 }
 function optimize(){
@@ -1817,13 +1850,14 @@ function dl(){
   a.click(); URL.revokeObjectURL(a.href);
   toast("Đã tải — Import xong nhớ CHỌN preset ở dropdown Process (không tự áp)");
 }
-async function slice(){
+async function slice(download){
   if(!FILE){ toast("Chọn lại file"); return; }
   const m=(document.getElementById("smode")||{value:""}).value;
+  const db=document.getElementById("dlbox"); if(db) db.innerHTML="";
   const xhr=new XMLHttpRequest();
-  xhr.open("POST","/api/upload?name="+encodeURIComponent(FILE.name)+(m?"&mode="+m:""));
+  xhr.open("POST","/api/upload?name="+encodeURIComponent(FILE.name)+(m?"&mode="+m:"")+(download?"&download=1":""));
   xhr.onload=()=>{ let j={}; try{j=JSON.parse(xhr.responseText);}catch(e){}
-    if(j.ok&&j.queued){ toast("Đang slice trên máy tính…"); poll(); }
+    if(j.ok&&j.queued){ toast(download?"Đang slice để tải về…":"Đang slice trên máy tính…"); poll(); }
     else if(j.ok){ toast("Đã đẩy xuống máy: "+j.name); }
     else toast("Lỗi: "+(j.msg||xhr.status)); };
   xhr.onerror=()=>toast("Mất kết nối");
@@ -1832,7 +1866,10 @@ async function slice(){
 async function poll(){
   try{ const j=await (await fetch("/api/upstatus",{cache:"no-store"})).json();
     if(j.state==="slicing"||j.state==="pushing"){ toast(j.msg||"Đang xử lý…"); setTimeout(poll,3000); return; }
-    if(j.state==="done"){ const s=j.stats||{}; toast("✔ "+j.msg+" — in "+(s.time||"?")+" · "+(s.weight_g||"?")+"g"); }
+    if(j.state==="done"){ const s=j.stats||{}; toast("✔ "+j.msg);
+      const db=document.getElementById("dlbox");
+      if(j.download&&db){ db.innerHTML='<a class="btn" style="display:block;text-align:center;text-decoration:none;background:linear-gradient(160deg,#22c55e,#16a34a)" href="/api/sliced-download">⬇ Tải '+j.download+' — mở Bambu Studio/Handy để in</a>'; }
+    }
     else if(j.state==="error") toast("Lỗi: "+j.msg);
   }catch(e){ setTimeout(poll,4000); }
 }
@@ -1912,6 +1949,23 @@ class H(BaseHTTPRequestHandler):
         elif path.startswith("/api/upstatus"):
             with UPJOB_LOCK:
                 self._send(200, json.dumps(UPJOB), "application/json; charset=utf-8")
+        elif path.startswith("/api/sliced-download"):
+            with UPJOB_LOCK:
+                fp, fn = LAST_SLICED.get("path"), LAST_SLICED.get("name")
+            if not fp or not os.path.isfile(fp):
+                self._send(404, json.dumps({"ok": False, "msg": "Chưa có file slice để tải"}),
+                           "application/json; charset=utf-8")
+                return
+            with open(fp, "rb") as f:
+                blob = f.read()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/octet-stream")
+            self.send_header("Content-Disposition",
+                             f'attachment; filename="{os.path.basename(fn or "sliced.gcode.3mf")}"')
+            self.send_header("Content-Length", str(len(blob)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(blob)
         elif path.startswith("/api/filemeta"):
             fpath = self._qs_path()
             if not fpath:
@@ -2064,10 +2118,13 @@ class H(BaseHTTPRequestHandler):
                     "application/json; charset=utf-8")
                 return
             UPJOB.update(state="slicing", name=name, msg="Bắt đầu slice…", stats=None)
-        mode = unquote(parse_qs(urlparse(self.path).query).get("mode", [""])[0]).strip().lower()
+        q = parse_qs(urlparse(self.path).query)
+        mode = unquote(q.get("mode", [""])[0]).strip().lower()
         if mode not in ("fast", "balanced", "quality"):
             mode = None
-        threading.Thread(target=_slice_and_push, args=(name, src, mode), daemon=True).start()
+        # download=1 -> CHI slice de tai ve (khong day xuong may)
+        push = q.get("download", ["0"])[0] not in ("1", "true", "yes")
+        threading.Thread(target=_slice_and_push, args=(name, src, mode, push), daemon=True).start()
         self._send(200, json.dumps({"ok": True, "queued": True, "name": name}),
                    "application/json; charset=utf-8")
 

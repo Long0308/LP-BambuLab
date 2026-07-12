@@ -289,6 +289,30 @@ def rot_preview(tris: list, rots: list, color: str | None = None) -> dict:
     if best and not (best["axis"] == "X" and best["angle"] == 0):
         out["best"] = render_iso_svg(tris, best["axis"], best["angle"], rgb=rgb)
         out["axis"], out["angle"] = best["axis"], best["angle"]
+
+    # 1-2 GOI Y MEM (khong cung): cac huong DUNG DUOC khac, xep hang, KHAC huong
+    # hien tai va khac nhau -> user tu can nhac. Ke ca khi huong hien tai da tot nhat,
+    # van dua 1-2 phuong an thay the de user thay lua chon, khong bi ep 1 dap an.
+    ranked = sorted((x for x in rots if x.get("usable")),
+                    key=lambda x: (x["overhang_pct"], -x["bed_cm2"], x["height"]))
+    opts, seen = [], set()
+    for x in ranked:
+        if x["axis"] == "X" and x["angle"] == 0:
+            continue                                   # bo huong hien tai
+        key = (x["axis"], x["angle"])
+        if key in seen:
+            continue
+        seen.add(key)
+        opts.append({"axis": x["axis"], "angle": x["angle"], "overhang_pct": x["overhang_pct"],
+                     "bed_cm2": x["bed_cm2"], "height": x["height"],
+                     "svg": render_iso_svg(tris, x["axis"], x["angle"], rgb=rgb)})
+        if len(opts) >= 2:
+            break
+    out["options"] = opts
+    cur = next((x for x in rots if x["axis"] == "X" and x["angle"] == 0), None)
+    out["current_meta"] = ({"overhang_pct": cur["overhang_pct"], "bed_cm2": cur["bed_cm2"],
+                            "height": cur["height"]} if cur else None)
+    out["current_is_best"] = bool(best and best["axis"] == "X" and best["angle"] == 0)
     return out
 
 
@@ -1187,12 +1211,22 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced",
     #       3. cham lai o mat tren (da co: top_surface_speed <= 150)
     #       4. hieu chinh Flow + PA cho tung cuon (KHONG phai key preset — phai calib that)
     nz = fl.get("nozzle") or 0.4
-    tslw = round(nz * 0.62, 2)              # ~0.25 cho nozzle 0.4 (forum: 0.25/0.4)
-    p["top_surface_line_width"] = str(tslw)
-    why.append(f"Mặt trên đường in HẸP {tslw}mm (mặc định {round(nz*1.05,2)}mm): fix lấm tấm / "
-               f"lỗ li ti / vân thưa — đường mảnh nhét kín khe ở khúc queo và đầu mút, kết hợp "
-               f"monotonic line + Arachne (đã bật). Nguồn: đồng thuận forum Bambu (thread top "
-               f"surface tiny holes). Root cause thật là chưa hiệu chỉnh Flow/PA — xem tip.")
+    narrow = round(nz * 0.62, 2)           # ~0.25 cho nozzle 0.4 (forum: 0.25/0.4)
+    # RANG BUOC: duong in KHONG duoc HEP hon chieu cao lop (bead vuong) — neu khong
+    # Bambu bao "incorrect slicing parameters" (return_code -51). O che do Nhanh
+    # (layer 0.28) 0.25 < 0.28 -> vo hieu; giu mac dinh. Chi hep khi van >= layer.
+    if narrow >= lh:
+        tslw = narrow
+        p["top_surface_line_width"] = str(tslw)
+        why.append(f"Mặt trên đường in HẸP {tslw}mm (mặc định {round(nz*1.05,2)}mm): fix lấm tấm / "
+                   f"lỗ li ti / vân thưa — đường mảnh nhét kín khe ở khúc queo và đầu mút, kết hợp "
+                   f"monotonic line + Arachne (đã bật). Nguồn: đồng thuận forum Bambu (thread top "
+                   f"surface tiny holes). Root cause thật là chưa hiệu chỉnh Flow/PA — xem tip.")
+    else:
+        why.append(f"Mặt trên giữ đường in mặc định (~{round(nz*1.05,2)}mm): chế độ này layer {lh}mm "
+                   f"CAO hơn mức hẹp {narrow}mm, không thu hẹp được (đường in phải ≥ chiều cao lớp, "
+                   f"nếu không Bambu báo lỗi tham số). Mặt trên mịn hơn thì dùng chế độ Cân bằng/Đẹp "
+                   f"(layer ≤0.20mm) để hẹp đường về {narrow}mm.")
     if emit_tips:      # chi emit o lan EXPORT chinh — make_preset goi 4 lan (export+3 mode)
         r["tips"].append(
             "🔧 Mặt trên còn lấm tấm sau khi in? Nguyên nhân GỐC thường là dòng chảy chưa chuẩn — "
