@@ -1559,6 +1559,28 @@ ANALYZE_PAGE = r"""<!doctype html><html lang="vi"><head>
   </div>
 </details>
 
+<details style="max-width:900px;margin:14px auto 0;padding:0 16px">
+  <summary style="cursor:pointer;font-weight:700;font-size:15px">📚 Fix mặt trên lấm tấm / lỗ li ti / vân thưa — vị trí chỉnh chính xác</summary>
+  <div class="mut" style="margin-top:10px;line-height:1.7">
+  <b>Triệu chứng:</b> mặt trên cùng có lỗ li ti, lấm tấm, vân thưa (đường in không khít nhau),
+  rõ nhất ở góc nhọn và vùng hẹp.<br>
+  <b>Thủ phạm:</b> đường in tròn đầu — chỗ queo và đầu mút để lại khe; nozzle to thì khe to
+  (đồng thuận forum Bambu, thread 14.7k view).<br><br>
+  <b>Cách chỉnh — theo tab Bambu Studio (bật Advanced):</b><br>
+  1️⃣ <b>Quality › Line width › Top surface = 0.25</b> mm (nozzle 0.4) — đường mảnh nhét kín khe. Đây là fix số 1.<br>
+  2️⃣ <b>Strength › Top/bottom shells › Top surface pattern = Monotonic line</b> — đi đường một chiều, khít nhất.<br>
+  3️⃣ <b>Quality › Wall generator = Arachne</b> — độ rộng biến thiên, nhét được góc nhọn.<br>
+  4️⃣ <b>Speed › Other layers speed › Top surface ≤ 150</b> mm/s — chậm để nhựa dàn đều.<br>
+  5️⃣ <b>Strength › Top/bottom shells › Top shell layers ≥ 5</b> (đủ dày để lấp) — hub tính theo độ dày 1.0mm.<br>
+  6️⃣ Còn rỗ nữa → <b>Quality › Ironing › Ironing Type = Top surfaces</b> (ủi phẳng, đánh đổi thời gian).<br><br>
+  🔧 <b>Nguyên nhân GỐC = dòng chảy chưa chuẩn.</b> Preset chỉ giảm; muốn HẾT hẳn phải hiệu chỉnh cho ĐÚNG cuộn nhựa:<br>
+  • Máy/ app: <b>Calibration › Flow Dynamics (PA)</b> + <b>Flow Rate</b> — mỗi cuộn/màu chạy 1 lần, lưu lại.<br>
+  • Nhiệt độ cao hơn ~5-10°C cũng giúp nhựa dàn (PLA 220→230).<br><br>
+  ✅ Hub <b>TỰ ÁP</b> mục 1-5 khi phân tích (mọi chế độ); mục 6 bật ở chế độ Đẹp khi có mặt phẳng lớn.<br>
+  🔗 Kiểm chứng: forum.bambulab.com/t/top-surface-has-tiny-holes-and-gaps/5489 (14.7k view, đồng thuận frank.d/albin/Flashy_DE)
+  </div>
+</details>
+
 <div id="toast"></div>
 <script>
 let FILE=null;
@@ -1699,6 +1721,20 @@ function render(j){
   if(j.export){ const e=j.export;
     h+='<div class="card"><h3 style="margin-top:0">Cấu hình tối ưu — sinh từ chính các vấn đề trên</h3>';
     for(const w of e.why) h+='<div class="tip">'+esc(w)+'</div>';
+    if(e.guide&&e.guide.length){
+      h+='<div style="margin-top:14px;border-top:1px solid rgba(255,255,255,.12);padding-top:12px">'
+       +'<div style="font-weight:800;font-size:14px;margin-bottom:4px">📋 Chỉnh ở đâu trong Bambu Studio — đọc trước khi xuất</div>'
+       +'<div class="mut" style="font-size:12px;margin-bottom:10px">Bật <b>Advanced</b> (góc trên phần Process) mới thấy đủ ô. Mỗi dòng = 1 ô trong Studio: <b>Tab › mục › tên tiếng Anh = giá trị</b>.</div>';
+      const tabvi={Quality:"Quality (Chất lượng)",Strength:"Strength (Độ bền)",Speed:"Speed (Tốc độ)",Support:"Support (Đỡ)",Others:"Others (Khác)"};
+      for(const g of e.guide){
+        h+='<div style="margin:8px 0 4px;font-weight:700;color:#38bdf8">'+esc(tabvi[g.tab]||g.tab)+'</div>'
+         +'<table style="width:100%;font-size:13px"><tr><th style="text-align:left">Mục</th><th style="text-align:left">Thông số (EN)</th><th style="text-align:right">Giá trị</th></tr>';
+        for(const it of g.items)
+          h+='<tr><td class="mut">'+esc(it.section)+'</td><td>'+esc(it.en)+'</td><td style="text-align:right"><b>'+esc(it.value)+'</b></td></tr>';
+        h+='</table>';
+      }
+      h+='</div>';
+    }
     h+='<button class="btn" style="margin-top:10px" onclick="dl()">Tải preset .json (import vào Bambu Studio)</button>'
      +'<div class="mut" style="margin-top:9px;line-height:1.6">✅ <b>Checklist sau khi import</b> (File ▸ Import ▸ Import Configs):<br>'
      +'1️⃣ <b>CHỌN preset ở dropdown Process</b> — import xong Studio KHÔNG tự áp, đây là lỗi số 1.<br>'

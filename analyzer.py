@@ -751,6 +751,87 @@ def preset_name(mode: str, lh: float, model: str = "") -> str:
     return f"{base}-{slug}" if slug else base
 
 
+# Vi tri MOI khoa preset trong giao dien Bambu Studio: (tab, section, nhan tieng Anh).
+# Tab = Quality/Strength/Speed/Support/Others. Muc dich: hub chi ro "chinh o dau" de
+# user hoc + nho, doc duoc TRUOC khi xuat JSON. Nhan tieng Anh = nguyen van tren UI 2.x.
+BS_LOC = {
+    "layer_height":                   ("Quality",  "Layer height",       "Layer height"),
+    "initial_layer_print_height":     ("Quality",  "Layer height",       "Initial layer height"),
+    "top_surface_line_width":         ("Quality",  "Line width",         "Top surface"),
+    "seam_position":                  ("Quality",  "Seam",               "Seam position"),
+    "seam_slope_type":                ("Quality",  "Seam",               "Scarf seam type"),
+    "seam_gap":                       ("Quality",  "Seam",               "Seam gap"),
+    "resolution":                     ("Quality",  "Precision",          "Resolution"),
+    "enable_arc_fitting":             ("Quality",  "Precision",          "Arc fitting"),
+    "ironing_type":                   ("Quality",  "Ironing",            "Ironing Type"),
+    "wall_generator":                 ("Quality",  "Wall generator",     "Wall generator"),
+    "wall_sequence":                  ("Quality",  "Advanced",           "Order of walls"),
+    "wall_loops":                     ("Strength", "Walls",              "Wall loops"),
+    "top_shell_layers":               ("Strength", "Top/bottom shells",  "Top shell layers"),
+    "top_shell_thickness":            ("Strength", "Top/bottom shells",  "Top shell thickness"),
+    "bottom_shell_layers":            ("Strength", "Top/bottom shells",  "Bottom shell layers"),
+    "top_surface_pattern":            ("Strength", "Top/bottom shells",  "Top surface pattern"),
+    "sparse_infill_density":          ("Strength", "Sparse infill",      "Sparse infill density"),
+    "sparse_infill_pattern":          ("Strength", "Sparse infill",      "Sparse infill pattern"),
+    "infill_wall_overlap":            ("Strength", "Advanced",           "Infill/Wall overlap"),
+    "outer_wall_speed":               ("Speed",    "Other layers speed", "Outer wall"),
+    "inner_wall_speed":               ("Speed",    "Other layers speed", "Inner wall"),
+    "sparse_infill_speed":            ("Speed",    "Other layers speed", "Sparse infill"),
+    "internal_solid_infill_speed":    ("Speed",    "Other layers speed", "Internal solid infill"),
+    "top_surface_speed":              ("Speed",    "Other layers speed", "Top surface"),
+    "initial_layer_speed":            ("Speed",    "Initial layer speed","Initial layer"),
+    "enable_support":                 ("Support",  "Support",            "Enable support"),
+    "support_type":                   ("Support",  "Support",            "Type"),
+    "support_style":                  ("Support",  "Support",            "Style"),
+    "support_threshold_angle":        ("Support",  "Support",            "Threshold angle"),
+    "support_on_build_plate_only":    ("Support",  "Support",            "On build plate only"),
+    "support_interface_filament":     ("Support",  "Support filament",   "Support/raft interface"),
+    "support_top_z_distance":         ("Support",  "Advanced",           "Top Z distance"),
+    "support_bottom_z_distance":      ("Support",  "Advanced",           "Bottom Z distance"),
+    "support_interface_spacing":      ("Support",  "Advanced",           "Top interface spacing"),
+    "support_interface_pattern":      ("Support",  "Advanced",           "Interface pattern"),
+    "independent_support_layer_height": ("Support","Advanced",           "Independent support layer height"),
+    "brim_type":                      ("Others",   "Bed adhesion",       "Brim type"),
+    "brim_width":                     ("Others",   "Bed adhesion",       "Brim width"),
+    "skirt_loops":                    ("Others",   "Bed adhesion",       "Skirt loops"),
+    # draft_shield: co trong PrintConfig nhung dong UI bi comment-out o MOI ban Tab.cpp
+    # -> user KHONG chinh duoc tren giao dien, CHI set qua preset JSON (hub tu ghi).
+    "draft_shield":                   ("Others",   "Bed adhesion (ẩn — chỉ preset)", "Draft shield"),
+}
+TAB_ORDER = ("Quality", "Strength", "Speed", "Support", "Others")
+
+
+def config_guide(preset: dict) -> list:
+    """Nhom cac khoa preset theo TAB Bambu Studio, kem nhan tieng Anh + gia tri.
+
+    De web hien 'clone' tung muc cau hinh giong cac tab trong Studio — user doc
+    va biet chinh o dau TRUOC khi xuat JSON. Bo qua khoa ky thuat (from/inherits/
+    name/version/extruder) khong phai thong so in.
+    """
+    skip = {"from", "inherits", "name", "print_settings_id", "version",
+            "print_extruder_id", "print_extruder_variant"}
+    groups = {t: [] for t in TAB_ORDER}
+    extra = []
+    for k, v in preset.items():
+        if k in skip:
+            continue
+        val = v[0] if isinstance(v, list) else v
+        loc = BS_LOC.get(k)
+        if loc:
+            tab, section, en = loc
+            groups[tab].append({"key": k, "en": en, "section": section, "value": str(val)})
+        else:
+            extra.append({"key": k, "en": k, "section": "Khác", "value": str(val)})
+    out = []
+    for tab in TAB_ORDER:
+        items = sorted(groups[tab], key=lambda x: x["section"])
+        if items:
+            out.append({"tab": tab, "items": items})
+    if extra:
+        out.append({"tab": "Khác (chưa map)", "items": extra})
+    return out
+
+
 def make_preset(r: dict, name: str = "OPT", mode: str = "balanced") -> dict:
     """Sinh preset process .json TU CHINH cac van de analyzer tim ra, THEO MUC TIEU.
 
@@ -1107,6 +1188,25 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced") -> dict:
         p["sparse_infill_pattern"] = "adaptivecubic"
         why.append(f"Ruột Adaptive Cubic {M['infill']}: dày ở gần vỏ, thưa ở giữa → nhanh + ít nhựa.")
 
+    # 8b) INFILL THEO KHOI DAC / MONG — infill chi la LOI, thanh + vo moi ganh luc chinh
+    #     (Sandwich Panel Theory, Hubs). Do "khoi" bang kich thuoc nho nhat + ti le mong:
+    #       - Chi tiet MONG/nho (thanh chiem phan lon) -> infill gan nhu vo nghia, giu thap.
+    #       - Khoi DAC lon -> infill la loi chiu luc; van giu thap vi thanh sandwich ganh,
+    #         chi tang tay khi chiu luc nang. Bambu auto doi vung ruot <15mm2 thanh dac.
+    dims_i = m.get("dims") or []
+    min_dim = min([d for d in dims_i if d], default=0)
+    thin_frac_i = (r.get("thin") or {}).get("thin_frac", 0)
+    if thin_frac_i >= 0.15 or (min_dim and min_dim < 12):
+        why.append(f"Ruột giữ {M['infill']} (KHÔNG cần cao): chi tiết mỏng/nhỏ (cạnh nhỏ nhất "
+                   f"{min_dim:.0f}mm, {int(thin_frac_i*100)}% bề mặt là thành) → thành + vỏ đã "
+                   f"gánh gần hết lực, tăng infill chỉ tốn nhựa + thời gian mà không chắc thêm "
+                   f"(Sandwich Panel Theory). Muốn chắc hơn: tăng Wall loops, đừng tăng infill.")
+    else:
+        why.append(f"Ruột {M['infill']} cho khối đặc (cạnh nhỏ nhất {min_dim:.0f}mm): đây là lõi — "
+                   f"thành sandwich vẫn gánh lực chính nên {M['infill']} là đủ cho vật trang trí/"
+                   f"thường. CHỊU LỰC NẶNG (bản lề, giá đỡ tải): tự nâng Sparse infill density lên "
+                   f"15–25% trong tab Strength; Bambu tự biến vùng ruột <15mm² thành đặc sẵn.")
+
     # 9) IRONING — chi khi co mat phang tren LON va uu tien dep
     top_flat = fa.get("top_flat_pct", 0)
     if mode == "quality" and top_flat >= 8:
@@ -1140,7 +1240,8 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced") -> dict:
                    f"(+{vl['extra_pct']}%). Server tự gỡ khi slice — không nhét được vào preset "
                    f"vì nó gắn theo vật thể trong .3mf.")
 
-    return {"preset": p, "why": why, "mode": mode, "mode_label": M["label"]}
+    return {"preset": p, "why": why, "mode": mode, "mode_label": M["label"],
+            "guide": config_guide(p)}
 
 
 def analyze(path: str, mode: str = "balanced", ams: list | None = None,
