@@ -1728,9 +1728,9 @@ function render(j){
       const tabvi={Quality:"Quality (Chất lượng)",Strength:"Strength (Độ bền)",Speed:"Speed (Tốc độ)",Support:"Support (Đỡ)",Others:"Others (Khác)"};
       for(const g of e.guide){
         h+='<div style="margin:8px 0 4px;font-weight:700;color:#38bdf8">'+esc(tabvi[g.tab]||g.tab)+'</div>'
-         +'<table style="width:100%;font-size:13px"><tr><th style="text-align:left">Mục</th><th style="text-align:left">Thông số (EN)</th><th style="text-align:right">Giá trị</th></tr>';
+         +'<table style="width:100%;font-size:13px"><tr><th style="text-align:left">Mục</th><th style="text-align:left">Thông số (EN)</th><th style="text-align:right">Giá trị</th><th style="text-align:left">Vì sao (theo số liệu model)</th></tr>';
         for(const it of g.items)
-          h+='<tr><td class="mut">'+esc(it.section)+'</td><td>'+esc(it.en)+'</td><td style="text-align:right"><b>'+esc(it.value)+'</b></td></tr>';
+          h+='<tr><td class="mut" style="vertical-align:top">'+esc(it.section)+'</td><td style="vertical-align:top">'+esc(it.en)+'</td><td style="text-align:right;vertical-align:top"><b>'+esc(it.value)+'</b></td><td class="mut" style="font-size:12px;line-height:1.5">'+esc(it.why||'')+'</td></tr>';
         h+='</table>';
       }
       h+='</div>';

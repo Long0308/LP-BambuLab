@@ -791,23 +791,104 @@ BS_LOC = {
     "support_interface_spacing":      ("Support",  "Advanced",           "Top interface spacing"),
     "support_interface_pattern":      ("Support",  "Advanced",           "Interface pattern"),
     "independent_support_layer_height": ("Support","Advanced",           "Independent support layer height"),
-    "brim_type":                      ("Others",   "Bed adhesion",       "Brim type"),
-    "brim_width":                     ("Others",   "Bed adhesion",       "Brim width"),
-    "skirt_loops":                    ("Others",   "Bed adhesion",       "Skirt loops"),
+    "brim_type":                      ("Others",   "Bed adhension",       "Brim type"),
+    "brim_width":                     ("Others",   "Bed adhension",       "Brim width"),
+    "skirt_loops":                    ("Others",   "Bed adhension",       "Skirt loops"),
     # draft_shield: co trong PrintConfig nhung dong UI bi comment-out o MOI ban Tab.cpp
     # -> user KHONG chinh duoc tren giao dien, CHI set qua preset JSON (hub tu ghi).
-    "draft_shield":                   ("Others",   "Bed adhesion (ẩn — chỉ preset)", "Draft shield"),
+    "draft_shield":                   ("Others",   "Bed adhension (ẩn — chỉ preset)", "Draft shield"),
 }
 TAB_ORDER = ("Quality", "Strength", "Speed", "Support", "Others")
 
 
-def config_guide(preset: dict) -> list:
-    """Nhom cac khoa preset theo TAB Bambu Studio, kem nhan tieng Anh + gia tri.
+def _guide_reason(key: str, val: str, r: dict, lh: float = 0.2) -> str:
+    """Giai thich NGAN cho tung dong guide — TU CONG SINH theo so lieu model.
+
+    Khong phai text co dinh: rut tu mesh/faces/flow/bridges cua chinh file dang xem.
+    """
+    m = r.get("mesh") or {}
+    fa = r.get("faces") or {}
+    fl = r.get("flow") or {}
+    br = r.get("bridges") or {}
+    h = m.get("height") or 0
+    bed = m.get("bed_cm2") or 0
+    ov = m.get("overhang_cm2") or 0
+    bridge = br.get("bridge_cm2") or 0
+    eff = max(0.0, ov - bridge)
+    flat = int((fa.get("flat_ratio") or 0) * 100)
+    nz = fl.get("nozzle") or 0.4
+    R = {
+        "layer_height": lambda: f"{val}mm → ~{int(h/float(val))} lớp" if h and float(val) else f"{val}mm theo chế độ",
+        "initial_layer_print_height": lambda: f"lớp đầu dày {val}mm: đáy nhỏ/tỉ lệ lật cao → bám chắc hơn",
+        "top_surface_line_width": lambda: f"hẹp {val} (mặc định {round(nz*1.05,2)}) → nhét kín khe, hết lấm tấm/vân thưa mặt trên",
+        "seam_position": lambda: (f"model dạng hộp (phẳng {flat}%, {fa.get('n_dirs')} hướng) → dồn mối nối ra sau"
+                                  if val == "back" else f"mặt cong (phẳng {flat}%) → rải đều + scarf"),
+        "seam_slope_type": lambda: "vát mối nối trên mặt cong" if val == "all" else "không vát (model góc cạnh)",
+        "seam_gap": lambda: "10% khi Flow/PA đã chuẩn (wiki Bambu)",
+        "resolution": lambda: f"{val}mm mịn hơn mặc định 0.01 → biên cong nét hơn",
+        "enable_arc_fitting": lambda: "bật → biên cong chạy G2/G3 liền mạch, hết facet",
+        "ironing_type": lambda: (f"ủi mặt trên: {fa.get('top_flat_cm2')}cm² phẳng hướng lên"
+                                 if val == "top" else "không ủi (mặt phẳng trên nhỏ / không phải chế độ Đẹp)"),
+        "wall_generator": lambda: "Arachne: đường biến thiên độ rộng → nhét góc nhọn, chi tiết nhỏ",
+        "wall_sequence": lambda: ("≥3 thành → sandwich: ngoài kẹp giữa (seam gọn + kích thước chuẩn)"
+                                  if "inner-outer-inner" in val else "2 thành → inner/outer"),
+        "wall_loops": lambda: f"{val} thành theo chế độ",
+        "top_shell_layers": lambda: f"{val} lớp ≈ {float(val)*lh:.2f}mm ≥1mm → chống pillowing/lỗ mặt trên",
+        "top_shell_thickness": lambda: "chốt chặn 1mm: slicer tự thêm lớp nếu mỏng hơn",
+        "bottom_shell_layers": lambda: f"{val} lớp đáy ≈ 0.8mm kín đáy",
+        "top_surface_pattern": lambda: "monotonic line: đường song song đều → mặt trên mịn nhất",
+        "sparse_infill_density": lambda: f"{val} theo chế độ (đủ đỡ mặt trên, ít nhựa)",
+        "sparse_infill_pattern": lambda: ("Gyroid: đều mọi hướng, đẹp nếu lộ" if val == "gyroid"
+                                          else "Adaptive Cubic: dày gần vỏ, thưa giữa → nhanh"),
+        "infill_wall_overlap": lambda: "25% chống hở giữa ruột và vỏ (wiki)",
+        "outer_wall_speed": lambda: f"{val} mm/s: chậm hơn để mặt ngoài mịn",
+        "inner_wall_speed": lambda: (f"{val} mm/s ≈ trần lưu lượng {fl.get('v_max')} (nhựa {fl.get('mvs')}mm³/s ở layer {lh}mm)"
+                                     if fl.get('v_max') else f"{val} mm/s"),
+        "sparse_infill_speed": lambda: f"{val} mm/s (bám trần lưu lượng)",
+        "internal_solid_infill_speed": lambda: f"{val} mm/s (bám trần lưu lượng)",
+        "top_surface_speed": lambda: f"{val} mm/s: chậm ở mặt trên cho mịn, kín khe",
+        "initial_layer_speed": lambda: "50 mm/s chuẩn A1 (PEI nhám + input shaping); hạ xuống chỉ lâu hơn",
+        "enable_support": lambda: (f"{eff:.1f}cm² hẫng cần đỡ thật (đã trừ {bridge}cm² khe bridge được)" if val == "1"
+                                   else f"chỉ {eff:.1f}cm² hẫng thật sau khi trừ khe → bắc cầu được, khỏi support"),
+        "support_type": lambda: (f"model phẳng {flat}% → giàn giáo NORMAL đỡ đều" if "normal" in val
+                                 else "model cong/chi tiết → cây TREE chạm điểm, ít sẹo"),
+        "support_style": lambda: (f"tree_strong: cao {h:.0f}mm nhánh to khỏi lắc" if val == "tree_strong"
+                                  else val),
+        "support_threshold_angle": lambda: f"{val}°: dốc hơn góc này tự đỡ ({'ABS/ASA nguội chậm nâng 40' if val=='40' else 'default Bambu, PrintConfig.cpp'})",
+        "support_on_build_plate_only": lambda: "chỉ chống từ bàn, không tì lên thân (khỏi seo)",
+        "support_interface_filament": lambda: f"nhựa khe {val} làm lớp tiếp giáp (dễ bóc)",
+        "support_top_z_distance": lambda: ("0: khác nhựa (PLA-PETG không dính) → khít vẫn bóc, mặt dưới bóng"
+                                           if val == "0" else f"{val}mm: cùng nhựa phải chừa khe mới bóc được"),
+        "support_bottom_z_distance": lambda: f"{val}mm khe đáy support",
+        "support_interface_spacing": lambda: ("0: interface đặc (khác nhựa)" if val == "0" else f"{val}mm giãn cách interface"),
+        "support_interface_pattern": lambda: "Rectilinear Interlaced: dễ tách",
+        "independent_support_layer_height": lambda: "0: support cùng layer height với model",
+        "brim_type": lambda: ("không brim: đáy rộng, tỉ lệ lật an toàn" if val == "no_brim"
+                              else f"brim viền ngoài neo mép (đáy {bed}cm²)"),
+        "brim_width": lambda: (f"{val}mm neo mép (giá đo thật ~+{'3.4' if val=='8' else '1.9'}% thời gian)"
+                               if val != "0" else "0: không cần brim"),
+        "skirt_loops": lambda: ("0: A1 tự mồi bằng purge line" if val == "0" else f"{val} vòng skirt (đi kèm draft shield chắn gió)"),
+        "draft_shield": lambda: "tường chắn gió (ABS/ASA co ngót) — Bambu ẩn UI, chỉ preset set được",
+    }
+    fn = R.get(key)
+    try:
+        return fn() if fn else ""
+    except Exception:      # noqa: BLE001 — reason chi de doc, loi thi bo trong
+        return ""
+
+
+def config_guide(preset: dict, r: dict | None = None) -> list:
+    """Nhom cac khoa preset theo TAB Bambu Studio, kem nhan tieng Anh + gia tri
+    + GIAI THICH tu cong sinh theo so lieu (cot 'why').
 
     De web hien 'clone' tung muc cau hinh giong cac tab trong Studio — user doc
-    va biet chinh o dau TRUOC khi xuat JSON. Bo qua khoa ky thuat (from/inherits/
-    name/version/extruder) khong phai thong so in.
+    va biet chinh o dau + TAI SAO TRUOC khi xuat JSON. Bo qua khoa ky thuat.
     """
+    r = r or {}
+    try:
+        lh = float(preset.get("layer_height") or 0.2)
+    except (TypeError, ValueError):
+        lh = 0.2
     skip = {"from", "inherits", "name", "print_settings_id", "version",
             "print_extruder_id", "print_extruder_variant"}
     groups = {t: [] for t in TAB_ORDER}
@@ -816,12 +897,13 @@ def config_guide(preset: dict) -> list:
         if k in skip:
             continue
         val = v[0] if isinstance(v, list) else v
+        why = _guide_reason(k, str(val), r, lh)
         loc = BS_LOC.get(k)
         if loc:
             tab, section, en = loc
-            groups[tab].append({"key": k, "en": en, "section": section, "value": str(val)})
+            groups[tab].append({"key": k, "en": en, "section": section, "value": str(val), "why": why})
         else:
-            extra.append({"key": k, "en": k, "section": "Khác", "value": str(val)})
+            extra.append({"key": k, "en": k, "section": "Khác", "value": str(val), "why": why})
     out = []
     for tab in TAB_ORDER:
         items = sorted(groups[tab], key=lambda x: x["section"])
@@ -832,7 +914,8 @@ def config_guide(preset: dict) -> list:
     return out
 
 
-def make_preset(r: dict, name: str = "OPT", mode: str = "balanced") -> dict:
+def make_preset(r: dict, name: str = "OPT", mode: str = "balanced",
+                emit_tips: bool = True) -> dict:
     """Sinh preset process .json TU CHINH cac van de analyzer tim ra, THEO MUC TIEU.
 
     Khong bia so: moi gia tri deu bat nguon tu 1 phat hien cu the hoac tu mode.
@@ -883,9 +966,11 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced") -> dict:
         p["inner_wall_speed"] = [str(safe)]
         p["sparse_infill_speed"] = [str(safe)]
         p["internal_solid_infill_speed"] = [str(safe)]
-        outer = M["outer"] or min(safe, 180)
+        # Thanh ngoai + mat tren CUNG phai <= tran (safe) — neu khong la so ao het,
+        # dung mat NHIN THAY nhieu nhat. Truoc day set cung 150/110 co the vuot vmax.
+        outer = min(M["outer"] or min(safe, 180), safe)
         p["outer_wall_speed"] = [str(outer)]
-        p["top_surface_speed"] = [str(min(outer, 150))]
+        p["top_surface_speed"] = [str(min(outer, 150, safe))]
         why.append(f"Tốc độ ≤{safe} mm/s: ở layer {lh}mm, nhựa {mvs} mm³/s chỉ cho tối đa "
                    f"{vmax} mm/s. Đặt cao hơn là số ảo — máy tự hãm."
                    + (f" Thành ngoài {outer} để mặt mịn." if M["outer"] else
@@ -894,7 +979,10 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced") -> dict:
     # Nhua than in — dung cho threshold support (3), interface (3b), brim/draft (4)
     ft = [str(t).upper() for t in ((r.get("config") or {}).get("filament_type") or [])]
     body = ft[0] if ft else ""
-    warpy = body.split()[0] in ("ABS", "ASA") if body else False
+    # filament_type Bambu KHONG co space, dung DAU GACH: ABS-GF, ASA-CF, PLA-CF...
+    # -> tach theo "-" de bat ca dong soi gia cuong (de venh nhat tren A1 khung ho).
+    fam = body.split("-")[0] if body else ""
+    warpy = fam in ("ABS", "ASA")
 
     # 3) SUPPORT — tu nhan dinh theo dien tich hang THAT, khong theo cam tinh
     ov = m.get("overhang_pct", 0)
@@ -954,7 +1042,7 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced") -> dict:
     #     nhau ve hoa hoc -> interface bang nhua doi ung thi Z distance = 0 van boc roi.
     #     Luu y: cac o nay chi HIEN trong Studio khi bat toggle Advanced (gia tri van an).
     sup_on = p["enable_support"] == "1"
-    partner = {"PLA": "PETG", "PETG": "PLA"}.get(body.split()[0] if body else "")
+    partner = {"PLA": "PETG", "PETG": "PLA"}.get(fam)
     # AMS Lite chi co 4 KHAY THAT — file co the khai bao 5+ filament nhung slot >4
     # khong ton tai tren may -> chi tim nhua doi ung trong slot 1-4.
     slot = next((i + 1 for i, t in enumerate(ft[:4]) if partner and t.startswith(partner)), 0)
@@ -987,8 +1075,8 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced") -> dict:
                    f"interface.{ams_chk}")
     elif ft:
         # FALLBACK cung vat lieu: khong co nhua doi ung -> interface van la nhua than
-        # nhung tro ve DUNG slot than in + khe ho an toan 0.2 (0 la dinh chet).
-        body_slot = ft.index(body) + 1
+        # (slot 1 — than in luon la filament dau tien) + khe ho an toan 0.2 (0 la dinh chet).
+        body_slot = 1
         p["support_interface_filament"] = str(body_slot)
         p["support_top_z_distance"] = "0.2"
         p["support_bottom_z_distance"] = "0.2"
@@ -1105,11 +1193,12 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced") -> dict:
                f"lỗ li ti / vân thưa — đường mảnh nhét kín khe ở khúc queo và đầu mút, kết hợp "
                f"monotonic line + Arachne (đã bật). Nguồn: đồng thuận forum Bambu (thread top "
                f"surface tiny holes). Root cause thật là chưa hiệu chỉnh Flow/PA — xem tip.")
-    r["tips"].append(
-        "🔧 Mặt trên còn lấm tấm sau khi in? Nguyên nhân GỐC thường là dòng chảy chưa chuẩn — "
-        "chạy Calibration ▸ Flow Dynamics (PA) + Flow Rate cho ĐÚNG cuộn nhựa đang dùng (mỗi "
-        "cuộn/màu một giá trị). Preset chỉ giảm được lỗ; calib mới hết hẳn (forum Bambu). "
-        "Muốn phẳng bóng tuyệt đối: bật Ironing = 'Top surfaces' (đánh đổi thêm thời gian).")
+    if emit_tips:      # chi emit o lan EXPORT chinh — make_preset goi 4 lan (export+3 mode)
+        r["tips"].append(
+            "🔧 Mặt trên còn lấm tấm sau khi in? Nguyên nhân GỐC thường là dòng chảy chưa chuẩn — "
+            "chạy Calibration ▸ Flow Dynamics (PA) + Flow Rate cho ĐÚNG cuộn nhựa đang dùng (mỗi "
+            "cuộn/màu một giá trị). Preset chỉ giảm được lỗ; calib mới hết hẳn (forum Bambu). "
+            "Muốn phẳng bóng tuyệt đối: bật Ironing = 'Top surfaces' (đánh đổi thêm thời gian).")
 
     # 6) SEAM — quyet dinh theo BANG TRA wiki Bambu Studio (wiki.bambulab.com/.../Seam),
     #    khong code cung theo cam tinh. Z-seam la diem bat dau moi vong in tren TUONG
@@ -1147,6 +1236,12 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced") -> dict:
                    f"(phẳng {int(flat_ratio*100)}%, {n_dirs or 'rải đều'} hướng đứng) → theo đúng "
                    f"cơ chế 'scarf application angle threshold' của Bambu: tán vát mối nối "
                    f"trên mặt cong. Muốn giấu hẳn 1 mặt: dùng Seam painting.")
+        if emit_tips:      # scarf o preset process CO THE bi filament preset ghi de am tham
+            r["tips"].append(
+                "⚠️ Scarf (vát seam) vừa bật ở process — NHƯNG nếu filament preset đang chọn có "
+                "'Override filament scarf seam setting' (tab Filament ▸ Advanced) thì nó THẮNG, "
+                "scarf bị tắt âm thầm. Kiểm tra ô đó = tắt, hoặc để 'Scarf seam type' của filament "
+                "khớp với process.")
 
     # 6b) MAT CONG MUOT — arc fitting mac dinh TAT trong Bambu (PrintConfig default 0):
     #     bat len thi bien cong xuat G2/G3 arc lien mach thay vi da giac gay khuc (lo
@@ -1230,7 +1325,10 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced") -> dict:
                    f"{ratio:.1f} — lớp dày hơn nuốt độ vênh bàn + bead bè rộng hơn → bám chắc "
                    f"hơn mà KHÔNG chậm đi. Tốc độ giữ 50 mm/s chuẩn A1.")
     else:
-        why.append(f"Lớp đầu giữ 50 mm/s / 0.2mm (chuẩn A1): đáy {bed} cm² bám thoải mái trên "
+        # Set TUONG MINH = layer height chinh (khong de base preset ke thua quyet dinh)
+        # -> JSON xuat ra khop dung voi cau why, khong lech base "0.28 Extra Draft"...
+        p["initial_layer_print_height"] = f"{lh:g}"
+        why.append(f"Lớp đầu giữ 50 mm/s / {lh:g}mm (chuẩn A1): đáy {bed} cm² bám thoải mái trên "
                    f"bàn PEI nhám. 25 mm/s là số cũ cho máy bàn kính — chỉ chậm thêm chứ "
                    f"không bám thêm.")
 
@@ -1241,7 +1339,7 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced") -> dict:
                    f"vì nó gắn theo vật thể trong .3mf.")
 
     return {"preset": p, "why": why, "mode": mode, "mode_label": M["label"],
-            "guide": config_guide(p)}
+            "guide": config_guide(p, r)}
 
 
 def analyze(path: str, mode: str = "balanced", ams: list | None = None,
@@ -1254,7 +1352,9 @@ def analyze(path: str, mode: str = "balanced", ams: list | None = None,
     import os as _os
     nm = _os.path.splitext(_os.path.basename(path))[0][:20]
     r["export"] = make_preset(r, nm, mode)
-    r["presets"] = {k: make_preset(r, nm, k) for k in MODES}
+    # Build preset cho 3 mode (cho E2E/so sanh) NHUNG khong emit tips — tranh trung
+    # tip 4 lan vao r["tips"] chung (bug trung du lieu).
+    r["presets"] = {k: make_preset(r, nm, k, emit_tips=False) for k in MODES}
     return r
 
 
