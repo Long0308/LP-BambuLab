@@ -1574,6 +1574,7 @@ function render(j){
 
   if(j.rotations&&j.rotations.length){
     h+='<div class="card"><h3 style="margin-top:0">Thử xoay 2 trục X + Y — tìm mặt úp tốt nhất</h3>'
+     +'<div class="mut" style="font-size:12px;margin-bottom:8px">Tiêu chí xếp hạng: ① overhang nhỏ nhất (ít support, ít xấu mặt) → ② diện tích tiếp xúc bàn lớn nhất (bám chắc, chống warp) → ③ chiều cao thấp nhất (ít lớp, in nhanh). Cùng nguyên lý thuật toán Tweaker (Schranz 2016, Salzburg Research — chính là plugin Auto-Orientation của Cura): overhang là điểm phạt, diện tích đáy + chu vi đáy là điểm thưởng.</div>'
      +'<table><tr><th>Hướng</th><th>Overhang</th><th>Bám bàn</th><th>Cao</th><th>Dùng được?</th></tr>';
     for(const r of j.rotations){
       const isCur=(r.axis==="X"||r.axis==null)&&(r.angle===0||r.angle_x===0);
