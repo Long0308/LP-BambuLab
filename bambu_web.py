@@ -32,6 +32,7 @@ import printer_config
 import filament_store
 import filament_ftp
 import slicer_cli
+import analyzer
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PRINTER_NAME = "LongPham A1-3"
@@ -583,6 +584,10 @@ PAGE = r"""<!doctype html><html lang="vi"><head>
  .cb.on{background:linear-gradient(90deg,#065f46,#16a34a);color:#eafff3}
  .cb.off{background:linear-gradient(90deg,#7f1d1d,#dc2626);color:#fff}
  .cb.wait{background:#1e2635;color:#8ea0b8}
+ .chips{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px;align-items:center}
+ .chip{display:flex;align-items:center;gap:6px;background:#0c111a;border:1px solid var(--line);
+   border-radius:99px;padding:4px 10px 4px 5px;font-size:11.5px;font-weight:700}
+ .chip i{width:15px;height:15px;border-radius:50%;border:1px solid rgba(255,255,255,.25);display:block}
  .up{padding:13px;border-radius:14px;background:linear-gradient(160deg,var(--card2),var(--card1));
    box-shadow:var(--sh),var(--hl);margin:2px 0 12px}
  .ubtn{width:100%;background:linear-gradient(160deg,#38bdf8,#0284c7);color:#fff;border:none;border-radius:12px;
@@ -592,7 +597,7 @@ PAGE = r"""<!doctype html><html lang="vi"><head>
  .ubar{height:7px;border-radius:99px;background:#0c111a;border:1px solid var(--line);margin-top:10px;overflow:hidden;display:none}
  .ubar > i{display:block;height:100%;width:0;background:linear-gradient(90deg,#38bdf8,#22c55e);transition:width .2s}
  .uhint{font-size:11.5px;color:var(--mut);margin-top:8px}
- .linkrow{display:grid;grid-template-columns:1fr 1fr;gap:11px;margin:2px 0 12px}
+ .linkrow{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px;margin:2px 0 12px}
  .infolink{display:flex;align-items:center;justify-content:center;gap:7px;text-align:center;
    min-height:52px;padding:10px;border-radius:14px;background:linear-gradient(160deg,var(--card2),var(--card1));
    color:var(--cyan);font-weight:700;font-size:13px;text-decoration:none;box-shadow:var(--sh),var(--hl)}
@@ -711,7 +716,10 @@ PAGE = r"""<!doctype html><html lang="vi"><head>
 <div class="linkrow">
   <a class="infolink" href="/info"><svg viewBox="0 0 24 24"><path d="M11 7h2v2h-2zM11 11h2v6h-2zM12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16z"/></svg> Thông tin G-code</a>
   <a class="infolink" href="/files"><svg viewBox="0 0 24 24"><path d="M10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2z"/></svg> File trên máy · chọn in</a>
+  <a class="infolink" href="/analyze"><svg viewBox="0 0 24 24"><path d="M3 3v18h18v-2H5V3H3zm4 12h2v-5H7v5zm4 0h2V7h-2v8zm4 0h2v-3h-2v3z"/></svg> Phân tích .3mf / .stl</a>
 </div>
+
+<div class="chips" id="chips"></div>
 
 <div class="up" id="up">
   <input type="file" id="fpick" accept=".3mf,.stl" style="display:none" onchange="pick()">
@@ -939,6 +947,12 @@ async function tick(){
   const pr=document.getElementById("printer");
   pr.classList.toggle("run",printing);
   updateHero(s.has_thumb, d.gcode_file);
+  // Mau nhua THUC SU dung trong ban in (tu slice_info cua file dang in)
+  const fils=s.job_filaments||[];
+  document.getElementById("chips").innerHTML = fils.length
+    ? fils.map(f=>'<span class="chip"><i style="background:'+(f.color||"#888")+'"></i>'
+        +(f.type||"?")+' · '+(f.used_g||0)+' g</span>').join("")
+    : "";
   // buttons
   const paused=(gc==="PAUSE");
   document.getElementById("bPause").disabled=!printing;
@@ -1298,6 +1312,162 @@ load();
 </script></body></html>"""
 
 
+ANALYZE_PAGE = r"""<!doctype html><html lang="vi"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phân tích file — Bambu A1</title>
+<style>
+ :root{--bg0:#080b10;--bg1:#0e131b;--card1:#171d28;--card2:#1e2635;--line:#28324a;
+   --txt:#eef3fb;--mut:#8ea0b8;--acc:#22c55e;--cyan:#38bdf8;--amb:#f59e0b;--red:#ef4444;
+   --sh:0 16px 30px -16px rgba(0,0,0,.85);--hl:inset 0 1px 0 rgba(255,255,255,.06)}
+ *{box-sizing:border-box}
+ body{margin:0;background:linear-gradient(180deg,var(--bg1),var(--bg0));color:var(--txt);
+   font-family:-apple-system,"Segoe UI",Roboto,sans-serif;padding:14px 14px 40px;max-width:680px;margin:auto}
+ a.back{color:var(--cyan);text-decoration:none;font-weight:700;font-size:14px;display:inline-flex;align-items:center;gap:6px;margin-bottom:10px}
+ h2{font-size:18px;margin:12px 2px 6px} h3{font-size:14px;margin:18px 2px 8px;color:var(--cyan)}
+ .card{padding:14px;border-radius:14px;background:linear-gradient(160deg,var(--card2),var(--card1));
+   box-shadow:var(--sh),var(--hl);margin:10px 0}
+ .btn{width:100%;background:linear-gradient(160deg,#38bdf8,#0284c7);color:#fff;border:none;border-radius:12px;
+   padding:14px;font-weight:800;font-size:14px;cursor:pointer}
+ .btn:disabled{opacity:.45;background:#334155;cursor:not-allowed}
+ .btn.go{background:linear-gradient(160deg,#34d399,#16a34a);margin-top:10px}
+ .grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:4px}
+ .kv{background:#0c111a;border:1px solid var(--line);border-radius:10px;padding:9px 11px}
+ .kv b{display:block;font-size:16px;margin-top:2px}
+ .kv span{font-size:11px;color:var(--mut)}
+ .iss,.tip{border-radius:10px;padding:10px 12px;margin:7px 0;font-size:13px;line-height:1.5}
+ .iss{background:rgba(239,68,68,.12);border-left:3px solid var(--red)}
+ .tip{background:rgba(34,197,94,.12);border-left:3px solid var(--acc)}
+ table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:6px}
+ td,th{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left}
+ th{color:var(--mut);font-weight:600}
+ .bad{color:var(--red);font-weight:700} .good{color:var(--acc);font-weight:700}
+ .mut{color:var(--mut);font-size:12px}
+ #toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#0b1220;border:1px solid var(--line);
+   color:#fff;padding:11px 18px;border-radius:12px;opacity:0;transition:opacity .25s;font-size:14px;z-index:50;max-width:90%}
+ #toast.show{opacity:1}
+</style></head><body>
+<a class="back" href="/"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M15 6l-6 6 6 6z"/></svg> Về dashboard</a>
+<h2>Phân tích file in <span class="mut">· .3mf và .stl</span></h2>
+
+<div class="card">
+  <input type="file" id="fp" accept=".3mf,.stl" style="display:none" onchange="go()">
+  <button class="btn" id="bt" onclick="document.getElementById('fp').click()">
+    <span id="lb">Chọn file .3mf / .stl để phân tích</span></button>
+  <div class="mut" style="margin-top:8px">Máy tính phân tích: kích thước · overhang · support · thử xoay ·
+  Variable Layer Height · trần lưu lượng. <b>Chỉ tính toán — không đụng tới máy in.</b></div>
+</div>
+<div id="out"></div>
+<div id="toast"></div>
+<script>
+let FILE=null;
+function toast(m){const t=document.getElementById("toast");t.textContent=m;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),3500);}
+function esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;");}
+async function go(){
+  const inp=document.getElementById("fp"); FILE=inp.files&&inp.files[0]; inp.value="";
+  if(!FILE) return;
+  const bt=document.getElementById("bt"), lb=document.getElementById("lb");
+  bt.disabled=true; lb.textContent="Đang phân tích "+FILE.name+"…";
+  document.getElementById("out").innerHTML="";
+  try{
+    const r=await fetch("/api/analyze?name="+encodeURIComponent(FILE.name),{method:"POST",body:FILE});
+    const j=await r.json();
+    if(!j.ok){ toast("Lỗi: "+(j.msg||r.status)); }
+    else render(j);
+  }catch(e){ toast("Lỗi: "+e); }
+  bt.disabled=false; lb.textContent="Chọn file .3mf / .stl để phân tích";
+}
+function render(j){
+  const m=j.mesh||{}; let h="";
+  h+='<div class="card"><h3 style="margin-top:0">'+esc(j.name)+'</h3>';
+  h+='<div class="grid">'
+    +kv("Kích thước",(m.dims||[]).join(" × ")+" mm")
+    +kv("Số tam giác",(m.triangles||0).toLocaleString())
+    +kv("Mặt hẫng >45°",(m.overhang_pct||0)+"% · "+(m.overhang_cm2||0)+" cm²")
+    +kv("Bám bàn",(m.bed_cm2||0)+" cm²")
+    +'</div>';
+  h+='<div class="mut" style="margin-top:9px">'+(j.sliced?"Đã slice (có G-code)":"File thô — chưa slice")+'</div></div>';
+
+  if(j.issues&&j.issues.length){ h+='<div class="card"><h3 style="margin-top:0">Vấn đề phát hiện</h3>';
+    for(const i of j.issues) h+='<div class="iss">'+esc(i)+'</div>'; h+='</div>'; }
+  if(j.tips&&j.tips.length){ h+='<div class="card"><h3 style="margin-top:0">Khuyến nghị</h3>';
+    for(const t of j.tips) h+='<div class="tip">'+esc(t)+'</div>'; h+='</div>'; }
+
+  if(j.rotations&&j.rotations.length){
+    h+='<div class="card"><h3 style="margin-top:0">Thử xoay quanh trục X</h3>'
+     +'<table><tr><th>Góc</th><th>Overhang</th><th>Bám bàn</th><th>Cao</th><th>Dùng được?</th></tr>';
+    for(const r of j.rotations){
+      const cur=r.angle_x===0?' style="background:rgba(56,189,248,.1)"':'';
+      h+='<tr'+cur+'><td>'+r.angle_x+'°'+(r.angle_x===0?' <span class="mut">(hiện tại)</span>':'')+'</td>'
+       +'<td>'+r.overhang_pct+'%</td><td>'+r.bed_cm2+' cm²</td><td>'+r.height+' mm</td>'
+       +'<td class="'+(r.usable?'good':'bad')+'">'+(r.usable?'OK':'bám bàn quá ít')+'</td></tr>';
+    }
+    h+='</table><div class="mut" style="margin-top:8px">Overhang thấp mà bám bàn ~0 là BẪY: model đứng trên cạnh dao, lớp đầu không bám.</div></div>';
+  }
+
+  if(j.flow){ const f=j.flow; const ov=Object.entries(f.over_ceiling||{});
+    h+='<div class="card"><h3 style="margin-top:0">Trần lưu lượng</h3><table>'
+     +'<tr><td>Nhựa chảy tối đa</td><td><b>'+f.mvs+' mm³/s</b></td></tr>'
+     +'<tr><td>Layer height</td><td>'+f.layer_height+' mm</td></tr>'
+     +'<tr><td>→ Tốc độ tối đa THẬT</td><td class="good"><b>'+f.v_max+' mm/s</b></td></tr></table>';
+    if(ov.length){ h+='<table style="margin-top:8px"><tr><th>Đang đặt</th><th>Thực tế</th></tr>';
+      for(const [k,v] of ov) h+='<tr><td>'+esc(k)+'</td><td class="bad">'+v+' mm/s → máy hãm còn '+f.v_max+'</td></tr>';
+      h+='</table>'; }
+    h+='</div>';
+  }
+  if(j.variable_layer){ const v=j.variable_layer;
+    h+='<div class="card"><h3 style="margin-top:0">Variable Layer Height</h3><table>'
+     +'<tr><td>Mỏng nhất / dày nhất</td><td>'+v.min+' / '+v.max+' mm</td></tr>'
+     +'<tr><td>Trung bình</td><td>'+v.avg+' mm</td></tr>'
+     +'<tr><td>Số lớp thực tế</td><td class="bad"><b>'+v.layers_actual+'</b></td></tr>'
+     +'<tr><td>Nếu để phẳng</td><td class="good"><b>'+v.layers_flat+'</b></td></tr>'
+     +'<tr><td>Cộng thêm</td><td class="bad"><b>+'+v.extra_layers+' lớp (+'+v.extra_pct+'%)</b></td></tr>'
+     +'</table></div>';
+  }
+  if(j.config){ h+='<div class="card"><h3 style="margin-top:0">Cấu hình trong file</h3><table>';
+    for(const [k,v] of Object.entries(j.config)) if(v!==null&&v!==undefined)
+      h+='<tr><td class="mut">'+esc(k)+'</td><td>'+esc(Array.isArray(v)?v.join(", "):v)+'</td></tr>';
+    h+='</table></div>';
+  }
+  if(j.export){ const e=j.export;
+    h+='<div class="card"><h3 style="margin-top:0">Cấu hình tối ưu — sinh từ chính các vấn đề trên</h3>';
+    for(const w of e.why) h+='<div class="tip">'+esc(w)+'</div>';
+    h+='<button class="btn" style="margin-top:10px" onclick="dl()">Tải preset .json (import vào Bambu Studio)</button></div>';
+    window.__preset=e.preset; window.__pname=(j.name||"file").replace(/\.[^.]+$/,"");
+  }
+  h+='<button class="btn go" onclick="slice()">Slice ngay + đẩy xuống máy in</button>'
+   +'<div class="mut" style="margin-top:7px;text-align:center">Gọi Bambu Studio CLI trên máy tính. Lệnh IN vẫn phải bạn bấm ở trang File.</div>';
+  document.getElementById("out").innerHTML=h;
+}
+function kv(k,v){ return '<div class="kv"><span>'+k+'</span><b>'+esc(v)+'</b></div>'; }
+function dl(){
+  const blob=new Blob([JSON.stringify(window.__preset,null,4)],{type:"application/json"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download=window.__pname+"-OPT-process.json";
+  a.click(); URL.revokeObjectURL(a.href);
+  toast("Đã tải preset — Bambu Studio → Process → Import");
+}
+async function slice(){
+  if(!FILE){ toast("Chọn lại file"); return; }
+  const xhr=new XMLHttpRequest();
+  xhr.open("POST","/api/upload?name="+encodeURIComponent(FILE.name));
+  xhr.onload=()=>{ let j={}; try{j=JSON.parse(xhr.responseText);}catch(e){}
+    if(j.ok&&j.queued){ toast("Đang slice trên máy tính…"); poll(); }
+    else if(j.ok){ toast("Đã đẩy xuống máy: "+j.name); }
+    else toast("Lỗi: "+(j.msg||xhr.status)); };
+  xhr.onerror=()=>toast("Mất kết nối");
+  toast("Đang gửi file…"); xhr.send(FILE);
+}
+async function poll(){
+  try{ const j=await (await fetch("/api/upstatus",{cache:"no-store"})).json();
+    if(j.state==="slicing"||j.state==="pushing"){ toast(j.msg||"Đang xử lý…"); setTimeout(poll,3000); return; }
+    if(j.state==="done"){ const s=j.stats||{}; toast("✔ "+j.msg+" — in "+(s.time||"?")+" · "+(s.weight_g||"?")+"g"); }
+    else if(j.state==="error") toast("Lỗi: "+j.msg);
+  }catch(e){ setTimeout(poll,4000); }
+}
+</script></body></html>"""
+
+
 class H(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
@@ -1326,6 +1496,9 @@ class H(BaseHTTPRequestHandler):
             with JOB_LOCK:
                 payload["job_weight"] = JOB["weight"]
                 payload["has_thumb"] = bool(JOB["thumb"])
+                # Mau nhua THUC SU dung trong ban in nay (tu slice_info: color + used_g)
+                info = JOB.get("info") or {}
+                payload["job_filaments"] = (info.get("slice") or {}).get("filaments") or []
             self._send(200, json.dumps(payload), "application/json; charset=utf-8")
         elif path.startswith("/api/filament"):
             self._send(200, json.dumps({"filament": build_filament()}), "application/json; charset=utf-8")
@@ -1382,6 +1555,8 @@ class H(BaseHTTPRequestHandler):
             self._send(200, INFO_PAGE, "text/html; charset=utf-8")
         elif path == "/files":
             self._send(200, FILES_PAGE, "text/html; charset=utf-8")
+        elif path == "/analyze":
+            self._send(200, ANALYZE_PAGE, "text/html; charset=utf-8")
         elif path == "/healthz":
             self._send(200, "ok", "text/plain")
         else:
@@ -1478,7 +1653,46 @@ class H(BaseHTTPRequestHandler):
         self._send(200, json.dumps({"ok": True, "queued": True, "name": name}),
                    "application/json; charset=utf-8")
 
+    def _do_analyze(self):
+        """Phan tich file user gui len — CHI tinh toan, khong dung toi may in."""
+        from urllib.parse import urlparse, parse_qs, unquote
+        raw = unquote(parse_qs(urlparse(self.path).query).get("name", [""])[0])
+        name = os.path.basename(raw.replace("\\", "/")).strip()
+        if not name.lower().endswith((".3mf", ".stl")):
+            self._send(400, json.dumps({"ok": False, "msg": "Chỉ phân tích .3mf hoặc .stl"}),
+                       "application/json; charset=utf-8")
+            return
+        try:
+            n = int(self.headers.get("Content-Length", 0))
+        except ValueError:
+            n = 0
+        if n <= 0 or n > self.MAX_UPLOAD:
+            self._send(400, json.dumps({"ok": False, "msg": "File rỗng hoặc quá lớn"}),
+                       "application/json; charset=utf-8")
+            return
+        os.makedirs(SLICE_DIR, exist_ok=True)
+        tmp = os.path.join(SLICE_DIR, "an_" + name)
+        try:
+            with open(tmp, "wb") as f:
+                f.write(self.rfile.read(n))
+            res = analyzer.analyze(tmp)
+            res["ok"] = True
+            res["name"] = name
+            self._send(200, json.dumps(res, ensure_ascii=False),
+                       "application/json; charset=utf-8")
+        except Exception as e:                          # noqa: BLE001 - bao len UI
+            self._send(500, json.dumps({"ok": False, "msg": f"Lỗi phân tích: {e}"},
+                                       ensure_ascii=False), "application/json; charset=utf-8")
+        finally:
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+
     def do_POST(self):
+        if self.path.startswith("/api/analyze"):
+            self._do_analyze()
+            return
         if self.path == "/api/cmd/pause":
             ok, msg = cmd_print("pause")
         elif self.path == "/api/cmd/resume":

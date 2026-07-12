@@ -237,6 +237,26 @@ def parse_job_info(zip_path) -> dict:
         for n in names:
             if n.lower().endswith("slice_info.config"):
                 txt = z.read(n).decode("utf-8", "ignore")
+                # Mau THAT SU dung: slice_info liet ke tung cuon kem color + used_g.
+                # Day moi la nguon chuan — filament_colour trong project_settings liet ke
+                # ca 4 khe AMS ke ca khe khong dung trong ban in nay.
+                fils = []
+                for m in re.finditer(r"<filament\b([^>]*)/?>", txt):
+                    at = m.group(1)
+                    def _a(k):
+                        mm = re.search(k + r'="([^"]*)"', at)
+                        return mm.group(1) if mm else None
+                    g = _a("used_g")
+                    try:
+                        g = float(g) if g else 0.0
+                    except ValueError:
+                        g = 0.0
+                    if g <= 0:                       # cuon khong dung trong ban in nay
+                        continue
+                    fils.append({"id": _a("id"), "color": _a("color"),
+                                 "type": _a("type"), "used_g": round(g, 2)})
+                if fils:
+                    info["slice"]["filaments"] = fils
                 gs = [float(x) for x in re.findall(r'used_g="([\d.]+)"', txt)]
                 if gs:
                     info["slice"]["weight_g"] = round(sum(gs), 2)
