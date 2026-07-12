@@ -470,6 +470,10 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced") -> dict:
     # khong ton tai tren may -> chi tim nhua doi ung trong slot 1-4.
     slot = next((i + 1 for i, t in enumerate(ft[:4]) if partner and t.startswith(partner)), 0)
     ghost = next((i + 1 for i, t in enumerate(ft) if partner and t.startswith(partner) and i >= 4), 0)
+    # DOI CHIEU KHAY THAT (MQTT — cung nguon voi panel AMS tren dashboard):
+    # file khai bao la mot chuyen, khay dang nap gi la chuyen khac.
+    ams = r.get("ams") or []
+    ams_has_partner = bool(partner) and any(a.startswith(partner) for a in ams)
     pre = "" if sup_on else " (cài sẵn — đang TẮT support, bật tay trong Studio là ăn ngay)"
     if slot:
         p["support_interface_filament"] = str(slot)
@@ -478,13 +482,20 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced") -> dict:
         p["support_interface_spacing"] = "0"
         p["support_interface_pattern"] = "rectilinear_interlaced"
         p["independent_support_layer_height"] = "0"
+        ams_chk = (f" ✓ Đã đối chiếu AMS: khay máy ĐANG nạp {partner} thật." if ams_has_partner
+                   else (f" ⚠️ AMS hiện KHÔNG nạp {partner} (khay thật: "
+                         f"{', '.join(ams) or '?'}) — nạp {partner} vào khay trước khi in, "
+                         f"không là máy đứng chờ nhựa." if ams else
+                         " (Chưa sync được khay AMS — kiểm tra máy có nạp "
+                         f"{partner} thật trước khi in.)"))
         why.append(f"TỰ ÁP mẹo gỡ support đẹp{pre}: file có {partner} ở slot {slot} trong khi "
                    f"thân in {body} — 2 nhựa này không dính nhau nên interface {partner} ép khít "
                    f"Z distance = 0 vẫn bóc rời, mặt dưới bóng như mặt trên. Đã set: "
                    f"interface = nhựa {slot}, Top/Bottom Z = 0, spacing = 0, pattern = "
                    f"Rectilinear Interlaced, tắt Independent support layer height. Các ô này "
                    f"nằm trong tab Support, chỉ hiện khi bật toggle ADVANCED (giá trị vẫn ăn "
-                   f"kể cả không hiện). Đổi lại: tốn thời gian + nhựa purge mỗi lớp interface.")
+                   f"kể cả không hiện). Đổi lại: tốn thời gian + nhựa purge mỗi lớp "
+                   f"interface.{ams_chk}")
     elif ft:
         # FALLBACK cung vat lieu: khong co nhua doi ung -> interface van la nhua than
         # nhung tro ve DUNG slot than in + khe ho an toan 0.2 (0 la dinh chet).
@@ -497,21 +508,30 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced") -> dict:
         ghost_note = (f" File CÓ khai báo {partner} ở slot {ghost} nhưng AMS Lite chỉ có 4 khay "
                       f"thật — chuyển {partner} vào khay 1-4 + sửa Project Filaments rồi upload "
                       f"lại là hub tự áp Z = 0." if ghost else
-                      f" Muốn mặt dưới bóng như mặt trên: nạp thêm {partner or 'PETG'} vào AMS "
-                      f"(khay 1-4) + khai báo trong Project Filaments rồi upload lại.")
+                      (f" AMS ĐANG nạp {partner} thật trong khay — chỉ cần THÊM {partner} vào "
+                       f"Project Filaments trong Studio rồi upload lại là hub tự áp Z = 0."
+                       if ams_has_partner else
+                       f" Đã đối chiếu khay AMS thật ({', '.join(ams)}) — không có "
+                       f"{partner or 'nhựa đối ứng'}; muốn mặt dưới bóng như mặt trên: nạp "
+                       f"{partner or 'PETG'} vào khay + khai báo trong Project Filaments rồi "
+                       f"upload lại." if ams else
+                       f" Muốn mặt dưới bóng như mặt trên: nạp thêm {partner or 'PETG'} vào AMS "
+                       f"(khay 1-4) + khai báo trong Project Filaments rồi upload lại."))
         why.append(f"Support interface CÙNG vật liệu{pre} ({body} slot {body_slot} — không có "
                    f"nhựa đối ứng trong 4 khay AMS): giữ khe Z distance 0.2mm để bóc được "
                    f"(cùng nhựa mà ép 0 là dính chết), pattern Rectilinear Interlaced cho dễ "
                    f"tách. Đổi interface sang khay {body} KHÁC cũng vô ích — cùng hóa học thì "
                    f"dính như nhau, chỉ tốn purge đổi màu.{ghost_note}")
     else:
+        ams_note = (f" Khay AMS thật đang nạp: {', '.join(ams)}." if ams else "")
         why.append("MẸO gỡ support đẹp (cần AMS + PETG): đặt Support/raft interface = PETG, "
                    "Top Z distance = 0, Top interface spacing = 0, Interface pattern = "
                    "Rectilinear Interlaced, tắt Independent support layer height (tab Support, "
                    "bật toggle ADVANCED mới hiện các ô này). PLA–PETG không dính nhau về hóa "
                    "học nên khít 0mm vẫn bóc rời — mặt dưới bóng như mặt trên. Upload file .3mf "
                    "có khai báo sẵn PETG trong Project Filaments là hub TỰ ÁP giúp bạn. "
-                   "CẢNH BÁO: cùng vật liệu thì KHÔNG được để Z distance 0 (dính chết vào model).")
+                   "CẢNH BÁO: cùng vật liệu thì KHÔNG được để Z distance 0 (dính chết vào "
+                   "model)." + ams_note)
 
     # 4) BRIM — quyet dinh bang NGUY CO LAT, khong phai bang cam giac
     #    Nguy co lat ~ chieu cao / canh vuong tuong duong cua mat day.
@@ -681,8 +701,11 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced") -> dict:
     return {"preset": p, "why": why, "mode": mode, "mode_label": M["label"]}
 
 
-def analyze(path: str, mode: str = "balanced") -> dict:
+def analyze(path: str, mode: str = "balanced", ams: list | None = None) -> dict:
+    """ams: loai nhua THAT trong khay AMS (tu MQTT, vd ['PLA LITE','PETG BASIC']).
+    None/[] = khong sync duoc may -> chi suy theo khai bao trong file."""
     r = analyze_stl(path) if path.lower().endswith(".stl") else analyze_3mf(path)
+    r["ams"] = [str(t).upper() for t in (ams or []) if t]
     import os as _os
     nm = _os.path.splitext(_os.path.basename(path))[0][:20]
     r["export"] = make_preset(r, nm, mode)

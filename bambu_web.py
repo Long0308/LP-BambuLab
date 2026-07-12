@@ -193,11 +193,26 @@ def _ams_filament_presets():
     return out
 
 
+def _ams_tray_types():
+    """Loai nhua THAT dang nam trong 4 khay AMS Lite (MQTT cache) — cung nguon voi
+    panel AMS tren dashboard. Tra ['PLA LITE','PLA MATTE',...] theo khe 1-4;
+    tra [] neu chua ket noi may (analyzer se fallback theo khai bao trong file)."""
+    with LOCK:
+        ams = (STATE["data"].get("ams") or {})
+    out = []
+    for u in ams.get("ams", []):
+        for t in (u.get("tray") or []):
+            typ = (t.get("tray_sub_brands") or t.get("tray_type") or "").strip()
+            if typ:
+                out.append(typ.upper())
+    return out
+
+
 def _run_analyze(name, src_path):
     """Phan tich chay NEN — file lon (300k+ tam giac) mat 30-60s, khong the
     giu request HTTP mo lau vay (Tailscale/trinh duyet cat -> tuong treo)."""
     try:
-        res = analyzer.analyze(src_path)
+        res = analyzer.analyze(src_path, ams=_ams_tray_types())
         res["ok"] = True
         res["name"] = name
         res["ams_filaments"] = _ams_filament_presets()   # preset filament tu AMS that
@@ -259,7 +274,7 @@ def _slice_and_push(name, src_path, mode=None):
                 UPJOB.update(state="slicing", name=name,
                              msg=f"Đang áp cấu hình chế độ + slice…", stats=None)
             import optimize_e2e
-            an = analyzer.analyze(src_path, mode)
+            an = analyzer.analyze(src_path, mode, ams=_ams_tray_types())
             tuned = src_path + f".{mode}.3mf"
             optimize_e2e.apply_preset(src_path, tuned, an["presets"][mode]["preset"])
             src_path = tuned
