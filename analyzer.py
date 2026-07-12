@@ -440,6 +440,11 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced") -> dict:
                    + (f" Thành ngoài {outer} để mặt mịn." if M["outer"] else
                       " Thành ngoài cũng chạy hết tốc (ưu tiên nhanh)."))
 
+    # Nhua than in — dung cho threshold support (3), interface (3b), brim/draft (4)
+    ft = [str(t).upper() for t in ((r.get("config") or {}).get("filament_type") or [])]
+    body = ft[0] if ft else ""
+    warpy = body.split()[0] in ("ABS", "ASA") if body else False
+
     # 3) SUPPORT — tu nhan dinh theo dien tich hang THAT, khong theo cam tinh
     ov = m.get("overhang_pct", 0)
     ov_cm2 = m.get("overhang_cm2", 0)
@@ -448,14 +453,38 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced") -> dict:
         why.append(f"TẮT support: chỉ {ov_cm2} cm² mặt hẫng >45° ({ov}%) — quá nhỏ, "
                    f"máy bắc cầu (bridging) qua được. Tiết kiệm thời gian + nhựa + khỏi gọt.")
     else:
+        # KIEU support theo HINH HOC + CHIEU CAO (dong thuan cong dong/forum Bambu):
+        #  - Mat hang PHANG (model boxy) -> NORMAL: gian giao do DEU toan mat, be mat
+        #    duoi dep; tree nhanh moc lech, cho co cho khong -> vong giua cac nhanh.
+        #  - Model cong/chi tiet -> TREE: cham diem, tiet kiem nhua, khong seo mat.
+        #  - Cang CAO nhanh tree cang lac -> model cao thi tree_strong (nhanh to).
         p["enable_support"] = "1"
-        p["support_type"] = "tree(auto)"
-        p["support_style"] = "tree_hybrid"
         p["support_on_build_plate_only"] = "1"
-        p["support_threshold_angle"] = "40"
-        why.append(f"BẬT support cây: {ov_cm2} cm² mặt hẫng >45° ({ov}%) — không có thì võng/hỏng. "
-                   f"Chỉ chống từ mặt bàn (không tì lên thân → khỏi rỗ mặt). "
-                   f"Support TỐN thêm thời gian — đó là giá của bản in không lỗi.")
+        # Threshold = goc nghieng so voi mat NGANG, support khi mat doc DUOI nguong
+        # (PrintConfig.cpp:5585). Default Bambu 30 — da tune cho quat A1 + PLA/PETG.
+        # ABS/ASA nguoi mat cham (cooling thap) -> vong som hon -> nang 40 do support
+        # bat som hon (Raise3D: ha nguong chiu hang cua ABS/ASA ~5-10 do).
+        p["support_threshold_angle"] = "40" if warpy else "30"
+        why.append(f"Ngưỡng support = {'40' if warpy else '30'}°: mặt dốc hơn góc này so với "
+                   f"mặt ngang thì tự đỡ được. 30° là default Bambu tune cho A1"
+                   + (f", nâng lên 40° vì {body} nguội chậm, võng sớm hơn PLA." if warpy
+                      else " (nguồn: PrintConfig.cpp, default 30)."))
+        h_sup = m.get("height") or 0
+        if (r.get("faces") or {}).get("flat_ratio", 0) >= 0.5:
+            p["support_type"] = "normal(auto)"
+            p["support_style"] = "default"
+            why.append(f"BẬT support THƯỜNG (giàn giáo đều): {ov_cm2} cm² mặt hẫng >45° ({ov}%) "
+                       f"trên model dạng hộp — mặt hẫng PHẲNG cần đỡ ĐỀU toàn mặt; support cây "
+                       f"nhánh mọc lệch, chỗ có chỗ không → võng giữa các nhánh, và càng cao "
+                       f"càng lắc. Chỉ chống từ mặt bàn (không tì lên thân).")
+        else:
+            p["support_type"] = "tree(auto)"
+            p["support_style"] = "tree_strong" if h_sup > 150 else "tree_hybrid"
+            why.append(f"BẬT support CÂY: {ov_cm2} cm² mặt hẫng >45° ({ov}%) trên model "
+                       f"cong/chi tiết — tree chạm điểm, ít sẹo mặt, tiết kiệm nhựa. "
+                       + (f"Model cao {h_sup:.0f}mm → dùng tree_strong (nhánh to, khỏi lắc). "
+                          if h_sup > 150 else "")
+                       + "Chỉ chống từ mặt bàn (không tì lên thân).")
 
     # 3b) SUPPORT INTERFACE — cai san LUON, ke ca khi support dang TAT: cac o nay chi
     #     co tac dung khi support bat, nen de san gia tri dung de user bat support tay
@@ -463,8 +492,6 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced") -> dict:
     #     nhau ve hoa hoc -> interface bang nhua doi ung thi Z distance = 0 van boc roi.
     #     Luu y: cac o nay chi HIEN trong Studio khi bat toggle Advanced (gia tri van an).
     sup_on = p["enable_support"] == "1"
-    ft = [str(t).upper() for t in ((r.get("config") or {}).get("filament_type") or [])]
-    body = ft[0] if ft else ""
     partner = {"PLA": "PETG", "PETG": "PLA"}.get(body.split()[0] if body else "")
     # AMS Lite chi co 4 KHAY THAT — file co the khai bao 5+ filament nhung slot >4
     # khong ton tai tren may -> chi tim nhua doi ung trong slot 1-4.
@@ -541,10 +568,23 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced") -> dict:
     h_mm = m.get("height", 0)
     side = math.sqrt(bed * 100) if bed > 0 else 0.01      # cm2 -> mm2 -> canh vuong td
     ratio = h_mm / side if side else 99
+    #    DAY BO CONG/VAT: bam ban < ~80% footprint nghia la mep ngoai day KHONG cham
+    #    ban (fillet/vat) — lop 1-2 o mep la dai mong in ho tren khong -> xu, bong,
+    #    keo soi. Case nay BAT BUOC brim de neo mep, du ti le lat an toan.
+    dims = m.get("dims") or []
+    foot = (dims[0] * dims[1] / 100) if len(dims) >= 2 and dims[0] and dims[1] else 0
+    bed_frac = bed / foot if foot else 1.0
+    rounded_base = bed_frac < 0.8
     #    Yeu to VAT LIEU (Simplify3D/Xometry): ABS/ASA co ngot manh -> venh mep du day
     #    rong, van can brim. PLA/PETG tren PEI nham thi theo hinh hoc thuan tuy.
-    warpy = body.split()[0] in ("ABS", "ASA") if body else False
-    if bed >= 20 and ratio <= 3 and not warpy:
+    if rounded_base and bed >= 8:
+        p["brim_type"] = "outer_only"
+        p["brim_width"] = "5"
+        why.append(f"Brim 5mm (đáy BO CONG/VÁT): chỉ {int(bed_frac*100)}% footprint chạm bàn "
+                   f"({bed} cm² / {foot:.0f} cm²) — mép ngoài đáy cong hớt lên, lớp 1-2 ở mép "
+                   f"là dải mỏng in hờ → xù mép, bong, kéo sợi. Brim neo mép cong xuống bàn. "
+                   f"Triệt để hơn: úp mặt đáy phẳng nhất xuống bàn khi sắp xếp.")
+    elif bed >= 20 and ratio <= 3 and not warpy:
         p["brim_type"] = "no_brim"
         p["brim_width"] = "0"
         why.append(f"KHÔNG brim: đáy rộng {bed} cm² (cạnh ~{side:.0f}mm) so với cao {h_mm}mm "

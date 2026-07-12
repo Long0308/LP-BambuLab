@@ -1547,6 +1547,26 @@ function render(j){
     +'</div>';
   h+='<div class="mut" style="margin-top:9px">'+(j.sliced?"Đã slice (có G-code)":"File thô — chưa slice")+'</div></div>';
 
+  // Khay AMS THAT (MQTT) — quyet dinh cau hinh support interface. Khong sync duoc
+  // thi phai canh bao TO: cau hinh suy theo file co the sai (Z=0 voi nhua khong co).
+  {
+    const af=j.ams_filaments||[], amsl=j.ams||[];
+    h+='<div class="card"><h3 style="margin-top:0">Khay AMS thật <span class="mut" style="font-size:12px">· sync qua MQTT lúc phân tích</span></h3>';
+    if(amsl.length){
+      h+='<div class="grid">';
+      if(af.length){ for(const t of af) h+=kv("Khe "+t.slot,'⬤ '+t.sub).replace('⬤','<span style="color:'+esc(t.color)+'">⬤</span>'); }
+      else { for(let i=0;i<amsl.length;i++) h+=kv("Khe "+(i+1), amsl[i]); }
+      h+='</div>';
+      const hasPETG=amsl.some(t=>t.indexOf("PETG")===0), hasPLA=amsl.some(t=>t.indexOf("PLA")===0);
+      h+= (hasPETG&&hasPLA)
+        ? '<div class="tip" style="margin-top:9px">✓ Có cặp PLA + PETG thật trong khay — cấu hình support interface Z=0 (gỡ đẹp) dùng được. Khai báo cả 2 nhựa trong Project Filaments để hub tự áp.</div>'
+        : '<div class="iss" style="margin-top:9px">Khay chỉ có 1 họ nhựa ('+esc(amsl.join(", "))+') — hub dùng cấu hình interface CÙNG vật liệu (khe hở 0.2mm, an toàn). KHÔNG tự ý chỉnh Z distance = 0.</div>';
+    } else {
+      h+='<div class="iss">⚠️ CHƯA SYNC ĐƯỢC KHAY AMS (máy in tắt / mất kết nối) — cấu hình support bên dưới suy theo KHAI BÁO TRONG FILE, có thể lệch thực tế. Bật máy in rồi phân tích lại để chắc chắn.</div>';
+    }
+    h+='</div>';
+  }
+
   if(j.issues&&j.issues.length){ h+='<div class="card"><h3 style="margin-top:0">Vấn đề phát hiện</h3>';
     for(const i of j.issues) h+='<div class="iss">'+esc(i)+'</div>'; h+='</div>'; }
   if(j.tips&&j.tips.length){ h+='<div class="card"><h3 style="margin-top:0">Khuyến nghị</h3>';
