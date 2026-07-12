@@ -567,6 +567,20 @@ PAGE = r"""<!doctype html><html lang="vi"><head>
  .b-pause{background:linear-gradient(160deg,#fbbf24,#d97706)}
  .b-resume{background:linear-gradient(160deg,#34d399,#16a34a)}
  .b-stop{background:linear-gradient(160deg,#f87171,#dc2626)}
+ .cb{position:sticky;top:0;z-index:60;margin:-14px -14px 12px;padding:10px 14px;font-weight:800;font-size:13.5px;
+   text-align:center;letter-spacing:.3px}
+ .cb.on{background:linear-gradient(90deg,#065f46,#16a34a);color:#eafff3}
+ .cb.off{background:linear-gradient(90deg,#7f1d1d,#dc2626);color:#fff}
+ .cb.wait{background:#1e2635;color:#8ea0b8}
+ .up{padding:13px;border-radius:14px;background:linear-gradient(160deg,var(--card2),var(--card1));
+   box-shadow:var(--sh),var(--hl);margin:2px 0 12px}
+ .ubtn{width:100%;background:linear-gradient(160deg,#38bdf8,#0284c7);color:#fff;border:none;border-radius:12px;
+   padding:13px;font-weight:800;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px}
+ .ubtn:disabled{opacity:.45;cursor:not-allowed;background:#334155}
+ .ubtn svg{width:17px;height:17px;fill:currentColor}
+ .ubar{height:7px;border-radius:99px;background:#0c111a;border:1px solid var(--line);margin-top:10px;overflow:hidden;display:none}
+ .ubar > i{display:block;height:100%;width:0;background:linear-gradient(90deg,#38bdf8,#22c55e);transition:width .2s}
+ .uhint{font-size:11.5px;color:var(--mut);margin-top:8px}
  .linkrow{display:grid;grid-template-columns:1fr 1fr;gap:11px;margin:2px 0 12px}
  .infolink{display:flex;align-items:center;justify-content:center;gap:7px;text-align:center;
    min-height:52px;padding:10px;border-radius:14px;background:linear-gradient(160deg,var(--card2),var(--card1));
@@ -652,6 +666,7 @@ PAGE = r"""<!doctype html><html lang="vi"><head>
  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style></head><body>
+<div id="connbar" class="cb wait">Đang kiểm tra kết nối máy in…</div>
 <h1><span id="dot" class="dot"></span> Bambu A1 · <span id="name">—</span>
   <button id="sndBtn" class="sndbtn" onclick="enableSound()"><svg viewBox="0 0 24 24"><path d="M12 3a1 1 0 0 0-1 1v.28C8.5 4.9 7 7.1 7 9.7V13l-1.7 2.5A1 1 0 0 0 6.1 17h11.8a1 1 0 0 0 .8-1.5L17 13V9.7c0-2.6-1.5-4.8-4-5.42V4a1 1 0 0 0-1-1zm0 18a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 21z"/></svg><span>Bật âm</span></button></h1>
 
@@ -685,6 +700,17 @@ PAGE = r"""<!doctype html><html lang="vi"><head>
 <div class="linkrow">
   <a class="infolink" href="/info"><svg viewBox="0 0 24 24"><path d="M11 7h2v2h-2zM11 11h2v6h-2zM12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16z"/></svg> Thông tin G-code</a>
   <a class="infolink" href="/files"><svg viewBox="0 0 24 24"><path d="M10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2z"/></svg> File trên máy · chọn in</a>
+</div>
+
+<div class="up" id="up">
+  <input type="file" id="fpick" accept=".3mf" style="display:none" onchange="pick()">
+  <button class="ubtn" id="ubtn" onclick="document.getElementById('fpick').click()">
+    <svg viewBox="0 0 24 24"><path d="M5 20h14v-2H5v2zM12 2L6.5 9.5h4V16h3V9.5h4L12 2z"/></svg>
+    <span id="ulabel">Đẩy file .3mf lên máy in — chưa slice cũng được</span>
+  </button>
+  <div class="ubar" id="ubar"><i id="ufill"></i></div>
+  <div class="uhint">File <b>đã slice</b> → chuyển thẳng xuống máy. File <b>dự án thô</b> → máy tính tự slice
+  (Bambu Studio, ~1-2 phút) rồi chuyển, kèm thời gian in + gam nhựa. <span id="uhintx" style="color:var(--acc)"></span></div>
 </div>
 
 <div class="grid">
@@ -809,6 +835,72 @@ function updateHero(hasThumb, gcodeFile){
   } else if(heroFile!==null){ img.src="/a1.jpg"; heroFile=null; }
 }
 
+// ===== Upload + tu slice (tich hop hub) =====
+function pick(){
+  const inp=document.getElementById("fpick"), f=inp.files&&inp.files[0];
+  inp.value="";
+  if(!f) return;
+  if(!f.name.toLowerCase().endsWith(".3mf")){ toast("Chỉ nhận file .3mf"); return; }
+  upload(f);
+}
+function upload(f){
+  const btn=document.getElementById("ubtn"), lab=document.getElementById("ulabel");
+  const bar=document.getElementById("ubar"), fill=document.getElementById("ufill");
+  btn.disabled=true; bar.style.display="block"; fill.style.width="0";
+  const mb=(f.size/1048576).toFixed(1);
+  const xhr=new XMLHttpRequest();
+  xhr.open("POST","/api/upload?name="+encodeURIComponent(f.name));
+  xhr.upload.onprogress=e=>{
+    if(!e.lengthComputable) return;
+    const p=Math.round(e.loaded/e.total*100);
+    fill.style.width=p+"%";
+    lab.textContent = p<100 ? ("Đang đẩy… "+p+"% ("+mb+" MB)") : "Đang ghi vào máy in… (chờ máy xác nhận)";
+  };
+  xhr.onload=()=>{
+    let j={}; try{ j=JSON.parse(xhr.responseText); }catch(e){}
+    if(xhr.status===200 && j.ok && j.queued){ pollSlice(); return; }
+    btn.disabled=false; bar.style.display="none";
+    lab.textContent="Đẩy file .3mf lên máy in — chưa slice cũng được";
+    if(xhr.status===200 && j.ok){ toast("Đã đẩy lên máy: "+j.name); }
+    else{ toast("Lỗi: "+(j.msg||("HTTP "+xhr.status))); }
+  };
+  xhr.onerror=()=>{
+    btn.disabled=false; bar.style.display="none";
+    lab.textContent="Đẩy file .3mf lên máy in — chưa slice cũng được";
+    toast("Mất kết nối khi đẩy file");
+  };
+  lab.textContent="Đang đẩy… 0% ("+mb+" MB)";
+  xhr.send(f);
+}
+function fmtStats(s){
+  if(!s) return "";
+  const p=[];
+  if(s.time) p.push("in "+s.time);
+  if(s.weight_g) p.push(s.weight_g.toFixed(0)+" g");
+  if(s.layers) p.push(s.layers+" lớp");
+  return p.join(" · ");
+}
+async function pollSlice(){
+  const btn=document.getElementById("ubtn"), lab=document.getElementById("ulabel");
+  const bar=document.getElementById("ubar"), fill=document.getElementById("ufill");
+  btn.disabled=true; bar.style.display="block"; fill.style.width="100%";
+  try{
+    const j=await (await fetch("/api/upstatus",{cache:"no-store"})).json();
+    if(j.state==="slicing"||j.state==="pushing"){
+      lab.textContent=j.msg||"Đang xử lý…";
+      setTimeout(pollSlice, 3000); return;
+    }
+    btn.disabled=false; bar.style.display="none";
+    lab.textContent="Đẩy file .3mf lên máy in — chưa slice cũng được";
+    if(j.state==="done"){
+      toast("✔ "+j.msg+(j.stats?(" — "+fmtStats(j.stats)):""));
+      const hint=document.getElementById("uhintx");
+      if(hint&&j.stats) hint.textContent="Kết quả slice: "+fmtStats(j.stats);
+    }
+    else if(j.state==="error"){ toast("Lỗi: "+j.msg); }
+  }catch(e){ setTimeout(pollSlice, 4000); }
+}
+
 async function tick(){
  try{
   const r=await fetch("/api/status",{cache:"no-store"});const s=await r.json();const d=s.data||{};
@@ -863,9 +955,16 @@ async function tick(){
   }
   prevState=gc;
   const age=s.ts?Math.round((Date.now()/1000)-s.ts):null;
+  // May in TAT: mat MQTT, HOAC "connected" nhung >90s khong co tin hieu (dung hinh)
+  const offline=!s.connected||(age!==null&&age>90);
+  const cb=document.getElementById("connbar");
+  if(offline){ cb.className="cb off"; cb.textContent="⏻ MÁY IN ĐANG TẮT hoặc mất kết nối — sẽ tự báo khi máy bật lại"; }
+  else { cb.className="cb on"; cb.textContent="● ĐÃ KẾT NỐI — "+(s.name||"máy in")+(age!=null?(" · tín hiệu "+age+"s trước"):""); }
   document.getElementById("foot").innerHTML=(s.connected?'<span class="dot on"></span> Đã kết nối':'<span class="dot off"></span> Mất kết nối')+(age!=null?(" · cập nhật "+age+"s trước"):"");
  }catch(e){
    if(wasConnected) setAlert("warn","Mất kết nối (không tải được dữ liệu)!");
+   const cb=document.getElementById("connbar");
+   cb.className="cb off"; cb.textContent="⏻ MẤT KẾT NỐI TỚI SERVER (máy tính tắt hoặc rớt mạng)";
    document.getElementById("foot").textContent="Lỗi tải: "+e;
  }
 }
@@ -1018,7 +1117,7 @@ FILES_PAGE = r"""<!doctype html><html lang="vi"><head>
 <h2>File in trên máy <span id="count" style="color:var(--mut);font-size:13px"></span></h2>
 <div id="busy"></div>
 
-<div class="up">
+<div class="up" id="up">
   <div class="uprow">
     <input type="file" id="fpick" accept=".3mf" style="display:none" onchange="pick()">
     <button class="ubtn" id="ubtn" onclick="document.getElementById('fpick').click()">
@@ -1148,7 +1247,13 @@ function render(){
   const list=FILES.filter(f=>f.name.toLowerCase().includes(q));
   document.getElementById("count").textContent="("+FILES.length+")";
   const root=document.getElementById("root");
-  if(!list.length){ root.innerHTML='<div class="loading">Không có file khớp.</div>'; return; }
+  if(!FILES.length){
+    root.innerHTML='<div class="loading">Máy chưa có file in nào (hoặc chưa đọc được thẻ SD).<br><br>'
+      +'👆 Dùng nút <b>"Đẩy file .3mf"</b> phía trên để đưa file đầu tiên lên — '
+      +'file chưa slice máy tính sẽ tự slice giúp bạn.</div>';
+    return;
+  }
+  if(!list.length){ root.innerHTML='<div class="loading">Không có file khớp từ khoá tìm.</div>'; return; }
   let html="";
   for(const f of list){
     html+='<div class="file" data-path="'+esc(f.path)+'">'
