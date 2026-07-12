@@ -35,3 +35,6 @@ node_modules/
 
 # File tam cua pipeline slice tren server (upload -> CLI slice -> day xuong may)
 slice_jobs/
+
+# Log server
+dashboard.log

@@ -33,6 +33,7 @@ import filament_store
 import filament_ftp
 import slicer_cli
 import analyzer
+import optimize_e2e
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PRINTER_NAME = "LongPham A1-3"
@@ -159,6 +160,30 @@ THUMB_LOCK = threading.Lock()  # tai thumbnail tuan tu (Bambu FTP gioi han ket n
 SLICE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "slice_jobs")
 UPJOB = {"state": "idle", "name": None, "msg": "", "stats": None}
 UPJOB_LOCK = threading.Lock()
+OPTJOB = {"state": "idle", "name": None, "msg": "", "report": None}
+OPTJOB_LOCK = threading.Lock()
+
+
+def _run_optimize(name, src_path):
+    """Slice BASELINE + 3 che do -> bao cao so sanh bang SO THAT. Khong dung may in."""
+    try:
+        with OPTJOB_LOCK:
+            OPTJOB.update(state="running", name=name,
+                          msg="Slice baseline + 3 chế độ (4 lần slice)…", report=None)
+        rep = optimize_e2e.run_modes(src_path, os.path.join(SLICE_DIR, "e2e"))
+        with OPTJOB_LOCK:
+            if rep.get("error"):
+                OPTJOB.update(state="error", msg=rep["error"])
+            else:
+                OPTJOB.update(state="done", msg="Xong", report=rep)
+    except Exception as e:                                # noqa: BLE001
+        with OPTJOB_LOCK:
+            OPTJOB.update(state="error", msg=f"Lỗi: {e}")
+    finally:
+        try:
+            os.remove(src_path)
+        except OSError:
+            pass
 
 
 def _slice_and_push(name, src_path):
@@ -1434,9 +1459,61 @@ function render(j){
     h+='<button class="btn" style="margin-top:10px" onclick="dl()">Tải preset .json (import vào Bambu Studio)</button></div>';
     window.__preset=e.preset; window.__pname=(j.name||"file").replace(/\.[^.]+$/,"");
   }
-  h+='<button class="btn go" onclick="slice()">Slice ngay + đẩy xuống máy in</button>'
+  h+='<button class="btn go" id="e2e" onclick="optimize()">So sánh 3 chế độ — slice thật 4 lần (~15s)</button>'
+   +'<div id="e2eout"></div>'
+   +'<button class="btn go" onclick="slice()">Slice ngay + đẩy xuống máy in</button>'
    +'<div class="mut" style="margin-top:7px;text-align:center">Gọi Bambu Studio CLI trên máy tính. Lệnh IN vẫn phải bạn bấm ở trang File.</div>';
   document.getElementById("out").innerHTML=h;
+}
+function optimize(){
+  if(!FILE){ toast("Chọn lại file"); return; }
+  const b=document.getElementById("e2e"); b.disabled=true; b.textContent="Đang slice baseline + 3 chế độ…";
+  const xhr=new XMLHttpRequest();
+  xhr.open("POST","/api/optimize?name="+encodeURIComponent(FILE.name));
+  xhr.onload=()=>{ let j={}; try{j=JSON.parse(xhr.responseText);}catch(e){}
+    if(j.ok&&j.queued) pollOpt(); else { b.disabled=false; toast("Lỗi: "+(j.msg||xhr.status)); } };
+  xhr.onerror=()=>{ b.disabled=false; toast("Mất kết nối"); };
+  xhr.send(FILE);
+}
+async function pollOpt(){
+  const b=document.getElementById("e2e");
+  try{
+    const j=await (await fetch("/api/optstatus",{cache:"no-store"})).json();
+    if(j.state==="running"){ b.textContent=j.msg||"Đang xử lý…"; setTimeout(pollOpt,2500); return; }
+    b.disabled=false; b.textContent="So sánh lại 3 chế độ";
+    if(j.state==="error"){ toast("Lỗi: "+j.msg); return; }
+    if(j.state==="done"&&j.report) renderE2E(j.report);
+  }catch(e){ setTimeout(pollOpt,4000); }
+}
+function renderE2E(r){
+  const b=r.baseline||{}; const MS=["fast","balanced","quality"];
+  let h='<div class="card"><h3 style="margin-top:0">So sánh — mỗi dòng là 1 lần slice THẬT</h3>'
+    +'<table><tr><th>Chế độ</th><th>Thời gian</th><th>Nhựa</th><th>Lớp</th></tr>'
+    +'<tr style="background:rgba(255,255,255,.04)"><td><b>Mặc định</b><br><span class="mut">AUTO-balanced 0.20</span></td>'
+    +'<td>'+esc(b.time||"?")+'</td><td>'+(b.weight_g||"?")+' g</td><td>'+(b.layers||"?")+'</td></tr>';
+  for(const k of MS){
+    const d=(r.modes||{})[k]; if(!d||d.error) continue;
+    const tp=d.time_pct, cls=tp>2?"good":(tp<-2?"bad":"mut");
+    h+='<tr><td><b>'+esc(d.label)+'</b></td><td class="'+cls+'">'+esc(d.time)
+      +'<br><span class="mut">'+(tp>0?"−"+tp:"+"+(-tp))+'%</span></td>'
+      +'<td>'+d.weight_g+' g</td><td>'+d.layers+'</td></tr>';
+  }
+  h+='</table></div>';
+  for(const k of MS){
+    const d=(r.modes||{})[k]; if(!d||d.error) continue;
+    h+='<div class="card"><h3 style="margin-top:0">'+esc(d.label)+' — vì sao</h3>';
+    for(const w of d.why) h+='<div class="tip">'+esc(w)+'</div>';
+    h+='<button class="btn" style="margin-top:9px" onclick='dlp("'+k+'")'>Tải preset '+esc(d.label)+' (.json)</button></div>';
+  }
+  window.__rep=r;
+  document.getElementById("e2eout").innerHTML=h;
+}
+function dlp(k){
+  const d=window.__rep.modes[k];
+  const blob=new Blob([JSON.stringify(d.preset,null,4)],{type:"application/json"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+  a.download=(window.__rep.name||"file")+"-"+k+"-process.json"; a.click(); URL.revokeObjectURL(a.href);
+  toast("Đã tải — Bambu Studio → Process → Import");
 }
 function kv(k,v){ return '<div class="kv"><span>'+k+'</span><b>'+esc(v)+'</b></div>'; }
 function dl(){
@@ -1521,6 +1598,10 @@ class H(BaseHTTPRequestHandler):
                 self._send(200, thumb, "image/png")
             else:
                 self._send(404, "no thumb", "text/plain")
+        elif path.startswith("/api/optstatus"):
+            with OPTJOB_LOCK:
+                self._send(200, json.dumps(OPTJOB, ensure_ascii=False),
+                           "application/json; charset=utf-8")
         elif path.startswith("/api/upstatus"):
             with UPJOB_LOCK:
                 self._send(200, json.dumps(UPJOB), "application/json; charset=utf-8")
@@ -1689,7 +1770,33 @@ class H(BaseHTTPRequestHandler):
             except OSError:
                 pass
 
+    def _do_optimize(self):
+        from urllib.parse import urlparse, parse_qs, unquote
+        raw = unquote(parse_qs(urlparse(self.path).query).get("name", [""])[0])
+        name = os.path.basename(raw.replace("\\", "/")).strip()
+        if not name.lower().endswith((".3mf", ".stl")):
+            self._send(400, json.dumps({"ok": False, "msg": "Chỉ nhận .3mf / .stl"}),
+                       "application/json; charset=utf-8"); return
+        with OPTJOB_LOCK:
+            if OPTJOB["state"] == "running":
+                self._send(409, json.dumps({"ok": False, "msg": "Đang tối ưu file khác"}),
+                           "application/json; charset=utf-8"); return
+            OPTJOB.update(state="running", name=name, msg="Bắt đầu…", report=None)
+        try:
+            n = int(self.headers.get("Content-Length", 0))
+        except ValueError:
+            n = 0
+        os.makedirs(SLICE_DIR, exist_ok=True)
+        tmp = os.path.join(SLICE_DIR, "opt_" + name)
+        with open(tmp, "wb") as f:
+            f.write(self.rfile.read(n))
+        threading.Thread(target=_run_optimize, args=(name, tmp), daemon=True).start()
+        self._send(200, json.dumps({"ok": True, "queued": True}),
+                   "application/json; charset=utf-8")
+
     def do_POST(self):
+        if self.path.startswith("/api/optimize"):
+            self._do_optimize(); return
         if self.path.startswith("/api/analyze"):
             self._do_analyze()
             return
