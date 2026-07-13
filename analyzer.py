@@ -1213,12 +1213,14 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced",
                    f"không brim thì lớp đầu bong / model đổ giữa chừng (giá đo thật brim 8mm: "
                    f"+3.4% thời gian, +3.1% nhựa — rẻ hơn 1 lần in hỏng).")
     # BRIM-OBJECT GAP (wiki Bambu + OrcaSlicer): khe giua brim va model. Nho = bam chac,
-    # Lon = DE GO. 0.1mm la can bang chuan (bam tot van boc duoc). Chi set khi CO brim.
+    # Lon = DE GO. KHONG ghi de key nay vao preset: mac dinh Bambu da la 0.1mm (can bang),
+    # va GHI key qua apply_preset lam Bambu CLI sap khi slice (da kiem chung: co gap ->
+    # crash, bo gap -> slice OK 9h04). De user tu chinh trong Studio neu can.
     if p["brim_type"] != "no_brim":
-        p["brim_object_gap"] = "0.1"
-        why.append("Brim-object gap 0.1mm (mặc định Bambu, cân bằng): đủ dính để neo mép, vẫn bóc "
-                   "được. Khó gỡ thì tăng 0.2–0.4mm (dễ tách hơn, wiki OrcaSlicer) NHƯNG bám kém đi. "
-                   "Lưu ý wiki: nếu để 0 mà brim vẫn hở là do 'Elephant foot compensation' đang bật.")
+        why.append("Brim-object gap: giữ mặc định 0.1mm của Bambu (cân bằng — đủ dính neo mép, vẫn "
+                   "bóc được). Khó gỡ thì TỰ tăng 0.2–0.4mm trong Studio (Others ▸ Bed adhension, dễ "
+                   "tách hơn, wiki OrcaSlicer) NHƯNG bám kém đi. Nếu để 0 mà brim vẫn hở → do "
+                   "'Elephant foot compensation' đang bật.")
         if emit_tips:
             r["tips"].append(
                 "🩹 Brim khó gỡ / để lại via mép? (1) Tăng Brim-object gap lên 0.2–0.4mm (Others ▸ Bed "
