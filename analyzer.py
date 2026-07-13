@@ -833,6 +833,7 @@ BS_LOC = {
     "independent_support_layer_height": ("Support","Advanced",           "Independent support layer height"),
     "brim_type":                      ("Others",   "Bed adhension",       "Brim type"),
     "brim_width":                     ("Others",   "Bed adhension",       "Brim width"),
+    "brim_object_gap":                ("Others",   "Bed adhension",       "Brim-object gap"),
     "skirt_loops":                    ("Others",   "Bed adhension",       "Skirt loops"),
     # draft_shield: co trong PrintConfig nhung dong UI bi comment-out o MOI ban Tab.cpp
     # -> user KHONG chinh duoc tren giao dien, CHI set qua preset JSON (hub tu ghi).
@@ -913,6 +914,7 @@ def _guide_reason(key: str, val: str, r: dict, lh: float = 0.2) -> str:
         "independent_support_layer_height": lambda: "0: support cùng layer height với model",
         "brim_type": lambda: ("không brim: đáy rộng, tỉ lệ lật an toàn" if val == "no_brim"
                               else f"brim viền ngoài neo mép (đáy {bed}cm²)"),
+        "brim_object_gap": lambda: f"{val}mm khe brim-model: nhỏ=bám chắc, lớn=dễ gỡ (0.1 cân bằng; 0.2-0.4 dễ tách)",
         "brim_width": lambda: (f"{val}mm neo mép (giá đo thật ~+{'3.4' if val=='8' else '1.9'}% thời gian)"
                                if val != "0" else "0: không cần brim"),
         "skirt_loops": lambda: ("0: A1 tự mồi bằng purge line" if val == "0" else f"{val} vòng skirt (đi kèm draft shield chắn gió)"),
@@ -1034,6 +1036,10 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced",
     # -> tach theo "-" de bat ca dong soi gia cuong (de venh nhat tren A1 khung ho).
     fam = body.split("-")[0] if body else ""
     warpy = fam in ("ABS", "ASA")
+    # BRIM-PRONE (wiki Bambu auto-brim): nhua ung suat nhiet cao can brim RONG hon —
+    # ABS/ASA/PC/PA + moi loai soi gia cuong CF/GF (PLA-CF, PET-CF, PA-CF...). TPU thi
+    # NGUOC lai (brim hep). warpy chi dung cho draft_shield (rieng ABS/ASA khung ho).
+    brim_prone = warpy or fam in ("PC", "PA", "PET") or "CF" in body or "GF" in body
 
     # 3) SUPPORT — tu nhan dinh theo dien tich hang THAT, khong theo cam tinh
     ov = m.get("overhang_pct", 0)
@@ -1174,7 +1180,7 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced",
     #    keo soi. Case nay BAT BUOC brim de neo mep, du ti le lat an toan.
     dims = m.get("dims") or []
     foot = (dims[0] * dims[1] / 100) if len(dims) >= 2 and dims[0] and dims[1] else 0
-    bed_frac = bed / foot if foot else 1.0
+    bed_frac = min(bed / foot, 1.0) if foot else 1.0   # cap 1.0: mat cham co the > bbox do artifact do
     rounded_base = bed_frac < 0.8
     #    Yeu to VAT LIEU (Simplify3D/Xometry): ABS/ASA co ngot manh -> venh mep du day
     #    rong, van can brim. PLA/PETG tren PEI nham thi theo hinh hoc thuan tuy.
@@ -1185,24 +1191,40 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced",
                    f"({bed} cm² / {foot:.0f} cm²) — mép ngoài đáy cong hớt lên, lớp 1-2 ở mép "
                    f"là dải mỏng in hờ → xù mép, bong, kéo sợi. Brim neo mép cong xuống bàn "f"(giá đo thật: +1.9% thời gian, +1.9% nhựa — quá rẻ so với hỏng lớp đầu). "
                    f"Triệt để hơn: úp mặt đáy phẳng nhất xuống bàn khi sắp xếp.")
-    elif bed >= 20 and ratio <= 3 and not warpy:
+    elif bed >= 20 and ratio <= 3 and not brim_prone:
         p["brim_type"] = "no_brim"
         p["brim_width"] = "0"
         why.append(f"KHÔNG brim: đáy rộng {bed} cm² (cạnh ~{side:.0f}mm) so với cao {h_mm}mm "
-                   f"→ tỉ lệ lật {ratio:.1f} (an toàn <3). Đáy dày/rộng thế này brim chỉ tốn "
-                   f"thời gian và phải gọt via.")
-    elif bed >= 8 or (warpy and ratio <= 3):
+                   f"→ tỉ lệ lật {ratio:.1f} (an toàn <3), đáy chạm bàn {int(bed_frac*100)}% (phẳng, "
+                   f"không bo cong) + nhựa không co ngót. Brim chỉ tốn thời gian và phải gọt via. "
+                   f"⚠️ NHƯNG no-brim vẫn vênh nếu: bàn dính dầu tay (rửa bàn) HOẶC vài góc nhọn hớt "
+                   f"lên (dùng Painted ▸ Brim Ears neo riêng góc — khỏi brim cả vòng).")
+    elif bed >= 8 or (brim_prone and ratio <= 3):
         p["brim_type"] = "outer_only"
         p["brim_width"] = "5"
         why.append(f"Brim 5mm: đáy {bed} cm², tỉ lệ lật {ratio:.1f}"
-                   + (f" — nhựa {body} co ngót mạnh, dễ vênh mép nên brim dù đáy rộng."
-                      if warpy else " — bám thêm cho chắc (giá đo thật: +1.9% thời gian/nhựa)."))
+                   + (f" — nhựa {body} ứng suất nhiệt cao/co ngót, dễ vênh mép nên brim dù đáy rộng "
+                      f"(wiki Bambu auto-brim: PC/ABS/ASA/CF cần brim rộng hơn)."
+                      if brim_prone else " — bám thêm cho chắc (giá đo thật: +1.9% thời gian/nhựa)."))
     else:
         p["brim_type"] = "outer_only"
         p["brim_width"] = "8"
         why.append(f"Brim 8mm (BẮT BUỘC): đáy chỉ {bed} cm², tỉ lệ lật {ratio:.1f} — "
                    f"không brim thì lớp đầu bong / model đổ giữa chừng (giá đo thật brim 8mm: "
                    f"+3.4% thời gian, +3.1% nhựa — rẻ hơn 1 lần in hỏng).")
+    # BRIM-OBJECT GAP (wiki Bambu + OrcaSlicer): khe giua brim va model. Nho = bam chac,
+    # Lon = DE GO. 0.1mm la can bang chuan (bam tot van boc duoc). Chi set khi CO brim.
+    if p["brim_type"] != "no_brim":
+        p["brim_object_gap"] = "0.1"
+        why.append("Brim-object gap 0.1mm (mặc định Bambu, cân bằng): đủ dính để neo mép, vẫn bóc "
+                   "được. Khó gỡ thì tăng 0.2–0.4mm (dễ tách hơn, wiki OrcaSlicer) NHƯNG bám kém đi. "
+                   "Lưu ý wiki: nếu để 0 mà brim vẫn hở là do 'Elephant foot compensation' đang bật.")
+        if emit_tips:
+            r["tips"].append(
+                "🩹 Brim khó gỡ / để lại via mép? (1) Tăng Brim-object gap lên 0.2–0.4mm (Others ▸ Bed "
+                "adhension) — dễ tách hơn. (2) Chỉ vài GÓC NHỌN bị vênh: dùng 'Painted' + Brim Ears (sơn "
+                "tai brim tại góc) → neo đúng chỗ, gỡ cực dễ, khỏi brim cả vòng (wiki Bambu). (3) Đế bo "
+                "cong: cách triệt để nhất vẫn là úp mặt phẳng nhất xuống bàn thay vì phủ brim.")
     # SKIRT + DRAFT SHIELD: skirt chi de moi nhua (A1 tu moi bang purge line -> tat).
     # RIENG nhua co ngot (ABS/ASA) tren may khung HO nhu A1: draft_shield bien skirt
     # thanh tuong chan gio cao bang model. Bambu AN o nay khoi UI (Tab.cpp comment
