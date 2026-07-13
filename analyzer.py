@@ -812,6 +812,12 @@ BS_LOC = {
     "internal_solid_infill_speed":    ("Speed",    "Other layers speed", "Internal solid infill"),
     "top_surface_speed":              ("Speed",    "Other layers speed", "Top surface"),
     "initial_layer_speed":            ("Speed",    "Initial layer speed","Initial layer"),
+    "enable_overhang_speed":          ("Speed",    "Other layers speed", "Slow down for overhangs"),
+    "overhang_1_4_speed":             ("Speed",    "Overhang speed",     "Overhang speed 10-25%"),
+    "overhang_2_4_speed":             ("Speed",    "Overhang speed",     "Overhang speed 25-50%"),
+    "overhang_3_4_speed":             ("Speed",    "Overhang speed",     "Overhang speed 50-75%"),
+    "overhang_4_4_speed":             ("Speed",    "Overhang speed",     "Overhang speed 75-100%"),
+    "overhang_totally_speed":         ("Speed",    "Overhang speed",     "Overhang speed 100%"),
     "enable_support":                 ("Support",  "Support",            "Enable support"),
     "support_type":                   ("Support",  "Support",            "Type"),
     "support_style":                  ("Support",  "Support",            "Style"),
@@ -864,6 +870,12 @@ def _guide_reason(key: str, val: str, r: dict, lh: float = 0.2) -> str:
         "wall_generator": lambda: "Arachne: đường biến thiên độ rộng → nhét góc nhọn, chi tiết nhỏ",
         "bridge_flow": lambda: f"{val} (mặc định 1.0): sợi bắc cầu nở ra dính nhau → bridge/overhang mịn không cần support + lấp internal bridge (wiki Bambu, PLA 1.4-1.7)",
         "bridge_speed": lambda: f"{val} mm/s chậm: sợi bắc cầu kịp nguội, bớt võng (wiki Bambu)",
+        "enable_overhang_speed": lambda: "BẬT: đường hẫng >45° tự hạ tốc → mặt hẫng mịn không cần support (kể cả chế độ Nhanh)",
+        "overhang_1_4_speed": lambda: f"{val} mm/s (hẫng 10-25%): 0 = không hãm, gần như không hẫng",
+        "overhang_2_4_speed": lambda: f"{val} mm/s (hẫng 25-50%)",
+        "overhang_3_4_speed": lambda: f"{val} mm/s (hẫng 50-75%): chậm cho sợi bám",
+        "overhang_4_4_speed": lambda: f"{val} mm/s (hẫng 75-100%): rất chậm, chống võng",
+        "overhang_totally_speed": lambda: f"{val} mm/s (hẫng 100% ~ bridge)",
         "wall_sequence": lambda: ("≥3 thành → sandwich: ngoài kẹp giữa (seam gọn + kích thước chuẩn)"
                                   if "inner-outer-inner" in val else "2 thành → inner/outer"),
         "wall_loops": lambda: f"{val} thành theo chế độ",
@@ -1277,6 +1289,32 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced",
             f"phụ thuộc NHỰA + máy + làm mát, 'chỉnh đại hiếm khi đẹp'. Bridge còn võng/khe? Mở model test "
             f"'Unsupported Bridge Experiments' (MakerWorld), in dải flow 1.4–1.7 (PLA) hoặc 1.1–1.4 (PETG/ABS) "
             f"bằng CHÍNH cuộn nhựa của bạn rồi chọn ô mịn nhất. Bridge dài >10mm vẫn có thể võng dù chỉnh đúng.")
+
+    # 5d) SLOW DOWN FOR OVERHANGS — ep BAT o MOI che do (ke ca Nhanh). Day la cach giu
+    #     THAM MY overhang khi in nhanh: THAN in van chay het toc, RIENG duong hang
+    #     >45deg tu ha toc theo 4 muc -> mat duoi/doc min ma KHONG can support.
+    #     Nguon: wiki chinh thuc Bambu (slow-down-for-overhang) — mac dinh 0/50/30/10/10.
+    #     Draft preset (0.28 Extra Draft) co the TAT san de nhanh -> set tuong minh de
+    #     Nhanh cung co overhang dep. Gia tri = default Bambu (da chung minh tot).
+    #     Muc do hang (%) = ti le be rong soi KHONG duoc lop duoi do (L1/L2), 100% = bridge.
+    p["enable_overhang_speed"] = ["1"]
+    p["overhang_1_4_speed"] = ["0"]        # 10-25%: gan nhu khong hang -> giu toc (0 = khong ham)
+    p["overhang_2_4_speed"] = ["50"]       # 25-50%
+    p["overhang_3_4_speed"] = ["30"]       # 50-75%
+    p["overhang_4_4_speed"] = ["10"]       # 75-100%
+    p["overhang_totally_speed"] = ["10"]   # 100% (hang hoan toan ~ bridge)
+    why.append("BẬT 'Slow down for overhangs' + tốc độ hẫng 0/50/30/10/10 mm/s (mặc định Bambu, "
+               "wiki xác nhận cho chất lượng tốt hơn hẳn): thân in chạy hết tốc, RIÊNG đường hẫng "
+               ">45° tự hạ tốc theo 4 mức độ hẫng → mặt dưới/dốc mịn KHÔNG cần support. Đây là lý do "
+               "chế độ Nhanh vẫn giữ được overhang đẹp (chỉ mm/s tổng nhanh, đường hẫng vẫn chậm). "
+               "Vị trí: tab Speed ▸ Overhang speed. 0 mm/s ở mức 10-25% = không hãm (gần như không hẫng).")
+    if emit_tips:
+        r["tips"].append(
+            "🪂 Overhang: nếu mặt hẫng vẫn xấu dù đã bật slow-down → (1) model đang bật Arachne nên MẤT "
+            "'smooth overhang transition' (nội suy tốc mượt giữa 4 mức — wiki: chỉ có ở wall generator "
+            "'classic'), overhang chuyển tốc theo BẬC; đổi Wall generator = Classic nếu ưu tiên mặt hẫng "
+            "mượt hơn thin-wall. (2) Hẫng chạm 100% sẽ dùng Bridge speed — chỉnh ở mục Bridge. (3) Cách "
+            "chắc nhất cho hẫng lớn vẫn là xoay mặt hẫng lên trên hoặc thêm support.")
 
     # 6) SEAM — quyet dinh theo BANG TRA wiki Bambu Studio (wiki.bambulab.com/.../Seam),
     #    khong code cung theo cam tinh. Z-seam la diem bat dau moi vong in tren TUONG

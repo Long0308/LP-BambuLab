@@ -45,6 +45,8 @@ SAFE_KEYS = (
     "ironing_type", "infill_wall_overlap", "initial_layer_speed",
     "initial_layer_print_height", "top_surface_pattern", "top_shell_thickness",
     "top_surface_line_width", "bridge_flow", "bridge_speed",
+    "enable_overhang_speed", "overhang_1_4_speed", "overhang_2_4_speed",
+    "overhang_3_4_speed", "overhang_4_4_speed", "overhang_totally_speed",
 )
 
 
