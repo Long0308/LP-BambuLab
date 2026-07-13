@@ -769,16 +769,18 @@ MODES = {
 QUALITY_TAG = {"fast": "Fast", "balanced": "Balanced", "quality": "HighQuality"}
 
 
-def preset_name(mode: str, lh: float, model: str = "") -> str:
-    """Ten preset chuan: LP-BamBu-A1-HighQuality-0.2mm-<model>.
+def preset_name(mode: str, lh: float, filament: str = "") -> str:
+    """Ten preset chuan: LP-<nhua>-<che do>-<lop>mm.
 
-    Prefix co dinh de user loc trong Bambu Studio; hau to model de preset cua
-    2 file khac nhau KHONG ghi de nhau (support/brim suy theo tung model).
+    Vd: LP-PLA-Lite-Fast-0.28mm. Co TEN NHUA de user biet preset danh cho cuon nao
+    (PLA Lite/Matte/Silk khac nhau). KHONG kem ten file model theo yeu cau.
     """
     tag = QUALITY_TAG.get(mode, mode.capitalize())
-    slug = re.sub(r"[^A-Za-z0-9_-]+", "", model)[:20]
-    base = f"LP-BamBu-A1-{tag}-{lh:g}mm"
-    return f"{base}-{slug}" if slug else base
+    # ten nhua -> gon, GIU acronym viet hoa: "PLA LITE" -> "PLA-Lite", "PETG BASIC" -> "PETG-Basic"
+    acr = {"PLA", "PETG", "ABS", "ASA", "TPU", "PVA", "PC", "PA", "PET", "HIPS", "PCTG", "PP", "CF", "GF"}
+    words = [w for w in re.split(r"[^A-Za-z0-9]+", filament or "PLA") if w]
+    fil = "-".join(w.upper() if w.upper() in acr else w.capitalize() for w in words)[:24] or "PLA"
+    return f"LP-{fil}-{tag}-{lh:g}mm"
 
 
 # Vi tri MOI khoa preset trong giao dien Bambu Studio: (tab, section, nhan tieng Anh).
@@ -978,7 +980,10 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced",
     # inherits khop theo layer height (base preset that cua A1), khong cung 1 gia tri
     base = {0.28: "0.28mm Extra Draft", 0.24: "0.24mm Draft", 0.20: "0.20mm Standard",
             0.16: "0.16mm Optimal", 0.12: "0.12mm Fine"}.get(lh, "0.20mm Standard")
-    pname = preset_name(mode, lh, name)
+    # ten nhua: khay AMS THAT (slot 1) > khai bao trong file > mac dinh PLA
+    _ams0 = (r.get("ams") or [None])[0]
+    _cft = ((r.get("config") or {}).get("filament_type") or [None])[0]
+    pname = preset_name(mode, lh, filament=_ams0 or _cft or "PLA")
     p = {
         "from": "User",
         "inherits": f"{base} @BBL A1",

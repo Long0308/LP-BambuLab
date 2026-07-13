@@ -1764,14 +1764,36 @@ function render(j){
       }
       h+='</div>';
     }
-    h+='<button class="btn" style="margin-top:10px" onclick="dl()">Tải preset .json (import vào Bambu Studio)</button>'
+    h+='<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">'
+     +'<label class="mut" style="font-size:13px">Tên preset:</label>'
+     +'<code style="font-size:12px;color:#93c5fd" id="pnamePrefix">'+esc(e.preset&&e.preset.name||"LP-PLA")+'</code>'
+     +'<input id="pnameExtra" placeholder="thêm tên model/ghi chú (tùy chọn)" oninput="pnamePreview()" '
+     +'style="flex:1;min-width:160px;padding:7px;border-radius:8px;border:1px solid #334;background:#0f1523;color:#e8ecf4;font-size:13px">'
+     +'</div>'
+     +'<div class="mut" id="pnameFull" style="font-size:12px;margin:5px 0 8px"></div>'
+     +'<button class="btn" style="margin-top:4px" onclick="dl()">Tải preset .json (import vào Bambu Studio)</button>'
      +'<div class="mut" style="margin-top:9px;line-height:1.6">✅ <b>Checklist sau khi import</b> (File ▸ Import ▸ Import Configs):<br>'
      +'1️⃣ <b>CHỌN preset ở dropdown Process</b> — import xong Studio KHÔNG tự áp, đây là lỗi số 1.<br>'
      +'2️⃣ Có dùng support: tab Support bật <b>Advanced</b> → kiểm Support/raft interface = đúng khay, Top Z distance đúng như dòng giải thích ở trên.<br>'
      +'3️⃣ Bấm in: map khay AMS đúng nhựa/màu như file khai báo.<br>'
      +'4️⃣ Slice → Preview: kéo thanh lớp, nhìn lớp interface đổi màu ngay dưới mặt hẫng là chuẩn.</div></div>';
     window.__preset=e.preset; window.__pname=(j.name||"file").replace(/\.[^.]+$/,"");
+    pnamePreview();
   }
+// Chen text user go vao ten preset NGAY TRUOC che do (Fast/Balanced/HighQuality):
+// LP-PLA-Lite-Balanced-0.2mm + "vase" -> LP-PLA-Lite-vase-Balanced-0.2mm
+function pnameWith(base,extra){
+  extra=(extra||"").trim().replace(/[^A-Za-z0-9_-]+/g,"-").replace(/^-+|-+$/g,"").slice(0,24);
+  if(!extra) return base;
+  const m=base.match(/^(LP-.+?)-(Fast|Balanced|HighQuality)-(.+)$/);
+  return m ? m[1]+"-"+extra+"-"+m[2]+"-"+m[3] : base+"-"+extra;
+}
+function pnamePreview(){
+  const p=window.__preset; if(!p) return;
+  const ex=(document.getElementById("pnameExtra")||{}).value||"";
+  const full=pnameWith(p.name||"LP-PLA-preset",ex);
+  const el=document.getElementById("pnameFull"); if(el) el.innerHTML="→ Tên khi xuất: <b style=\"color:#22c55e\">"+esc(full)+"</b>";
+}
   h+='<button class="btn go" id="e2e" onclick="optimize()">So sánh 3 chế độ — slice thật 4 lần (~15s)</button>'
    +'<div id="e2eout"></div>'
    +'<div class="card" style="margin-top:10px"><h3 style="margin-top:0">Slice + đẩy xuống máy in</h3>'
@@ -1845,12 +1867,16 @@ function dlp(k){
 }
 function kv(k,v){ return '<div class="kv"><span>'+k+'</span><b>'+esc(v)+'</b></div>'; }
 function dl(){
-  const blob=new Blob([JSON.stringify(window.__preset,null,4)],{type:"application/json"});
+  const p=Object.assign({},window.__preset);           // copy, khong sua ban goc
+  const ex=(document.getElementById("pnameExtra")||{}).value||"";
+  const full=pnameWith(p.name||(window.__pname+"-OPT-process"),ex);
+  p.name=full; p.print_settings_id=full;                // ten trong Bambu = ten user go
+  const blob=new Blob([JSON.stringify(p,null,4)],{type:"application/json"});
   const a=document.createElement("a");
   a.href=URL.createObjectURL(blob);
-  a.download=((window.__preset&&window.__preset.name)||(window.__pname+"-OPT-process"))+".json";
+  a.download=full+".json";
   a.click(); URL.revokeObjectURL(a.href);
-  toast("Đã tải — Import xong nhớ CHỌN preset ở dropdown Process (không tự áp)");
+  toast("Đã tải: "+full+" — Import xong nhớ CHỌN preset ở dropdown Process");
 }
 async function slice(download){
   if(!FILE){ toast("Chọn lại file"); return; }
