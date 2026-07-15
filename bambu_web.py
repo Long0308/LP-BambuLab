@@ -1683,8 +1683,8 @@ function render(j){
 
   if(j.rotations&&j.rotations.length){
     h+='<div class="card"><h3 style="margin-top:0">Thử xoay 2 trục X + Y — tìm mặt úp tốt nhất</h3>'
-     +'<div class="mut" style="font-size:12px;margin-bottom:8px">Tiêu chí xếp hạng: ① overhang nhỏ nhất (ít support, ít xấu mặt) → ② diện tích tiếp xúc bàn lớn nhất (bám chắc, chống warp) → ③ chiều cao thấp nhất (ít lớp, in nhanh). Cùng nguyên lý thuật toán Tweaker (Schranz 2016, Salzburg Research — chính là plugin Auto-Orientation của Cura): overhang là điểm phạt, diện tích đáy + chu vi đáy là điểm thưởng.</div>'
-     +'<table><tr><th>Hướng</th><th>Overhang</th><th>Bám bàn</th><th>Cao</th><th>Dùng được?</th></tr>';
+     +'<div class="mut" style="font-size:12px;margin-bottom:8px">Tiêu chí xếp hạng: ① <b>SUPPORT ít nhất</b> — số cm³ là ƯỚC LƯỢNG TƯƠNG ĐỐI (diện tích hẫng × chiều cao cột chống) để SO SÁNH giữa các hướng, KHÔNG phải gam thật (support in ở ~15% mật độ nên nhẹ hơn nhiều). Điểm mấu chốt: hướng bám bàn to mà support nhiều thì vẫn IN LÂU → xếp support trước. → ② tiếp xúc bàn lớn (bám chắc, chống warp) → ③ thấp nhất. Nguyên lý Tweaker (Schranz 2016 — Auto-Orientation của Cura) + bổ sung ước lượng support theo chiều cao.</div>'
+     +'<table><tr><th>Hướng</th><th>Support</th><th>Overhang</th><th>Bám bàn</th><th>Cao</th><th>Dùng được?</th></tr>';
     for(const r of j.rotations){
       const isCur=(r.axis==="X"||r.axis==null)&&(r.angle===0||r.angle_x===0);
       const style=r.recommend?' style="background:rgba(34,197,94,.16)"':(isCur?' style="background:rgba(56,189,248,.1)"':'');
@@ -1692,6 +1692,7 @@ function render(j){
       h+='<tr'+style+'><td>'+ax+' '+ang+'°'
        +(isCur?' <span class="mut">(hiện tại)</span>':'')
        +(r.recommend?' <b style="color:#22c55e">★ ĐỀ XUẤT</b>':'')+'</td>'
+       +'<td><b>~'+(r.support_cm3!=null?r.support_cm3:'?')+' cm³</b></td>'
        +'<td>'+r.overhang_pct+'%</td><td>'+r.bed_cm2+' cm²</td><td>'+r.height+' mm</td>'
        +'<td class="'+(r.usable?'good':'bad')+'">'+(r.usable?'OK':'bám bàn quá ít')+'</td></tr>';
     }
@@ -1701,7 +1702,7 @@ function render(j){
     if(j.rot_preview&&j.rot_preview.current){
       const pv=j.rot_preview;
       const cm=pv.current_meta;
-      const cmeta=cm?('overhang '+cm.overhang_pct+'% · bám '+cm.bed_cm2+'cm² · cao '+cm.height+'mm'):'';
+      const cmeta=cm?('support ~'+(cm.support_cm3||0)+'cm³ · overhang '+cm.overhang_pct+'% · bám '+cm.bed_cm2+'cm² · cao '+cm.height+'mm'):'';
       h+='<div style="display:flex;gap:18px;flex-wrap:wrap;margin-top:12px;align-items:flex-start">'
        +'<div style="text-align:center"><div class="mut" style="margin-bottom:4px">Hướng hiện tại'
        +(pv.current_is_best?' <span style="color:#22c55e">✓ tốt nhất</span>':'')+'</div>'+pv.current
@@ -1709,11 +1710,13 @@ function render(j){
       // 1-2 GOI Y MEM — user tu chon, khong ep. Vien xanh cho phuong an tot hon hien tai.
       const opts=pv.options||[];
       for(let i=0;i<opts.length;i++){ const o=opts[i];
-        const better=cm&&(o.overhang_pct<cm.overhang_pct-0.3);
+        const better=cm&&((o.support_cm3||0)<(cm.support_cm3||0)-1);
+        const saved=cm?Math.max(0,Math.round(((cm.support_cm3||0)-(o.support_cm3||0))*10)/10):0;
         h+='<div style="text-align:center"><div style="font-weight:700;margin-bottom:4px;color:'
-         +(better?'#22c55e':'#93c5fd')+'">'+(better?'★ ':'')+'Gợi ý '+(i+1)+': xoay '+o.angle+'° trục '+o.axis+'</div>'
+         +(better?'#22c55e':'#93c5fd')+'">'+(better?'★ ':'')+'Gợi ý '+(i+1)+': xoay '+o.angle+'° trục '+o.axis
+         +(saved>0?' — bớt ~'+saved+'cm³ support':'')+'</div>'
          +'<div style="border:2px solid '+(better?'rgba(34,197,94,.5)':'rgba(147,197,253,.35)')+';border-radius:10px;display:inline-block">'+o.svg+'</div>'
-         +'<div class="mut" style="font-size:11px;margin-top:2px">overhang '+o.overhang_pct+'% · bám '+o.bed_cm2+'cm² · cao '+o.height+'mm</div></div>';
+         +'<div class="mut" style="font-size:11px;margin-top:2px">support ~'+(o.support_cm3||0)+'cm³ · overhang '+o.overhang_pct+'% · bám '+o.bed_cm2+'cm² · cao '+o.height+'mm</div></div>';
       }
       h+='</div>';
       h+='<div class="mut" style="font-size:12px;margin-top:8px">'

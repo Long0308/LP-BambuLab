@@ -190,22 +190,28 @@ def try_rotations(tris: list, x_angles=(-60, -45, -30, -15, 0, 15, 30, 45, 90, 1
                 zmax = ztop
             rows.append((ar, nz2, ztop))
         over = bed = 0.0
+        sup_vol = 0.0     # UOC LUONG SUPPORT: dien tich hang x chieu cao cot chong (mm3)
+        zbase = zmin or 0
         for ar, nz2, ztop in rows:
             if nz2 < -COS45:
                 if ztop - zmin <= BED_EPS:
                     bed += ar
                 else:
                     over += ar
+                    sup_vol += ar * (ztop - zbase)   # mat hang cang CAO khoi ban -> cot cang dai
         return {"axis": axis, "angle": ang, "angle_x": ang if axis == "X" else None,
                 "overhang_pct": round(over / tot * 100, 2) if tot else 0.0,
                 "bed_cm2": round(bed / 100, 1),
+                "support_cm3": round(sup_vol / 1000, 1),   # mm3 -> cm3 (ti le nhua+gio support)
                 "height": round((zmax or 0) - (zmin or 0), 1),
                 "usable": bed / 100 >= MIN_BED_CM2}
 
     out = [measure("X", ax) for ax in x_angles] + [measure("Y", ay) for ay in y_angles]
     good = [x for x in out if x["usable"]]
     if good:
-        best = min(good, key=lambda x: (x["overhang_pct"], -x["bed_cm2"], x["height"]))
+        # Xep hang theo SUPPORT THAT (cm3 = it nhua+gio nhat) truoc, roi bam ban, roi cao.
+        # Truoc day chi theo overhang% -> co the chon huong bam ban to nhung support NHIEU.
+        best = min(good, key=lambda x: (x["support_cm3"], x["overhang_pct"], -x["bed_cm2"], x["height"]))
         best["recommend"] = True
     return out
 
@@ -286,23 +292,24 @@ def rot_preview(tris: list, rots: list, color: str | None = None) -> dict:
                 pass
     out = {"current": render_iso_svg(tris, "X", 0, rgb=rgb)}
 
-    # 1-2 GOI Y XOAY — CHI khi THUC SU dang can nhac, khong bia phuong an te hon:
-    #   - overhang phai THAP HON ro rang (>=0.3%) -> co ly do de xoay (bot support)
-    #   - bam ban du CHAC ve tuyet doi (>=20cm2, canh vuong ~45mm) VA khong sut qua
-    #     nua so voi hien tai -> tranh "bay canh dao" (vd 7.9cm2) ma header canh bao.
-    # Huong hien tai da it overhang nhat + bam tot -> options rong -> "da tot nhat".
+    # 1-2 GOI Y XOAY — CHI khi THUC SU BOT SUPPORT, khong bia phuong an te hon:
+    #   - support_cm3 phai THAP HON ro rang -> xoay de BOT NHUA+GIO support (dung y user:
+    #     bam ban to ma support nhieu thi in lau, khong dang)
+    #   - bam ban du CHAC (>=20cm2 VA khong sut qua nua) -> tranh "bay canh dao"
+    # Huong hien tai da it support nhat + bam tot -> options rong -> "da tot nhat".
     cur = next((x for x in rots if x["axis"] == "X" and x["angle"] == 0), None)
-    cur_ov = cur["overhang_pct"] if cur else 999.0
+    cur_sup = cur.get("support_cm3", 999.0) if cur else 999.0
     cur_bed = cur["bed_cm2"] if cur else 0.0
     bed_floor = max(20.0, 0.5 * cur_bed)
     ranked = sorted((x for x in rots if x.get("usable")),
-                    key=lambda x: (x["overhang_pct"], -x["bed_cm2"], x["height"]))
+                    key=lambda x: (x.get("support_cm3", 0), -x["bed_cm2"], x["height"]))
     opts, seen = [], set()
     for x in ranked:
         if x["axis"] == "X" and x["angle"] == 0:
             continue                                   # bo huong hien tai
-        if x["overhang_pct"] > cur_ov - 0.3:
-            continue                                   # khong bot support -> vo nghia
+        # phai bot support DANG KE (>=15% hoac >=3cm3) — khong xoay chi de nhinh chut
+        if x.get("support_cm3", 0) > cur_sup - max(3.0, 0.15 * cur_sup):
+            continue
         if x["bed_cm2"] < bed_floor:
             continue                                   # bam qua it/tut manh -> bay canh dao
         key = (x["axis"], x["angle"])
@@ -311,12 +318,14 @@ def rot_preview(tris: list, rots: list, color: str | None = None) -> dict:
         seen.add(key)
         opts.append({"axis": x["axis"], "angle": x["angle"], "overhang_pct": x["overhang_pct"],
                      "bed_cm2": x["bed_cm2"], "height": x["height"],
+                     "support_cm3": x.get("support_cm3", 0),
                      "svg": render_iso_svg(tris, x["axis"], x["angle"], rgb=rgb)})
         if len(opts) >= 2:
             break
     out["options"] = opts
     out["current_meta"] = ({"overhang_pct": cur["overhang_pct"], "bed_cm2": cur["bed_cm2"],
-                            "height": cur["height"]} if cur else None)
+                            "height": cur["height"], "support_cm3": cur.get("support_cm3", 0)}
+                           if cur else None)
     # "tot nhat" = KHONG con phuong an xoay AN TOAN nao tot hon (khop voi options)
     out["current_is_best"] = not opts
     return out
@@ -570,6 +579,26 @@ def _advise(r: dict) -> None:
             f"KHÔNG in đặc được (Wikifactory); 1.2mm = 2 perimeter khuyến nghị (LayerX); "
             f"chịu lực nên ≥1.5mm (3D Demand). Arachne (đã bật) cứu được phần nào, nhưng "
             f"triệt để phải dày hóa trong CAD hoặc scale model lên.")
+    # VAT CAO -> canh bao LECH TRUC / VENH DINH tren A1 (bed-slinger day ban Y). Cang cao,
+    # tam khoi cao, quan tinh khi ban giat cang lon -> ~2/3 chieu cao hay lech/nghieng.
+    # Nguon: wiki Bambu layer-shift + dac thu A1 khung ho 1 ray Z.
+    m0 = r.get("mesh") or {}
+    h_tall = m0.get("height") or 0
+    dims0 = m0.get("dims") or []
+    footmin = min(dims0[0], dims0[1]) if len(dims0) >= 2 and dims0[0] and dims0[1] else 999
+    slim = (h_tall / footmin) if footmin else 0     # cao/canh day nho nhat: >3 la manh de venh
+    if h_tall >= 140:
+        r["issues"].append(
+            f"VẬT CAO {h_tall:.0f}mm (>140mm){' + MẢNH (cao/đáy '+str(round(slim,1))+'×)' if slim>3 else ''}: "
+            f"trên A1 (đẩy bàn trục Y, khung hở 1 ray Z) dễ LỆCH TRỤC / nghiêng ở ~2/3 chiều cao — "
+            f"lúc này khối cao, quán tính khi bàn giật lớn nhất, cộng rung cộng hưởng.")
+        r["tips"].append(
+            f"🗼 Vật cao {h_tall:.0f}mm chống lệch trục Z (nguồn: wiki Bambu layer-shift + đặc thù A1): "
+            "(1) BẬT 'Auto-recovery from step loss' trên máy (Cài đặt ▸ Print Options) — máy tự về đúng "
+            "vị trí khi mất bước. (2) GIẢM tốc + gia tốc: outer/inner wall accel về ~3000–5000, tốc thành "
+            "ngoài ≤120 để bớt lực giật (chế độ Cân bằng/Đẹp đã chậm hơn Nhanh). (3) Căng lại DÂY ĐAI "
+            "trục Y (chùng đai = lệch lặp ở cùng cao độ). (4) Brim/đáy rộng cho vững chân; nếu quá mảnh: "
+            "chẻ đôi in 2 phần rồi ghép, hoặc xoay cho THẤP xuống. (5) Đừng đổi sang tốc Ludicrous giữa in.")
     m = r.get("mesh") or {}
     if m:
         if m["need_support"]:
