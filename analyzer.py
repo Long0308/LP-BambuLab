@@ -594,20 +594,24 @@ def _advise(r: dict) -> None:
             f"lúc này khối cao, quán tính khi bàn giật lớn nhất, cộng rung cộng hưởng. Nếu có hướng xoay "
             f"THẤP hơn (xem card Xoay) thì nên xoay để hạ độ cao + bớt support.")
         r["tips"].append(
-            f"🗼 Vật cao {h_tall:.0f}mm chống lệch trục Z — CHỈNH GÌ, BAO NHIÊU, Ở ĐÂU (wiki Bambu "
-            "layer-shift + đặc thù A1):\n"
-            "• 🔄 TỐT NHẤT: xoay cho THẤP xuống nếu có hướng khác (xem card Xoay) — vừa hạ độ cao, "
-            "vừa bớt support, giải quyết tận gốc thay vì chỉ giảm tốc.\n"
-            "• ⬆️ BẬT 'Auto-recovery from step loss' — trên MÀN HÌNH MÁY IN (Cài đặt ▸ Print Options), "
-            "KHÔNG phải trong Studio. Máy tự về đúng vị trí khi mất bước (quan trọng nhất).\n"
-            "• ⬇️ GIẢM gia tốc — Speed ▸ Acceleration: Outer wall 5000→3000, Normal printing 6000→4000, "
-            "Inner wall để 0 (theo normal). Travel giữ nguyên 10000.\n"
-            "• ⬇️ GIẢM tốc thành ngoài — Speed ▸ Outer wall: về ≤120 mm/s (Cân bằng đang 150).\n"
-            "• ⬆️ BẬT 'Slow down by height' — Speed: giảm tốc dần khi lên cao (đỡ quán tính ở đỉnh).\n"
-            "• 🔧 CĂNG lại DÂY ĐAI trục Y (phần cứng) — chùng đai = lệch LẶP LẠI ở cùng cao độ.\n"
-            "• 🧱 Brim + đáy rộng cho vững chân; quá mảnh (cao/đáy >3×) thì chẻ đôi in 2 phần rồi ghép, "
-            "hoặc xoay cho THẤP xuống.\n"
-            "• ⛔ ĐỪNG đổi sang tốc 'Ludicrous' giữa lúc in (gây mất bước tức thì).")
+            f"🗼 Vật cao {h_tall:.0f}mm — MẸO GHI NHỚ: 'GIẢM GIẬT, NEO CHẶT, NGUỘI ĐỈNH' "
+            "(nguồn CHÍNH THỨC A1: SparkLab academy Bambu + wiki layer-shift). A1 đẩy BÀN trục Y "
+            "→ vật càng cao quán tính khi bàn giật càng lớn → sway/lệch. KHÔNG phải in chậm ĐỀU — "
+            "mà chỉnh đúng chỗ:\n"
+            "• 🔄 GỐC NHẤT: xoay THẤP xuống nếu có hướng khác (card Xoay) — hạ độ cao + bớt support. "
+            "Vật cao-mảnh: nghiêng 10–20° cho nằm dọc trục X (bàn giật trục Y ít lắc hơn).\n"
+            "• ⬇️ GIẢM GIẬT (quan trọng NHẤT — gia tốc mới là thủ phạm, không phải tốc độ): "
+            "Speed ▸ Acceleration về <3000 mm/s², Travel speed <400 mm/s (số chính thức A1).\n"
+            "• 🧱 NEO CHẶT: Brim 5–10mm + Brim-object gap = 0 (dính khít, chống lật — chỉ vật cao mới "
+            "để 0); đáy nhỏ thì thêm Tree support quàng quanh GIỮA-TRÊN thân như 'tay ôm' giữ đỉnh.\n"
+            "• 🧊 NGUỘI ĐỈNH: Filament ▸ tăng 'Layer time' (Max Fan Threshold) ~10s + bật 'Slow "
+            "printing down for better layer cooling', min speed 20mm/s — đỉnh nhỏ mỗi lớp in nhanh "
+            "quá nên tự chậm lại cho kịp nguội, hết rung đỉnh.\n"
+            "• 🌀 Ruột Gyroid/Aligned Rectilinear (KHÔNG Grid) — Grid có đường cắt chéo, đầu phun cà "
+            "qua điểm giao gây lắc.\n"
+            "• ⬆️ BẬT 'Auto-recovery from step loss' trên MÀN HÌNH MÁY (Cài đặt ▸ Print Options) — máy "
+            "tự về đúng chỗ khi mất bước. 🔧 Căng lại đai trục Y (chùng = lệch lặp cùng cao độ). "
+            "⛔ Đừng đổi tốc Ludicrous giữa in.")
     m = r.get("mesh") or {}
     if m:
         if m["need_support"]:
