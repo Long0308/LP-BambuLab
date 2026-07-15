@@ -1536,18 +1536,14 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced",
         p["outer_wall_acceleration"] = ["3000"]     # thanh ngoai (mat nhin thay) < 3000 theo A1 guide
         p["inner_wall_acceleration"] = ["0"]        # 0 = theo default (4000)
         p["travel_speed"] = ["380"]                 # < 400 (A1 guide) — bot luc giat khi bay
-        # tocdo thanh ngoai cung ha <=120 cho vat cao (neu dang cao hon)
-        try:
-            cur_outer = int((p.get("outer_wall_speed") or ["150"])[0])
-        except (ValueError, IndexError):
-            cur_outer = 150
-        if cur_outer > 120:
-            p["outer_wall_speed"] = ["120"]
+        # CHI accel + travel (nguon A1 guide). KHONG cap outer_wall_speed: do slice that
+        # thay cap 150->120 ton them ~2% time ma khong co trong huong dan chinh thuc.
         why.append(f"VẬT CAO {h_mm:.0f}mm → TỰ GIẢM để chống lệch trục (đã ghi sẵn trong preset, "
                    f"không phải chỉnh tay): gia tốc chung 6000→4000, thành ngoài →3000 mm/s², tốc di "
-                   f"chuyển 700→380 mm/s (<400), tốc thành ngoài ≤120. Gia tốc mới là thủ phạm chính "
-                   f"khi bàn đảo chiều (nguồn chính thức A1: SparkLab). Muốn chắc hơn nữa: xem tip 🗼 "
-                   f"(brim gap 0, min layer time, tree support giữa-trên).")
+                   f"chuyển 700→380 mm/s (<400). Gia tốc mới là THỦ PHẠM CHÍNH khi bàn đảo chiều "
+                   f"(nguồn chính thức A1: SparkLab — accel<3000, travel<400). Đo slice thật: chỉ chậm "
+                   f"~7% (đổi lấy khỏi fail). Muốn chắc hơn: xem tip 🗼 (brim gap 0, min layer time, "
+                   f"tree support giữa-trên, hạ tốc thành ngoài tay nếu cần).")
 
     vl = r.get("variable_layer")
     if vl and vl["extra_layers"] > VLH_WARN_LAYERS:
