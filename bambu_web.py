@@ -1673,13 +1673,21 @@ ANALYZE_PAGE = r"""<!doctype html><html lang="vi"><head>
   • <b>ẨM:</b> hơi nước sôi trong nozzle → bọt, tắc từng phần.<br>
   • <b>Nhiệt THẤP:</b> chưa chảy đủ → under-melt → tắc (ngược với nhão).<br>
   • <b>Tốc quá nhanh</b> (Ludicrous): không kịp chảy → tắc từng phần.<br><br>
+  <div style="background:rgba(34,197,94,.12);border-left:3px solid #22c55e;border-radius:8px;padding:9px 11px;margin:6px 0 10px">
+  <b>✅ SỐ AN TOÀN CỘNG ĐỒNG dùng cho Matte / đen (A1) — chốt từ forum + Reddit:</b><br>
+  • <b>Nhiệt đầu phun 230°C</b> (KHÔNG để 220 stock, tuyệt đối không mượn profile Lite 210). Ca cứng đầu tăng dần +5°C tới <b>≤255°C</b>. <span class="mut">— Olias, DRCGRAPIX, Kevin1973</span><br>
+  • <b>Max volumetric speed HẠ còn ~12 mm³/s</b> (stock PLA ~21-22 — Matte chảy chậm hơn, giảm ~½ là chống kẹt hiệu quả nhất). <span class="mut">— oksanka 22→12; Olias: Generic PLA để ½ flow của Bambu PLA</span><br>
+  • <b>Flow ratio ≈ 0.98-0.99</b> (Matte đùn hơi thiếu so với PLA thường). <span class="mut">— Kevin1973: Elegoo Matte Gray 230°C + flow 0.99 hết lỗi</span><br>
+  • <b>Bàn 55°C</b> (đầu bảng PLA 45-60°C của wiki — đen hút nhiệt, để thấp giảm heat creep). Khung A1 HỞ sẵn nên PLA gần như không heat-creep, đây là lợi thế.<br>
+  • <b>Sấy trước khi in:</b> cộng đồng đo cuộn Bambu Matte ra lò đã ẩm ~15g/cuộn, đẩy ẩm AMS 10%→30%+. Trắng in đẹp, ĐEN/xám hay lỗi nhất.
+  </div>
   <b>Thông số HAY SAI (kiểm lại):</b><br>
-  1️⃣ <b>Dùng NHẦM profile nhựa</b> → sai nhiệt. Matte cần ~<b>220°C</b> (hạt độn cản chảy, cần NÓNG hơn Lite 210); dùng profile Lite/generic cho Matte = quá nguội → under-melt kẹt. Chọn ĐÚNG "Bambu PLA Matte" / "PLA Lite" trong Project Filaments.<br>
-  2️⃣ <b>Max volumetric speed</b>: Matte chảy chậm hơn — đặt tốc cao vượt trần → kẹt. Hub đã tính trần theo cuộn.<br>
+  1️⃣ <b>Dùng NHẦM profile nhựa</b> → sai nhiệt. Matte cần <b>230°C</b> (hạt độn cản chảy, cần NÓNG hơn Lite 210); dùng profile Lite/generic cho Matte = quá nguội → under-melt kẹt. Chọn ĐÚNG "Bambu PLA Matte" / "PLA Lite" trong Project Filaments.<br>
+  2️⃣ <b>Max volumetric speed</b>: Matte chảy chậm hơn — đặt tốc cao vượt trần → kẹt. Hạ trần còn ~12 (Filament ▸ Setting Overrides ▸ Max volumetric speed). Hub đã tính trần theo cuộn.<br>
   3️⃣ <b>Chưa COLD PULL:</b> Matte/đen tích cặn — wiki khuyên cold pull ≥1 lần/tháng (làm nóng 260°C, để nguội một phần, rút ra kéo theo cặn). Đây là fix số 1 cho kẹt lặp lại.<br>
   4️⃣ Bàn nóng + phòng nóng → heat creep: PLA nên MỞ thoáng, không che kín.<br><br>
-  <b>Fix nhanh khi đang kẹt:</b> Cold pull (A1: wiki.bambulab.com/en/a1-mini/troubleshooting/nozzle-clog) → sấy cuộn → chọn đúng profile → chậm lại (đừng Ludicrous) → kiểm silicone sock còn ôm nozzle.<br>
-  🔗 Nguồn: wiki.bambulab.com/en/knowledge-sharing/how_to_avoid_nozzle_clogs + heat-creep guide + forum BL Matte PLA + r/BambuLab (đen kẹt A1).
+  <b>Fix nhanh khi ĐANG kẹt cứng:</b> nâng nozzle <b>280-300°C</b> để hoá lỏng cục Matte kẹt trong nozzle rồi đùn/rút mạnh (Reddit r/BambuLab) → Cold pull (A1: wiki.bambulab.com/en/a1-mini/troubleshooting/nozzle-clog) → sấy cuộn → chọn đúng profile → chậm lại (đừng Ludicrous) → kiểm silicone sock còn ôm nozzle.<br>
+  🔗 Nguồn: forum.bambulab.com/t/matte-filament-poor-print-quality/30567 + wiki heat-creep (A1 khung hở) + r/BambuLab (đen kẹt, 300°C hoá lỏng) + how_to_avoid_nozzle_clogs.
   </div>
 </details>
 
