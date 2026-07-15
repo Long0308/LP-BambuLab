@@ -1600,6 +1600,30 @@ ANALYZE_PAGE = r"""<!doctype html><html lang="vi"><head>
   </div>
 </details>
 
+<details style="margin-top:12px;background:#0f1523;border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:12px">
+  <summary style="cursor:pointer;font-weight:700;font-size:15px">📖 CÓ PHẢI CỨ TĂNG LÀ TỐT? — nguyên tắc chỉnh thông số (đọc kỹ trước khi tự vặn)</summary>
+  <div class="mut" style="margin-top:10px;line-height:1.7">
+  <b>KHÔNG.</b> Đa số thông số có VÙNG TỐI ƯU — tăng quá tay còn hại hơn. Chia 4 nhóm:<br><br>
+  <b>① Có VÙNG TỐI ƯU — tăng quá = XẤU (nguy hiểm nhất):</b><br>
+  • <b>Bridge flow</b>: cao quá → vón cục, chảy xệ (PLA ~1.5, PETG chỉ ~1.05 — KHÁC nhau, không phải cao hơn là tốt).<br>
+  • <b>Nhiệt độ</b>: cao quá → chảy nhão, rủ overhang, kéo sợi; thấp quá → yếu lớp. Có điểm ngọt.<br>
+  • <b>Quạt làm mát</b>: PLA thích tối đa, nhưng ABS/ASA bật nhiều → nứt/tách lớp. Ngược nhau theo nhựa.<br>
+  • <b>Gia tốc</b>: cao → nhanh nhưng RUNG/lệch trục (vật cao); thấp → sạch nhưng chậm. Đánh đổi, không "cao là ngon".<br>
+  • <b>Retraction (rút)</b>: nhiều quá → kẹt/mài nhựa, thiếu → kéo sợi.<br><br>
+  <b>② LỢI ÍCH GIẢM DẦN — tăng thêm chỉ tốn công/nhựa:</b><br>
+  • <b>Infill</b>: 15-25% đã chắc; >40-50% gần như không bền thêm mà lâu + nặng (Markforged/Ultimaker). Độ bền do THÀNH + hướng in quyết định, không phải ruột.<br>
+  • <b>Số thành (walls)</b>: 3-5 là điểm ngọt; >6 bền không đáng kể mà chậm (Sandwich Panel Theory).<br>
+  • <b>Lớp mặt trên</b>: đủ lấp kín (~5-6 lớp ở 0.2mm) là dừng; dư chỉ phí giờ.<br><br>
+  <b>③ TĂNG = TỐT nhưng ĐÁNH ĐỔI (cân theo nhu cầu):</b><br>
+  • <b>Brim</b> rộng: bám chắc hơn nhưng khó gỡ + phải gọt via.<br>
+  • <b>Support</b> dày: đỡ tốt hơn nhưng tốn nhựa + để lại sẹo mặt.<br><br>
+  <b>④ TĂNG = ẢO (máy chặn):</b><br>
+  • <b>Tốc độ</b> đặt cao hơn TRẦN LƯU LƯỢNG (nhựa mm³/s ÷ (layer × line width)) = số ảo, máy tự hãm. Hub đã tính trần này.<br><br>
+  🎯 <b>Thứ tự ưu tiên khi muốn CHẮC/ĐẸP hơn</b> (cộng đồng đồng thuận): <b>Hướng in > Số thành > Nhựa+calib > Ruột.</b> Đổi hướng + tăng thành hiệu quả hơn tăng infill nhiều.<br>
+  🔗 Nguồn: Ultimaker/Markforged (infill diminishing returns), wiki Bambu (bridge/flow/tốc độ), r/3Dprinting (orientation > walls > infill).
+  </div>
+</details>
+
 <div id="toast"></div>
 <script>
 let FILE=null;
