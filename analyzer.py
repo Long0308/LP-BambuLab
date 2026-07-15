@@ -113,8 +113,10 @@ def mesh_stats(tris: list) -> dict:
     zs = [v[2] for t in tris for v in t]
     xs = [v[0] for t in tris for v in t]
     ys = [v[1] for t in tris for v in t]
-    zmin = min(zs)
+    zmin, zmax = min(zs), max(zs)
+    H = (zmax - zmin) or 1.0
     tot = over = bed = 0.0
+    over_band = [0.0, 0.0, 0.0]     # overhang theo TANG: [duoi 1/3, giua 1/3, tren 1/3]
     for p, q, r in tris:
         ux, uy, uz = q[0]-p[0], q[1]-p[1], q[2]-p[2]
         vx, vy, vz = r[0]-p[0], r[1]-p[1], r[2]-p[2]
@@ -129,15 +131,23 @@ def mesh_stats(tris: list) -> dict:
                 bed += a
             else:
                 over += a
+                # tam giac hang thuoc tang nao (theo cao do trong tam)
+                zc = (p[2] + q[2] + r[2]) / 3
+                band = min(2, int((zc - zmin) / H * 3))
+                over_band[band] += a
+    top_frac = round(over_band[2] / over, 2) if over else 0.0
     return {
         "dims": [round(max(xs)-min(xs), 1), round(max(ys)-min(ys), 1), round(max(zs)-min(zs), 1)],
-        "height": round(max(zs)-min(zs), 1),
+        "height": round(H, 1),
         "triangles": len(tris),
         "area_cm2": round(tot / 100, 1),
         "overhang_cm2": round(over / 100, 1),
         "overhang_pct": round(over / tot * 100, 2) if tot else 0.0,
         "bed_cm2": round(bed / 100, 1),
         "need_support": (over / tot * 100 if tot else 0) > 1.0,
+        # phan bo overhang theo TANG chieu cao (%) — de biet mai/khe tap trung o dau
+        "over_band_pct": [round(x / over * 100) if over else 0 for x in over_band],
+        "over_top_frac": top_frac,   # ti le overhang o 1/3 TREN — cao = "hong o 2/3-3/3"
     }
 
 
@@ -612,6 +622,21 @@ def _advise(r: dict) -> None:
             "• ⬆️ BẬT 'Auto-recovery from step loss' trên MÀN HÌNH MÁY (Cài đặt ▸ Print Options) — máy "
             "tự về đúng chỗ khi mất bước. 🔧 Căng lại đai trục Y (chùng = lệch lặp cùng cao độ). "
             "⛔ Đừng đổi tốc Ludicrous giữa in.")
+        # OVERHANG TAP TRUNG O NUA TREN -> canh bao ca lech (co hoc) LAN mai/khe hong (hinh hoc)
+        top_f = m0.get("over_top_frac", 0)
+        band = m0.get("over_band_pct") or [0, 0, 0]
+        if top_f >= 0.4 and (m0.get("overhang_cm2") or 0) >= 3:
+            r["issues"].append(
+                f"⚠️ HỎNG Ở ~2/3 TRÊN không chỉ do rung: {int(top_f*100)}% mặt hẫng nằm ở 1/3 TRÊN "
+                f"(phân bố dưới/giữa/trên = {band[0]}/{band[1]}/{band[2]}%). Phần trên có mái nghiêng/khe "
+                f"hẫng tập trung → in thẳng 2/3 dưới OK, tới đó mới xệ + tích nhiệt cộng hưởng. Đây là "
+                f"lý do in đầu đẹp, 70% mới hỏng.")
+            r["tips"].append(
+                f"🎯 Overhang dồn ở 1/3 TRÊN ({int(top_f*100)}%) — support ở đây QUAN TRỌNG KHÔNG KÉM "
+                "chống rung: (1) TỐT NHẤT xoay cho phần mái/khe úp xuống hoặc thành mặt bên (card Xoay — "
+                "vừa bớt hẫng vừa hạ độ cao). (2) In đứng thì BẬT support (hub đã tự bật) + Paint thêm "
+                "Tree support quàng quanh phần thân GIỮA-TRÊN như 'tay ôm' để vừa đỡ mái vừa giữ khối "
+                "khỏi lắc (SparkLab A1). (3) Tăng cooling + min layer time cho vùng trên đỡ tích nhiệt.")
     m = r.get("mesh") or {}
     if m:
         if m["need_support"]:
