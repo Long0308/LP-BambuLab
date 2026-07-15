@@ -1624,6 +1624,25 @@ ANALYZE_PAGE = r"""<!doctype html><html lang="vi"><head>
   </div>
 </details>
 
+<details style="margin-top:12px;background:#0f1523;border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:12px">
+  <summary style="cursor:pointer;font-weight:700;font-size:15px">🌡️ Nhão / rủ overhang / kéo sợi — do NHIỆT hay ẨM hay QUẠT?</summary>
+  <div class="mut" style="margin-top:10px;line-height:1.7">
+  <b>3 thủ phạm dễ nhầm nhau — phân biệt trước khi chỉnh:</b><br>
+  • <b>NHIỆT cao</b> → mặt bóng nhẫy, overhang rủ/xệ, blob ở góc, kéo sợi DÀY. Nhựa ra chảy loãng.<br>
+  • <b>ẨM (nhựa hút nước)</b> → kéo sợi MẢNH như tơ + xù lông + nghe <b>lách tách/xì</b> ở đầu phun, mặt rỗ li ti. PLA Lite rẻ, hút ẩm rất nhanh, khay AMS Lite KHÔNG sấy.<br>
+  • <b>THIẾU QUẠT</b> → overhang rủ dù nhiệt đúng, chi tiết nhỏ dính chảy (lớp chưa kịp nguội đã in lớp kế).<br><br>
+  <b>Cách thử nhanh:</b> đùn 100mm nhựa giữa không khí → sợi có bọt li ti/lởm chởm = ẨM; sợi bóng mượt chảy nhanh = NHIỆT cao.<br><br>
+  <b>Fix cho PLA Lite (số official Bambu GitHub):</b><br>
+  1️⃣ <b>Nhiệt đầu phun = 210°C</b> (PLA Lite chuẩn là 210, KHÔNG phải 220 như PLA Basic — nếu bạn để 220 là đang QUÁ 10°C). Filament ▸ Nozzle temperature.<br>
+  2️⃣ Overhang vẫn rủ → hạ thêm <b>200-205°C</b> + <b>quạt 100%</b> (PLA thích tối đa) + hạ tốc overhang (hub đã set 0/50/30/10).<br>
+  3️⃣ Kéo sợi + xù lông → <b>SẤY nhựa 50-55°C trong 8h</b> (máy sấy / nồi chiên không dầu hé) rồi cất kèm hút ẩm. Đây là fix số 1 nếu là ẩm — chỉnh nhiệt không cứu được ẩm.<br>
+  4️⃣ Bàn 65°C (textured PEI) cho PLA là ĐÚNG — không liên quan nhão/rủ.<br>
+  5️⃣ Muốn hết hẳn: <b>Calibration ▸ Temp tower</b> (in tháp nhiệt 190-220) → chọn tầng đẹp nhất cho đúng cuộn.<br><br>
+  ⚠️ <b>Với cuộn PLA Lite vàng của bạn:</b> kéo sợi + xù (ảnh bạn gửi trước) là chữ ký ĐIỂN HÌNH của nhựa ẨM, không phải chỉ nhiệt. Sấy trước, rồi mới giảm nhiệt 210→205. Đừng chỉ vặn nhiệt.<br>
+  🔗 Nguồn: filament preset official bambulab/BambuStudio (PLA Lite @base = 210°C), wiki Bambu filament drying.
+  </div>
+</details>
+
 <div id="toast"></div>
 <script>
 let FILE=null;
