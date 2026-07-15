@@ -48,6 +48,8 @@ SAFE_KEYS = (
     "top_surface_line_width", "bridge_flow", "bridge_speed",
     "enable_overhang_speed", "overhang_1_4_speed", "overhang_2_4_speed",
     "overhang_3_4_speed", "overhang_4_4_speed", "overhang_totally_speed",
+    "default_acceleration", "outer_wall_acceleration", "inner_wall_acceleration",
+    "travel_speed",
 )
 
 

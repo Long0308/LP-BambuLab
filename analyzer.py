@@ -856,6 +856,10 @@ BS_LOC = {
     "internal_solid_infill_speed":    ("Speed",    "Other layers speed", "Internal solid infill"),
     "top_surface_speed":              ("Speed",    "Other layers speed", "Top surface"),
     "initial_layer_speed":            ("Speed",    "Initial layer speed","Initial layer"),
+    "travel_speed":                   ("Speed",    "Travel speed",       "Travel"),
+    "default_acceleration":           ("Speed",    "Acceleration",       "Normal printing"),
+    "outer_wall_acceleration":        ("Speed",    "Acceleration",       "Outer wall"),
+    "inner_wall_acceleration":        ("Speed",    "Acceleration",       "Inner wall"),
     "enable_overhang_speed":          ("Speed",    "Other layers speed", "Slow down for overhangs"),
     "overhang_1_4_speed":             ("Speed",    "Overhang speed",     "Overhang speed 10-25%"),
     "overhang_2_4_speed":             ("Speed",    "Overhang speed",     "Overhang speed 25-50%"),
@@ -939,6 +943,10 @@ def _guide_reason(key: str, val: str, r: dict, lh: float = 0.2) -> str:
         "internal_solid_infill_speed": lambda: f"{val} mm/s (bám trần lưu lượng)",
         "top_surface_speed": lambda: f"{val} mm/s: chậm ở mặt trên cho mịn, kín khe",
         "initial_layer_speed": lambda: "50 mm/s chuẩn A1 (PEI nhám + input shaping); hạ xuống chỉ lâu hơn",
+        "travel_speed": lambda: (f"{val} mm/s (<400): vật cao → giảm để bớt lực giật khi đầu phun bay (A1 guide)" if val and int(float(val))<500 else f"{val} mm/s"),
+        "default_acceleration": lambda: (f"{val} mm/s²: vật cao → giảm (gia tốc là thủ phạm chính gây lệch trục trên A1)" if val=="4000" else f"{val} mm/s²"),
+        "outer_wall_acceleration": lambda: (f"{val} mm/s² (<3000): vật cao → giảm cho mặt ngoài nhìn thấy khỏi rung" if val=="3000" else f"{val} mm/s²"),
+        "inner_wall_acceleration": lambda: "0 = theo gia tốc chung (default_acceleration)",
         "enable_support": lambda: (f"{eff:.1f}cm² hẫng cần đỡ thật (đã trừ {bridge}cm² khe bridge được)" if val == "1"
                                    else f"chỉ {eff:.1f}cm² hẫng thật sau khi trừ khe → bắc cầu được, khỏi support"),
         "support_type": lambda: (f"model phẳng {flat}% → giàn giáo NORMAL đỡ đều" if "normal" in val
@@ -1518,6 +1526,28 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced",
         why.append(f"Lớp đầu giữ 50 mm/s / {lh:g}mm (chuẩn A1): đáy {bed} cm² bám thoải mái trên "
                    f"bàn PEI nhám. 25 mm/s là số cũ cho máy bàn kính — chỉ chậm thêm chứ "
                    f"không bám thêm.")
+
+    # 12) VAT CAO -> TU GIAM GIA TOC + TOC DI CHUYEN (khong chi nhac tip, GHI vao preset).
+    #     Gia toc moi la thu pham chinh khien vat cao lac tren A1 (day ban Y) — nguon
+    #     CHINH THUC A1 (SparkLab): gia toc <3000, travel <400. Ap khi cao >=120mm.
+    #     Da SLICE-TEST cac key nay OK (khong crash CLI nhu brim_object_gap).
+    if h_mm >= 120:
+        p["default_acceleration"] = ["4000"]        # base ~6000 -> 4000
+        p["outer_wall_acceleration"] = ["3000"]     # thanh ngoai (mat nhin thay) < 3000 theo A1 guide
+        p["inner_wall_acceleration"] = ["0"]        # 0 = theo default (4000)
+        p["travel_speed"] = ["380"]                 # < 400 (A1 guide) — bot luc giat khi bay
+        # tocdo thanh ngoai cung ha <=120 cho vat cao (neu dang cao hon)
+        try:
+            cur_outer = int((p.get("outer_wall_speed") or ["150"])[0])
+        except (ValueError, IndexError):
+            cur_outer = 150
+        if cur_outer > 120:
+            p["outer_wall_speed"] = ["120"]
+        why.append(f"VẬT CAO {h_mm:.0f}mm → TỰ GIẢM để chống lệch trục (đã ghi sẵn trong preset, "
+                   f"không phải chỉnh tay): gia tốc chung 6000→4000, thành ngoài →3000 mm/s², tốc di "
+                   f"chuyển 700→380 mm/s (<400), tốc thành ngoài ≤120. Gia tốc mới là thủ phạm chính "
+                   f"khi bàn đảo chiều (nguồn chính thức A1: SparkLab). Muốn chắc hơn nữa: xem tip 🗼 "
+                   f"(brim gap 0, min layer time, tree support giữa-trên).")
 
     vl = r.get("variable_layer")
     if vl and vl["extra_layers"] > VLH_WARN_LAYERS:
