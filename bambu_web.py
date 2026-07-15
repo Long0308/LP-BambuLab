@@ -216,14 +216,30 @@ def _ams_tray_types():
     return out
 
 
+def _ams_tray_colors():
+    """Mau hex tung khay — KHOP DUNG thu tu voi _ams_tray_types (cung dieu kien loc)."""
+    with LOCK:
+        ams = (STATE["data"].get("ams") or {})
+    out = []
+    for u in ams.get("ams", []):
+        for t in (u.get("tray") or []):
+            typ = (t.get("tray_sub_brands") or t.get("tray_type") or "").strip()
+            if typ:
+                c = (t.get("tray_color") or "")[:6]
+                out.append(f"#{c}" if c else "")
+    return out
+
+
 def _run_analyze(name, src_path):
     """Phan tich chay NEN — file lon (300k+ tam giac) mat 30-60s, khong the
     giu request HTTP mo lau vay (Tailscale/trinh duyet cat -> tuong treo)."""
     try:
-        res = analyzer.analyze(src_path, ams=_ams_tray_types(), color=_ams_first_color())
+        _fils = _ams_filament_presets()                  # preset filament tu AMS that
+        res = analyzer.analyze(src_path, ams=_ams_tray_types(),
+                               color=_ams_first_color(), ams_colors=_ams_tray_colors())
         res["ok"] = True
         res["name"] = name
-        res["ams_filaments"] = _ams_filament_presets()   # preset filament tu AMS that
+        res["ams_filaments"] = _fils
         with ANJOB_LOCK:
             ANJOB.update(state="done", msg="Xong", result=res)
     except Exception as e:                                # noqa: BLE001
@@ -1733,6 +1749,22 @@ function render(j){
       if(af.length){ for(const t of af) h+=kv("Khe "+t.slot,'⬤ '+t.sub).replace('⬤','<span style="color:'+esc(t.color)+'">⬤</span>'); }
       else { for(let i=0;i<amsl.length;i++) h+=kv("Khe "+(i+1), amsl[i]); }
       h+='</div>';
+      // CANH BAO DO NGAY TUNG KHAY: nhiet chuan + rui ro (am/ket/warp/den)
+      const adv=j.ams_advice||[];
+      if(adv.length){
+        h+='<div style="margin-top:10px"><div class="mut" style="font-weight:700;margin-bottom:4px">🌡️ Nhiệt chuẩn + cảnh báo từng khay (đối chiếu nguồn Bambu chính thức):</div>';
+        for(const a of adv){
+          const warn=a.level==="warn";
+          const bg=warn?"rgba(239,68,68,.14)":"rgba(56,189,248,.10)";
+          const bd=warn?"#ef4444":"rgba(56,189,248,.4)";
+          h+='<div style="background:'+bg+';border-left:3px solid '+bd+';border-radius:8px;padding:8px 10px;margin-bottom:6px">'
+           +'<b>'+(warn?"🔴 ":"")+'Khe '+a.slot+': '+esc(a.name)+'</b>'
+           +' <span style="color:#fca5a5;font-weight:700">'+esc(a.temp||"?")+'</span>'
+           +(a.flow?' <span class="mut">· flow '+a.flow+' mm³/s</span>':'')
+           +'<div class="mut" style="font-size:12px;margin-top:3px;line-height:1.5">'+esc(a.note||"")+'</div></div>';
+        }
+        h+='</div>';
+      }
       const hasPETG=amsl.some(t=>t.indexOf("PETG")===0), hasPLA=amsl.some(t=>t.indexOf("PLA")===0);
       h+= (hasPETG&&hasPLA)
         ? '<div class="tip" style="margin-top:9px">✓ Có cặp PLA + PETG thật trong khay — cấu hình support interface Z=0 (gỡ đẹp) dùng được. Khai báo cả 2 nhựa trong Project Filaments để hub tự áp.</div>'

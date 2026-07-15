@@ -1580,13 +1580,85 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced",
             "guide": config_guide(p, r)}
 
 
+# THU VIEN DOI CHIEU FILAMENT — de HOC/CANH BAO, khong hardcode vao preset.
+# nozzle temp + max_vol tra tu preset official bambulab/BambuStudio (GitHub); note tu
+# wiki Bambu (clog/heat-creep/drying) + cong dong (r/BambuLab, forum BL). level: warn=do.
+FILAMENT_REF = {
+    "PLA LITE":  {"temp": "210°C", "flow": 16, "level": "info",
+                  "note": "Dòng rẻ, HÚT ẨM rất nhanh (khay AMS Lite không sấy) → kéo sợi/xù thì SẤY 50-55°C/8h. Nhiệt THẤP hơn PLA Basic (210 vs 220)."},
+    "PLA MATTE": {"temp": "220°C", "flow": 22, "level": "warn",
+                  "note": "HẠT ĐỘN mài mòn + tích cặn như nhựa CF → DỄ KẸT. Fix tối ưu (cộng đồng): (1) COLD PULL định kỳ ≥1 lần/tháng — làm nóng 250-260°C, hạ ~90°C rồi rút mạnh kéo cặn ra; (2) cần nhiệt CAO hơn Lite (220, không dùng profile Lite 210 = under-melt kẹt); (3) chọn đúng profile 'PLA Matte'; (4) chậm lại, đừng Ludicrous."},
+    "PLA BASIC": {"temp": "220°C", "flow": 21, "level": "info",
+                  "note": "PLA tiêu chuẩn, dễ in nhất. Ẩm nhẹ theo thời gian."},
+    "PLA SILK":  {"temp": "230°C", "flow": 16, "level": "warn",
+                  "note": "Nhiệt CAO (230) → dễ KÉO SỢI + rủ overhang. Fix: giảm tốc mặt ngoài, tăng retraction, quạt 100%. Không hạ nhiệt quá thấp (mất độ bóng)."},
+    "PLA CF":    {"temp": "230°C", "flow": 18, "level": "warn",
+                  "note": "SỢI CARBON mài mòn nozzle đồng → cần nozzle THÉP CỨNG; tích cặn → cold pull thường xuyên."},
+    "PETG":      {"temp": "245°C", "flow": 21, "level": "warn",
+                  "note": "DÍNH nozzle → nhựa bám đầu phun quẹt vào model gây LỆCH TRỤC (bật Prime tower). Hút ẩm mạnh → sấy 65°C. Bàn 70-80°C."},
+    "PETG BASIC":{"temp": "245°C", "flow": 8,  "level": "warn",
+                  "note": "Flow thấp (8 mm³/s) → tốc phải chậm, vượt là kẹt/under-extrude. Dính nozzle → Prime tower chống lệch."},
+    "ABS":       {"temp": "270°C", "flow": 29, "level": "warn",
+                  "note": "CO NGÓT MẠNH + cần BUỒNG KÍN — A1 khung HỞ rất khó in ABS to (cong vênh/tách lớp). Bật draft_shield, brim rộng, tránh gió. Mùi độc → thoáng khí."},
+    "ASA":       {"temp": "270°C", "flow": 18, "level": "warn",
+                  "note": "Như ABS: co ngót, A1 khung hở dễ vênh. Draft shield + brim. Chịu UV tốt hơn ABS."},
+    "TPU":       {"temp": "235°C", "flow": 15, "level": "warn",
+                  "note": "MỀM/DẺO → in CHẬM ~30 mm/s, retraction thấp, KHÔNG in nhanh (buckling kẹt extruder). Sấy trước."},
+}
+
+
+def _fil_ref(name: str) -> dict | None:
+    """Tra thu vien theo ten khay AMS — khop cu the truoc (PLA MATTE) roi ho nhua."""
+    n = (name or "").upper().strip()
+    if n in FILAMENT_REF:
+        return FILAMENT_REF[n]
+    for key in FILAMENT_REF:
+        if n.startswith(key) or key in n:
+            return FILAMENT_REF[key]
+    fam = n.split()[0] if n else ""
+    return FILAMENT_REF.get(fam)     # PLA/PETG/ABS/ASA/TPU tran
+
+
+def ams_advice(ams: list, colors: list | None = None) -> list:
+    """Doi chieu TUNG khay AMS thuc voi thu vien -> canh bao nhiet/k
+    et/am. colors: list hex '#RRGGBB' cung thu tu (de bat mau DEN → clog)."""
+    out = []
+    colors = colors or []
+    for i, name in enumerate(ams):
+        if not name:
+            continue
+        ref = _fil_ref(name)
+        hexc = (colors[i] if i < len(colors) else "") or ""
+        # mau DEN (rgb thap) → tang canh bao clog (bot carbon)
+        dark = False
+        h = hexc.lstrip("#")
+        if len(h) >= 6:
+            try:
+                dark = sum(int(h[j:j+2], 16) for j in (0, 2, 4)) < 130
+            except ValueError:
+                dark = False
+        item = {"slot": i + 1, "name": name, "color": hexc}
+        if ref:
+            item.update(temp=ref["temp"], flow=ref["flow"], level=ref["level"], note=ref["note"])
+            if dark and ("MATTE" in name.upper() or "PLA" in name.upper()):
+                item["level"] = "warn"
+                item["note"] = "🖤 MÀU ĐEN (bột carbon) → tích cặn + hút nhiệt, cộng đồng A1 báo KẸT nhiều nhất. " + item["note"]
+        else:
+            item.update(temp="?", flow=None, level="info",
+                        note="Không có trong thư viện đối chiếu — kiểm nhiệt theo nhà sản xuất.")
+        out.append(item)
+    return out
+
+
 def analyze(path: str, mode: str = "balanced", ams: list | None = None,
-            color: str | None = None) -> dict:
+            color: str | None = None, ams_colors: list | None = None) -> dict:
     """ams: loai nhua THAT trong khay AMS (tu MQTT, vd ['PLA LITE','PETG BASIC']).
+    ams_colors: hex mau tung khay (cung thu tu) de bat mau DEN -> canh bao clog.
     None/[] = khong sync duoc may -> chi suy theo khai bao trong file."""
     r = (analyze_stl(path, color) if path.lower().endswith(".stl")
          else analyze_3mf(path, color))
     r["ams"] = [str(t).upper() for t in (ams or []) if t]
+    r["ams_advice"] = ams_advice(r["ams"], ams_colors)
     import os as _os
     nm = _os.path.splitext(_os.path.basename(path))[0][:20]
     r["export"] = make_preset(r, nm, mode)
