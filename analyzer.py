@@ -587,18 +587,27 @@ def _advise(r: dict) -> None:
     dims0 = m0.get("dims") or []
     footmin = min(dims0[0], dims0[1]) if len(dims0) >= 2 and dims0[0] and dims0[1] else 999
     slim = (h_tall / footmin) if footmin else 0     # cao/canh day nho nhat: >3 la manh de venh
-    if h_tall >= 140:
+    if h_tall >= 120:      # ha tu 140 -> 120: bundle.3mf 138mm dung in FAIL 2 lan (lot luoi cu)
         r["issues"].append(
-            f"VẬT CAO {h_tall:.0f}mm (>140mm){' + MẢNH (cao/đáy '+str(round(slim,1))+'×)' if slim>3 else ''}: "
+            f"VẬT CAO {h_tall:.0f}mm (≥120mm){' + MẢNH (cao/đáy '+str(round(slim,1))+'×)' if slim>3 else ''}: "
             f"trên A1 (đẩy bàn trục Y, khung hở 1 ray Z) dễ LỆCH TRỤC / nghiêng ở ~2/3 chiều cao — "
-            f"lúc này khối cao, quán tính khi bàn giật lớn nhất, cộng rung cộng hưởng.")
+            f"lúc này khối cao, quán tính khi bàn giật lớn nhất, cộng rung cộng hưởng. Nếu có hướng xoay "
+            f"THẤP hơn (xem card Xoay) thì nên xoay để hạ độ cao + bớt support.")
         r["tips"].append(
-            f"🗼 Vật cao {h_tall:.0f}mm chống lệch trục Z (nguồn: wiki Bambu layer-shift + đặc thù A1): "
-            "(1) BẬT 'Auto-recovery from step loss' trên máy (Cài đặt ▸ Print Options) — máy tự về đúng "
-            "vị trí khi mất bước. (2) GIẢM tốc + gia tốc: outer/inner wall accel về ~3000–5000, tốc thành "
-            "ngoài ≤120 để bớt lực giật (chế độ Cân bằng/Đẹp đã chậm hơn Nhanh). (3) Căng lại DÂY ĐAI "
-            "trục Y (chùng đai = lệch lặp ở cùng cao độ). (4) Brim/đáy rộng cho vững chân; nếu quá mảnh: "
-            "chẻ đôi in 2 phần rồi ghép, hoặc xoay cho THẤP xuống. (5) Đừng đổi sang tốc Ludicrous giữa in.")
+            f"🗼 Vật cao {h_tall:.0f}mm chống lệch trục Z — CHỈNH GÌ, BAO NHIÊU, Ở ĐÂU (wiki Bambu "
+            "layer-shift + đặc thù A1):\n"
+            "• 🔄 TỐT NHẤT: xoay cho THẤP xuống nếu có hướng khác (xem card Xoay) — vừa hạ độ cao, "
+            "vừa bớt support, giải quyết tận gốc thay vì chỉ giảm tốc.\n"
+            "• ⬆️ BẬT 'Auto-recovery from step loss' — trên MÀN HÌNH MÁY IN (Cài đặt ▸ Print Options), "
+            "KHÔNG phải trong Studio. Máy tự về đúng vị trí khi mất bước (quan trọng nhất).\n"
+            "• ⬇️ GIẢM gia tốc — Speed ▸ Acceleration: Outer wall 5000→3000, Normal printing 6000→4000, "
+            "Inner wall để 0 (theo normal). Travel giữ nguyên 10000.\n"
+            "• ⬇️ GIẢM tốc thành ngoài — Speed ▸ Outer wall: về ≤120 mm/s (Cân bằng đang 150).\n"
+            "• ⬆️ BẬT 'Slow down by height' — Speed: giảm tốc dần khi lên cao (đỡ quán tính ở đỉnh).\n"
+            "• 🔧 CĂNG lại DÂY ĐAI trục Y (phần cứng) — chùng đai = lệch LẶP LẠI ở cùng cao độ.\n"
+            "• 🧱 Brim + đáy rộng cho vững chân; quá mảnh (cao/đáy >3×) thì chẻ đôi in 2 phần rồi ghép, "
+            "hoặc xoay cho THẤP xuống.\n"
+            "• ⛔ ĐỪNG đổi sang tốc 'Ludicrous' giữa lúc in (gây mất bước tức thì).")
     m = r.get("mesh") or {}
     if m:
         if m["need_support"]:
