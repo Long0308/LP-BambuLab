@@ -1685,17 +1685,17 @@ ANALYZE_PAGE = r"""<!doctype html><html lang="vi"><head>
   • <b>THIẾU QUẠT</b> → overhang rủ dù nhiệt đúng, chi tiết nhỏ dính chảy (lớp chưa kịp nguội đã in lớp kế).<br><br>
   <b>Cách thử nhanh:</b> đùn 100mm nhựa giữa không khí → sợi có bọt li ti/lởm chởm = ẨM; sợi bóng mượt chảy nhanh = NHIỆT cao.<br><br>
   <b>Fix cho PLA Lite (số official Bambu GitHub):</b><br>
-  1️⃣ <b>Nhiệt đầu phun = 210°C</b> (PLA Lite chuẩn là 210, KHÔNG phải 220 như PLA Basic — nếu bạn để 220 là đang QUÁ 10°C). Filament ▸ Nozzle temperature.<br>
-  2️⃣ Overhang vẫn rủ → hạ thêm <b>200-205°C</b> + <b>quạt 100%</b> (PLA thích tối đa) + hạ tốc overhang (hub đã set 0/50/30/10).<br>
+  1️⃣ <b>Nhiệt đầu phun chuẩn A1 = 220°C</b> (official: 'Bambu PLA Lite @BBL A1' OVERRIDE bản @base 210 lên 220 — đã đối chiếu cả 2 tầng GitHub). Để 220 là ĐÚNG chuẩn máy bạn. Filament ▸ Nozzle temperature.<br>
+  2️⃣ Overhang rủ / kéo sợi → hạ DẦN <b>210-215°C</b> (hướng tuning, không phải chuẩn) + <b>quạt 100%</b> (PLA thích tối đa) + hạ tốc overhang (hub đã set 0/50/30/10).<br>
   3️⃣ Kéo sợi + xù lông → <b>SẤY nhựa 50-55°C trong 8h</b> (máy sấy / nồi chiên không dầu hé) rồi cất kèm hút ẩm. Đây là fix số 1 nếu là ẩm — chỉnh nhiệt không cứu được ẩm.<br>
   4️⃣ Bàn 65°C (textured PEI) cho PLA là ĐÚNG — không liên quan nhão/rủ.<br>
   5️⃣ Muốn hết hẳn: <b>Calibration ▸ Temp tower</b> (in tháp nhiệt 190-220) → chọn tầng đẹp nhất cho đúng cuộn.<br><br>
-  ⚠️ <b>Với cuộn PLA Lite vàng của bạn:</b> kéo sợi + xù (ảnh bạn gửi trước) là chữ ký ĐIỂN HÌNH của nhựa ẨM, không phải chỉ nhiệt. Sấy trước, rồi mới giảm nhiệt 210→205. Đừng chỉ vặn nhiệt.<br><br>
+  ⚠️ <b>Với cuộn PLA Lite vàng của bạn:</b> kéo sợi + xù (ảnh bạn gửi trước) là chữ ký ĐIỂN HÌNH của nhựa ẨM, không phải chỉ nhiệt. Sấy trước, rồi mới giảm nhiệt dần 220→210. Đừng chỉ vặn nhiệt.<br><br>
   <b>❓ Tại sao ĐẦU in đẹp, tới ~2/3 (70%) mới hỏng?</b> — "2/3 mới hỏng" LOẠI TRỪ ẩm/nhiệt toàn cục (mấy cái đó hỏng từ lớp 1). Là lỗi PHỤ THUỘC CHIỀU CAO, 3 khả năng:<br>
   • <b>Tích nhiệt (heat soak):</b> phần dưới in xong vẫn ấm, càng cao càng bí nhiệt → lớp trên chưa nguội đã in lớp kế → overhang bắt đầu xệ. Cùng 1 overhang in đẹp dưới nhưng rủ trên. Fix: min layer time 10s + quạt 100% + hạ nhiệt.<br>
   • <b>Hình học đổi ở 2/3:</b> 2/3 dưới là thành thẳng (dễ), 1/3 trên mới có mái nghiêng/khe (overhang tập trung). Fix: support chỗ đó / XOAY nằm. <i>Hub tự dò: nếu >40% overhang dồn ở 1/3 trên sẽ cảnh báo khi phân tích.</i><br>
   • <b>Rung/lệch trục ở cao:</b> nếu là NGHIÊNG/DỊCH cả khối (không phải chảy xệ) → xem card vật cao.<br>
-  🔗 Nguồn: filament preset official bambulab/BambuStudio (PLA Lite @base = 210°C), wiki Bambu filament drying + heat-creep.
+  🔗 Nguồn: filament preset official bambulab/BambuStudio — 2 TẦNG: 'PLA Lite @base' 210°C nhưng bản máy 'PLA Lite @BBL A1' override 220°C/bàn 65 (tra cả 2 tầng mới đúng); wiki Bambu filament drying + heat-creep.
   </div>
 </details>
 
@@ -1711,14 +1711,14 @@ ANALYZE_PAGE = r"""<!doctype html><html lang="vi"><head>
   • <b>Tốc quá nhanh</b> (Ludicrous): không kịp chảy → tắc từng phần.<br><br>
   <div style="background:rgba(34,197,94,.12);border-left:3px solid #22c55e;border-radius:8px;padding:9px 11px;margin:6px 0 10px">
   <b>✅ SỐ AN TOÀN CỘNG ĐỒNG dùng cho Matte / đen (A1) — chốt từ forum + Reddit:</b><br>
-  • <b>Nhiệt đầu phun 230°C</b> (KHÔNG để 220 stock, tuyệt đối không mượn profile Lite 210). Ca cứng đầu tăng dần +5°C tới <b>≤255°C</b>. <span class="mut">— Olias, DRCGRAPIX, Kevin1973</span><br>
+  • <b>Nhiệt đầu phun 230°C</b> (KHÔNG để 220 stock, tuyệt đối không mượn profile Lite). Ca cứng đầu tăng dần +5°C tới <b>≤255°C</b>. <span class="mut">— Olias, DRCGRAPIX, Kevin1973</span><br>
   • <b>Max volumetric speed HẠ còn ~12 mm³/s</b> (stock PLA ~21-22 — Matte chảy chậm hơn, giảm ~½ là chống kẹt hiệu quả nhất). <span class="mut">— oksanka 22→12; Olias: Generic PLA để ½ flow của Bambu PLA</span><br>
   • <b>Flow ratio ≈ 0.98-0.99</b> (Matte đùn hơi thiếu so với PLA thường). <span class="mut">— Kevin1973: Elegoo Matte Gray 230°C + flow 0.99 hết lỗi</span><br>
   • <b>Bàn 55°C</b> (đầu bảng PLA 45-60°C của wiki — đen hút nhiệt, để thấp giảm heat creep). Khung A1 HỞ sẵn nên PLA gần như không heat-creep, đây là lợi thế.<br>
   • <b>Sấy trước khi in:</b> cộng đồng đo cuộn Bambu Matte ra lò đã ẩm ~15g/cuộn, đẩy ẩm AMS 10%→30%+. Trắng in đẹp, ĐEN/xám hay lỗi nhất.
   </div>
   <b>Thông số HAY SAI (kiểm lại):</b><br>
-  1️⃣ <b>Dùng NHẦM profile nhựa</b> → sai nhiệt. Matte cần <b>230°C</b> (hạt độn cản chảy, cần NÓNG hơn Lite 210); dùng profile Lite/generic cho Matte = quá nguội → under-melt kẹt. Chọn ĐÚNG "Bambu PLA Matte" / "PLA Lite" trong Project Filaments.<br>
+  1️⃣ <b>Dùng NHẦM profile nhựa</b> → sai nhiệt. Matte cần <b>230°C</b> (hạt độn cản chảy, cần NÓNG hơn Lite/Basic 220); dùng profile Lite/generic cho Matte = quá nguội → under-melt kẹt. Chọn ĐÚNG "Bambu PLA Matte" / "PLA Lite" trong Project Filaments.<br>
   2️⃣ <b>Max volumetric speed</b>: Matte chảy chậm hơn — đặt tốc cao vượt trần → kẹt. Hạ trần còn ~12 (Filament ▸ Setting Overrides ▸ Max volumetric speed). Hub đã tính trần theo cuộn.<br>
   3️⃣ <b>Chưa COLD PULL:</b> Matte/đen tích cặn — wiki khuyên cold pull ≥1 lần/tháng (làm nóng 260°C, để nguội một phần, rút ra kéo theo cặn). Đây là fix số 1 cho kẹt lặp lại.<br>
   4️⃣ Bàn nóng + phòng nóng → heat creep: PLA nên MỞ thoáng, không che kín.<br><br>
