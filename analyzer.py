@@ -1755,19 +1755,23 @@ FIL_EXPORT = {
     "PLA MATTE": {"inherits": "Bambu PLA Matte @BBL A1", "verified": True,  # ✓ template
                   "safe": {"nozzle_temperature": "230", "filament_max_volumetric_speed": "12",
                            "filament_flow_ratio": "0.98", "hot_plate_temp": "55"},
-                  "why": "SO AN TOAN cong dong: 230°C + HA volumetric 22→12 (chong ket manh nhat) + flow 0.98."},
-    "PLA BASIC": {"inherits": "Bambu PLA Basic @BBL A1", "verified": False,
+                  "why": "SO AN TOAN cong dong: 230°C + HA volumetric 22→12 (chong ket manh nhat) + flow 0.98. "
+                         "Ban 55 CHU DICH (official A1 = 65): Matte/den hut nhiet, ha ban giam heat-creep "
+                         "theo wiki — ca 4 lech official deu co ly do ghi day."},
+    "PLA BASIC": {"inherits": "Bambu PLA Basic @BBL A1", "verified": True,   # ✓ audit 2 tang
                   "safe": {"nozzle_temperature": "220", "filament_max_volumetric_speed": "21",
-                           "filament_flow_ratio": "0.98", "hot_plate_temp": "55"},
-                  "why": "PLA chuan, de in — giu so official."},
-    "PLA SILK":  {"inherits": "Bambu PLA Silk @BBL A1", "verified": False,
-                  "safe": {"nozzle_temperature": "230", "filament_max_volumetric_speed": "16",
-                           "filament_flow_ratio": "0.98", "hot_plate_temp": "55"},
-                  "why": "Silk can 230 giu do bong, flow thap chong keo soi."},
-    "PLA CF":    {"inherits": "Bambu PLA-CF @BBL A1", "verified": False,
-                  "safe": {"nozzle_temperature": "230", "filament_max_volumetric_speed": "18",
-                           "filament_flow_ratio": "0.98", "hot_plate_temp": "55"},
-                  "why": "CF mai mon — can nozzle thep cung; flow vua."},
+                           "filament_flow_ratio": "0.98", "hot_plate_temp": "65"},
+                  "why": "GIU NGUYEN official A1 (220 / mvs 21 / flow 0.98 / ban 65 — audit 2 tang 2026-07-16)."},
+    "PLA SILK":  {"inherits": "Bambu PLA Silk @BBL A1", "verified": True,    # ✓ audit 2 tang
+                  "safe": {"nozzle_temperature": "230", "filament_max_volumetric_speed": "12",
+                           "filament_flow_ratio": "0.98", "hot_plate_temp": "65"},
+                  "why": "Official A1: 230 / mvs 12 / ban 65 (audit 2 tang — so cu mvs 16 CAO hon official, "
+                         "da ha ve 12). Silk can 230 giu do bong, mvs thap chong keo soi."},
+    "PLA CF":    {"inherits": "Bambu PLA-CF @BBL A1", "verified": True,      # ✓ audit: file ton tai dung ten
+                  "safe": {"nozzle_temperature": "230", "filament_max_volumetric_speed": "15",
+                           "filament_flow_ratio": "0.98", "hot_plate_temp": "65"},
+                  "why": "Official A1: 230 / mvs 15 / ban 65 (audit 2 tang — so cu mvs 18 CAO hon official, "
+                         "da ha ve 15). CF mai mon — can nozzle thep cung."},
     "PLA METAL": {"inherits": "Bambu PLA Metal @BBL A1", "verified": True,  # ✓ BUCKET.3mf that
                   "safe": {"nozzle_temperature": "230", "filament_max_volumetric_speed": "12",
                            "filament_flow_ratio": "0.98", "hot_plate_temp": "65"},
@@ -1787,28 +1791,36 @@ FIL_EXPORT = {
     # Ho PLA chung — bat moi bien the la (PLA Galaxy/Glow/Wood...) chua co ban rieng
     "PLA":       {"inherits": "Bambu PLA Basic @BBL A1", "verified": False,
                   "safe": {"nozzle_temperature": "220", "filament_max_volumetric_speed": "16",
-                           "filament_flow_ratio": "0.98", "hot_plate_temp": "55"},
-                  "why": "Bien the PLA la — dung so PLA Basic THAN TRONG (flow 16 thay vi 21)."},
+                           "filament_flow_ratio": "0.98", "hot_plate_temp": "65"},
+                  "why": "Bien the PLA la — CHU DICH ha mvs 21→16 than trong (official Basic 21); "
+                         "ban 65 theo official A1."},
     "PETG BASIC":{"inherits": "Bambu PETG Basic @BBL A1", "verified": True,  # ✓ template
                   "safe": {"nozzle_temperature": "245", "filament_max_volumetric_speed": "13",
                            "filament_flow_ratio": "0.94", "hot_plate_temp": "70"},
                   "why": "Lay NGUYEN so that trong template may nay (13 / 0.94 / ban 70)."},
-    "PETG":      {"inherits": "Bambu PETG HF @BBL A1", "verified": False,
-                  "safe": {"nozzle_temperature": "245", "filament_max_volumetric_speed": "21",
-                           "filament_flow_ratio": "0.95", "hot_plate_temp": "70"},
-                  "why": "PETG HF chay nhanh hon ban Basic."},
-    "ABS":       {"inherits": "Bambu ABS @BBL A1", "verified": False,
-                  "safe": {"nozzle_temperature": "270", "filament_max_volumetric_speed": "29",
-                           "filament_flow_ratio": "0.98", "hot_plate_temp": "90"},
-                  "why": "Ban 90 theo wiki (ABS 90-100). A1 khung HO van de vênh."},
-    "ASA":       {"inherits": "Bambu ASA @BBL A1", "verified": False,
+    "PETG":      {"inherits": "Bambu PETG HF @BBL A1", "verified": True,     # ✓ audit 2 tang
+                  "safe": {"nozzle_temperature": "240", "filament_max_volumetric_speed": "18",
+                           "filament_flow_ratio": "0.94", "hot_plate_temp": "70"},
+                  "why": "Official A1: 240 / mvs 18 / flow 0.94 / ban 70 (audit 2 tang — so cu 245/21/0.95 "
+                         "la tang @base, dinh dung bug 2 tang nhu PLA Lite)."},
+    "ABS":       {"inherits": "Bambu ABS @BBL A1", "verified": True,         # ✓ audit 2 tang
+                  "safe": {"nozzle_temperature": "270", "filament_max_volumetric_speed": "16",
+                           "filament_flow_ratio": "0.95", "hot_plate_temp": "100"},
+                  "why": "Official A1: 270 / mvs 16 / flow 0.95 / ban 100 (audit 2 tang — so cu mvs 29 la "
+                         "goc fdm, tang A1 CAT CON NUA; 29 tren A1 la vuot spec de ket). A1 khung HO van "
+                         "de venh — hub tu bat draft shield + brim."},
+    "ASA":       {"inherits": "Bambu ASA @BBL A1 0.4 nozzle", "verified": True,  # ✓ audit: KHONG co file
+                  # 'Bambu ASA @BBL A1' — chi co ban theo nozzle; ten cu la 404, Studio import FAIL
                   "safe": {"nozzle_temperature": "270", "filament_max_volumetric_speed": "18",
-                           "filament_flow_ratio": "0.98", "hot_plate_temp": "90"},
-                  "why": "Nhu ABS, chiu UV tot hon."},
-    "TPU":       {"inherits": "Bambu TPU 95A HF @BBL A1", "verified": False,
-                  "safe": {"nozzle_temperature": "235", "filament_max_volumetric_speed": "15",
-                           "filament_flow_ratio": "0.98", "hot_plate_temp": "40"},
-                  "why": "TPU ban 35-45 (wiki) — mem, phai in cham."},
+                           "filament_flow_ratio": "0.95", "hot_plate_temp": "100"},
+                  "why": "Official A1 0.4: 270 / mvs 18 / flow 0.95 / ban 100 (audit — ten inherits cu "
+                         "'Bambu ASA @BBL A1' KHONG ton tai, import fail). Nhu ABS, chiu UV tot hon."},
+    "TPU":       {"inherits": "Bambu TPU 95A HF @BBL A1", "verified": True,  # ✓ audit 2 tang
+                  "safe": {"nozzle_temperature": "230", "filament_max_volumetric_speed": "12",
+                           "filament_flow_ratio": "1", "hot_plate_temp": "45"},
+                  "why": "Official A1 (TPU 95A HF): 230 / mvs 12 / flow 1.0 / ban 45 (audit 2 tang — so cu "
+                         "235/15/0.98/40 tron ca 3 tang sai). Mem, in cham; cuon TPU thuong (khong HF) "
+                         "con cham hon nua (mvs 3.6)."},
 }
 
 
