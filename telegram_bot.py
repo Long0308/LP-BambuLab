@@ -134,10 +134,11 @@ def _handle(token: str, chat: str, text: str, hooks: dict) -> None:  # noqa: PLR
             "chốt 1 dòng: ✅ ỔN / ⚠️ NGHI NGỜ / ❌ HỎNG.",
             imgs, context=hooks["status"]()) \
             or "AI vision không phản hồi (hết lượt free hôm nay?) — xem ảnh bằng nút 📷."
-        # PHAN TICH VISION LUON KEM ANH (user chot 2026-07-17) — anh nguyen do phan
-        # giai camera lam caption cua chinh tam anh AI vua soi
+        # PHAN TICH VISION LUON KEM ANH (user chot 2026-07-17) — chon frame NET
+        # nhat trong loat (JPEG lon nhat; frame mo do ban chay nen nho hon han)
+        photo = max(imgs, key=len) if len(imgs) > 2 else imgs[0]
         try:
-            _send_photo(token, chat, imgs[0], caption=a[:1000])
+            _send_photo(token, chat, photo, caption=a[:1000])
         except Exception:                                # noqa: BLE001
             _send(token, chat, a, html=False)            # gui anh loi -> van co text
     elif t == B_TIP:

@@ -55,17 +55,25 @@ VISION_PROMPT = (
     "chụp lúc bàn đang chạy xa tâm (false positive thật đã gặp 2026-07-17; không "
     "đọc được toạ độ bàn nên bù bằng chụp loạt — luôn có ảnh lúc bàn gần tâm). "
     "QUY TẮC: chỉ kết luận LỆCH TRỤC khi độ nghiêng giống nhau Ở MỌI ẢNH; nghiêng "
-    "chỉ 1 ảnh = bàn đang chạy, KHÔNG phải lỗi. Soi các lỗi: spaghetti (nhựa rối), "
+    "chỉ 1 ảnh = bàn đang chạy, KHÔNG phải lỗi. Ảnh NHÒE/MÉO kiểu bị kéo dài, mép "
+    "cong như tan chảy = MOTION BLUR/rolling shutter do bàn phóng nhanh lúc chụp — "
+    "là artifact máy ảnh, KHÔNG phải nhựa chảy; đánh giá dựa trên ảnh NÉT nhất. "
+    "Soi các lỗi: spaghetti (nhựa rối), "
     "nhựa RỦ/chảy xệ, LỆCH TRỤC, XƠ/kéo sợi, cong vênh mép. DÒNG ĐẦU trả đúng 1 "
     "trong 3: 'KQ: ON' / 'KQ: NGHI NGO' / 'KQ: HONG'. Chỉ NGHI NGO/HONG khi THẤY "
     "RÕ lỗi nhất quán và nêu được nó; không thì PHẢI 'KQ: ON' — kết luận khớp lý "
     "do. Sau đó 1-3 dòng lý do ngắn.")
 
 
-def _burst_frames(n: int = 3, gap_s: float = 4.0) -> list[bytes]:
+def _burst_frames(n: int = 4, gap_s: float = 4.0) -> list[bytes]:
     """Loat n frame cach nhau gap_s giay — ban bed-slinger dao dong qua lai nen
     trong loat luon co frame luc ban gan TAM camera; nghieng that = nhat quan moi
-    frame. (Khong doc duoc toa do ban qua MQTT khi dang in -> bu bang thong ke.)"""
+    frame. (Khong doc duoc toa do ban qua MQTT khi dang in -> bu bang thong ke.)
+
+    CHONG ANH MEO (user bat tai moc 75% that: frame dinh luc ban phong nhanh ->
+    motion blur nhu nhua chay): anh MO nen JPEG NHO hon han -> dung size byte lam
+    thuoc do do net, LOAI frame mo nhat khi du loat. Anh dai dien = frame LON nhat.
+    """
     out: list[bytes] = []
     for i in range(n):
         f = camera_stream.get_frame(IP, CODE, wait_s=10 if not out else 6)
@@ -73,6 +81,8 @@ def _burst_frames(n: int = 3, gap_s: float = 4.0) -> list[bytes]:
             out.append(f)
         if i < n - 1:
             time.sleep(gap_s)
+    if len(out) >= 3:
+        out.remove(min(out, key=len))       # bo frame mo nhat (JPEG nho nhat)
     return out
 
 
@@ -82,7 +92,7 @@ def _vision_check(pct: int, fn: str) -> None:
     if not frames:
         notify._log(f"[vision {pct}%] khong lay duoc frame")   # noqa: SLF001
         return
-    jpg = frames[-1]
+    jpg = max(frames, key=len)              # anh gui di = frame NET nhat
     # Hinh hoc A1 cho AI: camera CO DINH tren khung, ban chay truc Y (gay nghieng
     # phoi canh), gian nang truc Z theo lop — Z suy duoc tu layer_num (MQTT khong
     # phat toa do Y nen khong sync tam ban duoc; muon frame chuan tung lop thi bat
