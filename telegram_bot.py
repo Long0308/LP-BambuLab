@@ -129,7 +129,12 @@ def _handle(token: str, chat: str, text: str, hooks: dict) -> None:  # noqa: PLR
             "nhựa/cong vênh không? Nhận xét ngắn gọn từng ý, chốt 1 dòng: ✅ ỔN / "
             "⚠️ NGHI NGỜ / ❌ HỎNG.", imgs, context=hooks["status"]()) \
             or "AI vision không phản hồi (hết lượt free hôm nay?) — xem ảnh bằng nút 📷."
-        _send(token, chat, a, html=False)
+        # PHAN TICH VISION LUON KEM ANH (user chot 2026-07-17) — anh nguyen do phan
+        # giai camera lam caption cua chinh tam anh AI vua soi
+        try:
+            _send_photo(token, chat, imgs[0], caption=a[:1000])
+        except Exception:                                # noqa: BLE001
+            _send(token, chat, a, html=False)            # gui anh loi -> van co text
     elif t == B_TIP:
         a = ai_chat.ask("Cho 3 mẹo NGẮN, cụ thể, đúng với nhựa và bản in đang chạy "
                         "(theo bối cảnh). Mỗi mẹo 1 dòng bắt đầu bằng 💡.",

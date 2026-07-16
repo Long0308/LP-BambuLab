@@ -68,11 +68,13 @@ def _vision_check(pct: int, fn: str) -> None:
     notify._log(f"[vision {pct}%] {verdict[:40] or 'AI KHONG PHAN HOI'}")  # noqa: SLF001
     if not a:
         return
+    # LUON kem ANH ket qua soi (user chot 2026-07-17: 'phan tich vision phai kem
+    # anh, on cung kem hinh') — anh nguyen do phan giai camera, caption = ket luan.
+    notify.send_photo_telegram(jpg, caption=f"🔍 AI soi {pct}% — {fn}\n{a[:900]}")
     if "NGHI NGO" in verdict or "HONG" in verdict:
         bad = "HỎNG" if "HONG" in verdict and "NGHI" not in verdict else "NGHI NGỜ"
         notify.send(f"Bambu A1: AI soi camera {pct}% — {bad} ⚠️",
                     f"{fn}\n{a[:500]}\nMỞ CAMERA: {notify.hub_url()}", urgent=True)
-        notify.send_photo_telegram(jpg, caption=f"Ảnh AI vừa soi ({pct}%) — {bad}")
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PRINTER_NAME = "LongPham A1-3"
