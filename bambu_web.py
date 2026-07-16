@@ -2217,8 +2217,9 @@ class H(BaseHTTPRequestHandler):
             self.wfile.write(blob)
         elif path.startswith("/api/plateimg"):
             # Anh khay (T2) — png Bambu Studio render san, _run_analyze da boc ra dia
+            # LUU Y: `path` da bi cat query o dau do_GET -> phai parse tu self.path
             from urllib.parse import urlparse, parse_qs, unquote
-            q = parse_qs(urlparse(path).query)
+            q = parse_qs(urlparse(self.path).query)
             nm = os.path.basename(unquote(q.get("name", [""])[0]).replace("\\", "/")).strip()
             try:
                 pl = int(q.get("plate", ["1"])[0])
@@ -2232,8 +2233,9 @@ class H(BaseHTTPRequestHandler):
                 self._send(404, "no plate image", "text/plain")
         elif path.startswith("/api/filpreset"):
             # Preset filament an toan (T3) — combo box chon nhua -> tai .json rieng
+            # LUU Y: `path` da bi cat query o dau do_GET -> phai parse tu self.path
             from urllib.parse import urlparse, parse_qs, unquote
-            q = parse_qs(urlparse(path).query)
+            q = parse_qs(urlparse(self.path).query)
             fil = unquote(q.get("fil", [""])[0]).strip()
             custom = unquote(q.get("custom", [""])[0]).strip()
             r = analyzer.filament_preset(fil, custom)
