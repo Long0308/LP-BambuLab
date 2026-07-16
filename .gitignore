@@ -39,3 +39,6 @@ slice_jobs/
 # Log server
 dashboard.log
 server.log
+
+# nhat ky gui thong bao (runtime)
+notify.log
