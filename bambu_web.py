@@ -1042,11 +1042,22 @@ async function saveCfg(){
 
 <script>
 const STAGE={IDLE:"Đang rảnh",PREPARE:"Đang chuẩn bị",RUNNING:"ĐANG IN",PAUSE:"Tạm dừng",FINISH:"In XONG",FAILED:"In LỖI",SLICING:"Đang slice"};
-/* ===== CAMERA A1 (lazy — chi ket noi khi mo khung) ===== */
+/* ===== CAMERA A1 (lazy — chi ket noi khi mo khung) =====
+   DOUBLE-BUFFER thay vi MJPEG: camera A1 chi phat ~1 frame/2s; MJPEG tren mang cham
+   lam browser ve NUA frame (xe hinh) + khung khong deu. Tai ngam anh moi qua
+   /api/camera.jpg, tai XONG moi trao src -> khong xe, nhip deu, chiu mang yeu. */
+let CAMT=null;
 function camTog(){
   const d=document.getElementById("cambox"),im=document.getElementById("camimg");
-  if(d&&d.open){im.src="/api/camera?"+Date.now();}
-  else if(im){im.removeAttribute("src");}
+  if(d&&d.open){ camPoll(im); }
+  else { if(CAMT){clearTimeout(CAMT);CAMT=null;} if(im)im.removeAttribute("src"); }
+}
+function camPoll(im){
+  const pre=new Image();
+  const next=()=>{ CAMT=setTimeout(()=>camPoll(im),1200); };  /* ~nhip nguon 1-2s */
+  pre.onload=()=>{ im.src=pre.src; next(); };
+  pre.onerror=next;                       /* mat mang tam thoi -> thu lai nhip sau */
+  pre.src="/api/camera.jpg?t="+Date.now();
 }
 /* ===== CHUONG TREN TRANG (WebAudio — can 1 cu bam de mo khoa am thanh) ===== */
 let BELL=localStorage.getItem("lp_bell")==="1", AC=null, prevGc=null;
