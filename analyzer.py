@@ -671,9 +671,9 @@ def _advise(r: dict) -> None:
             "• 🔄 GỐC NHẤT: xoay THẤP xuống nếu có hướng khác (card Xoay) — hạ độ cao + bớt support. "
             "Vật cao-mảnh: nghiêng 10–20° cho nằm dọc trục X (bàn giật trục Y ít lắc hơn).\n"
             "• ⬇️ GIẢM GIẬT (quan trọng NHẤT — gia tốc mới là thủ phạm, không phải tốc độ): "
-            "Speed ▸ Acceleration — 'Normal printing' 6000→4000, 'Outer wall' →3000 mm/s² "
-            "(mặt nhìn thấy, ưu tiên êm nhất), 'Inner wall' = 0 (ăn theo số chung); "
-            "Travel speed 580→380 mm/s. ĐÂY LÀ ĐÚNG BỘ SỐ PRESET TỰ ĐẶT — không phải chỉnh tay.\n"
+            + tall_summary(h_tall, "balanced") +
+            " — ĐÂY LÀ ĐÚNG BỘ SỐ PRESET TỰ ĐẶT (chế độ Cân bằng), không phải chỉnh tay. "
+            "Fast hạ ít hơn, Đẹp hạ sâu nhất.\n"
             "• 🧱 NEO CHẶT: Brim 5–10mm + Brim-object gap = 0 (dính khít, chống lật — chỉ vật cao mới "
             "để 0); đáy nhỏ thì thêm Tree support quàng quanh GIỮA-TRÊN thân như 'tay ôm' giữ đỉnh.\n"
             "• 🧊 NGUỘI ĐỈNH: Filament ▸ tăng 'Layer time' (Max Fan Threshold) ~10s + bật 'Slow "
@@ -896,6 +896,54 @@ MODES = {
 
 # Tag tieng Anh cho ten preset co cau truc: LP-BamBu-A1-<Tag>-<layer>mm-<model>
 QUALITY_TAG = {"fast": "Fast", "balanced": "Balanced", "quality": "HighQuality"}
+
+
+TALL_MM = 120          # >= nguong nay = "vat cao" tren A1 (ban-slinger, khung ho 1 ray Z)
+
+
+def tall_rules(h_mm: float, mode: str = "balanced") -> list:
+    """NGUON DUY NHAT cho vat cao — preset, tip VA guide deu doc tu day.
+
+    VI SAO CO HAM NAY (bug he thong da sua): truoc day phan sinh TIP va phan ghi
+    PRESET duoc viet TAY o 2 cho khac nhau, khong ai kiem ai -> lech 3 lan lien:
+      1. tip hua "Acceleration <3000" trong khi preset ghi 4000 (chi outer moi 3000)
+      2. tip bao "dung Tree support" trong khi preset ghi normal(auto)
+      3. tip bao "ruot Gyroid" trong khi preset ghi adaptivecubic
+    Gio moi con so chi ton tai DUNG 1 CHO. Sua o day = tip/guide/preset doi theo,
+    khong the lech nua.
+
+    Moi rule: key (ten key Bambu) / val (gia tri ghi) / base (mac dinh A1, de doi
+    chieu) / en (ten o trong Bambu Studio) / why (ly do, theo so lieu).
+
+    Theo CHE DO: Fast uu tien thoi gian nen ha gia toc it hon (van an toan hon
+    stock 6000); Quality uu tien be mat nen ha sau nhat. Nguon: SparkLab A1
+    academy (accel<3000, travel<400) + wiki layer-shift.
+    """
+    if h_mm < TALL_MM:
+        return []
+    # accel chung theo che do — Fast khong ha sau bang Quality (danh doi gio/an toan)
+    acc = {"fast": "5000", "balanced": "4000", "quality": "3000"}.get(mode, "4000")
+    return [
+        {"key": "default_acceleration", "val": acc, "base": "6000",
+         "en": "Speed ▸ Acceleration ▸ Normal printing",
+         "why": f"gia tốc là THỦ PHẠM CHÍNH gây lệch trục khi bàn A1 đảo chiều "
+                f"(vật cao {h_mm:.0f}mm, quán tính lớn) — chế độ {mode}"},
+        {"key": "outer_wall_acceleration", "val": "3000", "base": "5000",
+         "en": "Speed ▸ Acceleration ▸ Outer wall",
+         "why": "mặt nhìn thấy → êm nhất, <3000 theo A1 guide"},
+        {"key": "inner_wall_acceleration", "val": "0", "base": "0",
+         "en": "Speed ▸ Acceleration ▸ Inner wall",
+         "why": "0 = ăn theo gia tốc chung, không cần đặt riêng"},
+        {"key": "travel_speed", "val": "380", "base": "700",
+         "en": "Speed ▸ Travel speed ▸ Travel",
+         "why": "<400 (A1 guide) — bớt lực giật khi đầu phun bay ngang"},
+    ]
+
+
+def tall_summary(h_mm: float, mode: str = "balanced") -> str:
+    """Cau tom tat sinh TU tall_rules -> khong the khac preset."""
+    return "; ".join(f"{r['en'].split('▸')[-1].strip()} {r['base']}→{r['val']}"
+                     for r in tall_rules(h_mm, mode) if r["val"] != r["base"])
 
 
 def preset_name(mode: str, lh: float, filament: str = "") -> str:
@@ -1614,23 +1662,15 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced",
                    f"bàn PEI nhám. 25 mm/s là số cũ cho máy bàn kính — chỉ chậm thêm chứ "
                    f"không bám thêm.")
 
-    # 12) VAT CAO -> TU GIAM GIA TOC + TOC DI CHUYEN (khong chi nhac tip, GHI vao preset).
-    #     Gia toc moi la thu pham chinh khien vat cao lac tren A1 (day ban Y) — nguon
-    #     CHINH THUC A1 (SparkLab): gia toc <3000, travel <400. Ap khi cao >=120mm.
-    #     Da SLICE-TEST cac key nay OK (khong crash CLI nhu brim_object_gap).
-    if h_mm >= 120:
-        p["default_acceleration"] = ["4000"]        # base ~6000 -> 4000
-        p["outer_wall_acceleration"] = ["3000"]     # thanh ngoai (mat nhin thay) < 3000 theo A1 guide
-        p["inner_wall_acceleration"] = ["0"]        # 0 = theo default (4000)
-        p["travel_speed"] = ["380"]                 # < 400 (A1 guide) — bot luc giat khi bay
-        # CHI accel + travel (nguon A1 guide). KHONG cap outer_wall_speed: do slice that
-        # thay cap 150->120 ton them ~2% time ma khong co trong huong dan chinh thuc.
+    # 12) VAT CAO -> TU GIAM GIA TOC + TOC DI CHUYEN.
+    #     Doc tu tall_rules() = NGUON DUY NHAT (preset + tip + guide deu lay tu day).
+    for _r in tall_rules(h_mm, mode):
+        p[_r["key"]] = [_r["val"]]
+    if h_mm >= TALL_MM:
         why.append(f"VẬT CAO {h_mm:.0f}mm → TỰ GIẢM để chống lệch trục (đã ghi sẵn trong preset, "
-                   f"không phải chỉnh tay): gia tốc chung 6000→4000, thành ngoài →3000 mm/s², tốc di "
-                   f"chuyển 700→380 mm/s (<400). Gia tốc mới là THỦ PHẠM CHÍNH khi bàn đảo chiều "
-                   f"(nguồn chính thức A1: SparkLab — accel<3000, travel<400). Đo slice thật: chỉ chậm "
-                   f"~7% (đổi lấy khỏi fail). Muốn chắc hơn: xem tip 🗼 (brim gap 0, min layer time, "
-                   f"tree support giữa-trên, hạ tốc thành ngoài tay nếu cần).")
+                   f"không phải chỉnh tay): " + tall_summary(h_mm, mode) +
+                   ". Gia tốc mới là THỦ PHẠM CHÍNH khi bàn đảo chiều (nguồn chính thức A1: "
+                   "SparkLab). Đo slice thật: chỉ chậm ~7% (đổi lấy khỏi fail).")
 
     vl = r.get("variable_layer")
     if vl and vl["extra_layers"] > VLH_WARN_LAYERS:
