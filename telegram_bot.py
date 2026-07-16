@@ -29,7 +29,8 @@ import ai_chat
 import notify
 
 B_STATUS, B_PHOTO = "📊 Tình hình in", "📷 Ảnh bàn in"
-B_ANALYZE, B_TEMP = "🔍 Phân tích bản in", "🌡️ Nhiệt & khay"
+B_ANALYZE, B_TEMP = "🔍 Phân tích bản in qua AI Vision", "🌡️ Nhiệt & khay"
+B_ANALYZE_OLD = "🔍 Phân tích bản in"   # ban phim cu con cache tren may user van an
 B_TIP, B_ERR = "💡 Mẹo in", "🧯 Hỏi lỗi"
 B_PAUSE, B_RESUME, B_STOP = "⏸ Tạm dừng", "▶️ Tiếp tục", "⏹ DỪNG HẲN"
 STOP_WORD = "DUNG XAC NHAN"
@@ -116,7 +117,7 @@ def _handle(token: str, chat: str, text: str, hooks: dict) -> None:  # noqa: PLR
             _send_photo(token, chat, jpg, caption=hooks["status"]())
         else:
             _send(token, chat, "Camera chưa có hình (máy tắt / đang kết nối) — thử lại.")
-    elif t == B_ANALYZE:
+    elif t in (B_ANALYZE, B_ANALYZE_OLD):
         _send(token, chat, "🔍 Đang chụp camera + phân tích bằng AI vision…", html=False)
         imgs = _images(hooks)
         if not imgs:
