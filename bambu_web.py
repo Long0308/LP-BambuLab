@@ -275,6 +275,32 @@ def _ams_filament_presets():
     return out
 
 
+def _color_name(hexcol: str) -> str:
+    """'#000000' -> 'Black' — ten mau ngan cho TEN PRESET (mau quyet dinh bo so:
+    Matte den 230/12 khac Matte trang). Bang mau co ban, gan dung theo RGB."""
+    h = (hexcol or "").lstrip("#")[:6]
+    try:
+        rv, gv, bv = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    except ValueError:
+        return ""
+    mx, mn = max(rv, gv, bv), min(rv, gv, bv)
+    if mx < 60:
+        return "Black"
+    if mn > 200:
+        return "White"
+    if mx - mn < 30:
+        return "Gray"
+    if rv >= gv and rv >= bv:
+        if bv < 100 and gv > 170:
+            return "Yellow"
+        if bv < 100 and gv > 60:
+            return "Orange"
+        return "Pink" if bv > 140 else "Red"
+    if gv >= rv and gv >= bv:
+        return "Cyan" if bv > 160 else "Green"
+    return "Purple" if rv > 120 else "Blue"
+
+
 def _ams_first_color():
     """Mau hex cua khay AMS dau tien co nhua — de render preview dung mau that."""
     for f in _ams_filament_presets():
@@ -2028,7 +2054,9 @@ function toast(m){const t=document.getElementById("toast");t.textContent=m;t.cla
 async function dlFil(){
   const sel=document.getElementById("filsel"); if(!sel||!sel.value) return;
   try{
-    const j=await (await fetch("/api/filpreset?fil="+encodeURIComponent(sel.value))).json();
+    const v=sel.value;
+    const qs=v.indexOf("slot:")===0?("slot="+v.slice(5)):("fil="+encodeURIComponent(v));
+    const j=await (await fetch("/api/filpreset?"+qs)).json();
     if(!j.ok){toast(j.msg||"Không sinh được preset");return;}
     const info=document.getElementById("filinfo");
     if(info) info.innerHTML=(j.verified
@@ -2169,7 +2197,8 @@ function render(j){
          ma mau de phan biet (Matte den canh bao ket khac Matte trang). Chi dedupe
          danh sach generic ben duoi so voi loai da co trong khay. */
       for(const t of af){const k=(t.sub||"").toUpperCase(); if(!k)continue; seen.add(k);
-        h+='<option value="'+esc(t.sub)+'">Khe '+(+t.slot||0)+' — '+esc(t.sub)+' '+esc(t.color||'')+' (AMS thật)</option>';}
+        /* value=slot:N -> server tu dat ten kem MAU (Matte den 230/12 khac trang) */
+        h+='<option value="slot:'+(+t.slot||0)+'">Khe '+(+t.slot||0)+' — '+esc(t.sub)+' '+esc(t.color||'')+' (AMS thật)</option>';}
       for(const o of opts){if(!seen.has(o)){seen.add(o);h+='<option value="'+esc(o)+'">'+esc(o)+'</option>';}}
       h+='</select>';
       h+='<button class="btn" style="width:auto;padding:11px 16px" onclick="dlFil()">⬇ Tải preset nhựa</button></div>';
@@ -2580,13 +2609,30 @@ class H(BaseHTTPRequestHandler):
             else:
                 self._send(404, "no plate image", "text/plain")
         elif path.startswith("/api/filpreset"):
-            # Preset filament an toan (T3) — combo box chon nhua -> tai .json rieng
+            # Preset filament an toan (T3) — combo box chon nhua -> tai .json rieng.
+            # slot=N (khe AMS that): ten preset KEM MAU (user chot 2026-07-17 —
+            # 'phai luu thanh mau chu': Matte DEN 230/12 khac Matte trang) + nhung
+            # dung ma mau cuon vao filament_colour.
             # LUU Y: `path` da bi cat query o dau do_GET -> phai parse tu self.path
             from urllib.parse import urlparse, parse_qs, unquote
             q = parse_qs(urlparse(self.path).query)
             fil = unquote(q.get("fil", [""])[0]).strip()
             custom = unquote(q.get("custom", [""])[0]).strip()
+            hexcol = ""
+            try:
+                slot = int(q.get("slot", ["0"])[0])
+            except ValueError:
+                slot = 0
+            if slot:
+                t = next((x for x in _ams_filament_presets() if x["slot"] == slot), None)
+                if t:
+                    fil = t["sub"]
+                    hexcol = t["color"]
+                    custom = custom or _color_name(hexcol)
             r = analyzer.filament_preset(fil, custom)
+            if r and hexcol:
+                r["preset"]["filament_colour"] = [hexcol]
+                r["preset"]["default_filament_colour"] = [hexcol]
             if not r:
                 self._send(404, json.dumps(
                     {"ok": False, "msg": f"Không có preset an toàn cho '{fil}'"},
