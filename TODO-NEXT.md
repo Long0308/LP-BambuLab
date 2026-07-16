@@ -64,9 +64,22 @@ verified=True.
 
 ## VIỆC PHIÊN SAU
 
-1. **Đọc kết quả gold set** `slice_jobs/gold/GOLD-SET.md` (+ `gold_results.jsonl`) —
-   80 file Downloads. Soi: file lỗi slice (vd `A1_bed_dragchain_RV01.3mf`), mode nào
-   hay vượt sai số, bậc thang cắt có hợp lý trên model lạ không.
+0. **KẾT QUẢ GOLD SET (đã chạy xong 2026-07-16, 83 file Downloads)** —
+   `slice_jobs/gold/GOLD-SET.md` + `gold_results.jsonl`:
+   - 79/83 phân tích OK; 4 lỗi THẬT của file: `son fix.3mf` + `無印良品風.stl`
+     (plate rỗng −50), `Raupe.3mf` (G-code ngoài vùng in −104, model to hơn bàn A1),
+     `Body 14 - LP LP FIX.gcode.3mf` (−6 không parse — file gcode.3mf đã slice).
+   - Lọt mục tiêu +1h30: Nhanh 75/76 · Cân bằng 70/76 · Đẹp 60/76.
+     Trong sai số +2h thêm: Cân bằng 5 · Đẹp 13 (giữ chất lượng + note tư vấn).
+   - VƯỢT +2h (3 ca, đều đã cắt hết lever cho phép, note trung thực):
+     `Modular_Storage_System` quality +2h36m (baseline là profile P2S — có cảnh báo
+     máy khác rồi) và `AMS+Lite+Top+Mount-Final.3mf` cả 3 mode (+6h50m..+9h21m,
+     fast +6h50 với 0 bước cắt!) → **ĐIỀU TRA PHIÊN SAU**: nghi mvs cap theo
+     filament khai báo trong file (PETG mvs thấp?) đội thời gian — soi
+     `gold_results.jsonl` + config nhúng file này trước khi sửa gì.
+   - BÀI HỌC vận hành: 22 file từng fail `return_code=None` vì chạy 2 process CLI
+     song song (gold + verify tay) — CLI_LOCK chỉ chống trong 1 process. Đừng slice
+     tay khi gold đang chạy; cân nhắc file-lock liên process nếu tái diễn.
 2. **Xử lý findings code-reviewer** (nếu phiên này chưa xử lý hết — xem git log).
 3. Cân nhắc: note ngân sách hiển thị trong hub UI optimize (hiện chỉ có trong JSON
    report — UI `/api/optstatus` render thêm `budget.note` + `trims`).
