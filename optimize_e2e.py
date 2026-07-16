@@ -53,6 +53,77 @@ SAFE_KEYS = (
 )
 
 
+# ===== NGAN SACH THOI GIAN (user chot 2026-07-16) =====
+# Preset khong duoc lam thoi gian in vuot qua DEFAULT (0.20mm Standard @BBL A1)
+# qua 1h30m; cho phep sai so nho. So sanh bang total_predication (result.json) —
+# CUNG THANG voi so Bambu Studio GUI hien thi (gom flush/moi nhua).
+BUDGET_S = 90 * 60
+BUDGET_TOL_S = 5 * 60
+
+
+def _v1(v) -> str:
+    """Gia tri config co the la list hoac scalar -> lay phan tu dau dang str."""
+    return str(v[0] if isinstance(v, list) and v else v)
+
+
+def trim_ladder(p: dict) -> list[tuple[str, dict]]:
+    """Bac thang CAT de ep ngan sach — thu tu theo GIA DO THAT (bench_ab.py,
+    BUCKET.3mf khay 1, baseline 3h22m54s, 2026-07-16): cat truoc cai TON GIO
+    NHIEU nhung mat tham my IT.
+
+    TUYET DOI KHONG cham lever KY THUAT (uu tien user > ngan sach):
+      - tall_rules: default/outer_wall_acceleration, travel_speed (chong lech truc vat cao)
+      - inner/sparse/solid speed (tran luu luong mvs — chong ket nhua Matte/Metal)
+      - enable_overhang_speed + overhang_* (chong xau mat hang), bridge_flow/speed
+      - support* (chong vong/hong hinh), initial_layer_* (bam ban), brim (bam ban)
+    """
+    steps: list[tuple[str, dict]] = []
+    if p.get("ironing_type") not in (None, "no ironing"):
+        steps.append(("Tắt ủi mặt trên (giá đo: −19m28s)",
+                      {"ironing_type": "no ironing"}))
+    dens = re.sub(r"[^\d.]", "", _v1(p.get("sparse_infill_density") or ""))
+    if dens and float(dens) > 8:
+        steps.append((f"Ruột {dens}% → 8% (giá đo 12%→8%: −9m16s)",
+                      {"sparse_infill_density": "8%"}))
+    if _v1(p.get("sparse_infill_pattern")) == "gyroid":
+        steps.append(("Ruột Gyroid → Adaptive Cubic (giá đo: −4m39s, −2.9g)",
+                      {"sparse_infill_pattern": "adaptivecubic"}))
+    if p.get("wall_loops") and int(_v1(p["wall_loops"])) >= 3:
+        steps.append(("Tường 3 → 2 (giá đo: −32m07s; sandwich cần ≥3 nên về Inner/Outer)",
+                      {"wall_loops": "2", "wall_sequence": "inner wall/outer wall"}))
+    # Thanh ngoai/mat tren: tha ham THAM MY ve muc fast (van <= tran mvs vi lay theo
+    # inner_wall_speed da bi chan boi tran) — KHONG dung den cac speed ky thuat khac.
+    inner = p.get("inner_wall_speed")
+    outer = p.get("outer_wall_speed")
+    if inner and outer and int(_v1(outer)) < min(int(_v1(inner)), 180):
+        v = min(int(_v1(inner)), 180)
+        steps.append((f"Thành ngoài {_v1(outer)} → {v} mm/s (giá đo 200→150: −7m04s chiều ngược)",
+                      {"outer_wall_speed": [str(v)],
+                       "top_surface_speed": [str(min(v, 150))]}))
+    tsl = int(_v1(p.get("top_shell_layers") or 0) or 0)
+    bsl = int(_v1(p.get("bottom_shell_layers") or 0) or 0)
+    if tsl > 5 or bsl > 3:
+        steps.append((f"Vỏ trên/dưới {tsl}/{bsl} → {max(tsl - 1, 5)}/{max(bsl - 1, 3)} "
+                      f"(giá đo 6/4: −6m07s chiều ngược)",
+                      {"top_shell_layers": str(max(tsl - 1, 5)),
+                       "bottom_shell_layers": str(max(bsl - 1, 3))}))
+    # CUOI CUNG moi dung den layer height (danh doi van lop — ban chat che do):
+    lh = float(_v1(p.get("layer_height") or 0.2))
+    nxt = {0.12: 0.16, 0.16: 0.2, 0.2: 0.24}.get(lh)
+    if nxt:
+        ch = {"layer_height": f"{nxt:g}"}
+        ilh = float(_v1(p.get("initial_layer_print_height") or lh))
+        if ilh < nxt:
+            ch["initial_layer_print_height"] = f"{nxt:g}"
+        # duong in mat tren phai >= layer height, khong la CLI loi -51
+        tw = float(_v1(p.get("top_surface_line_width") or 9) or 9)
+        if tw < nxt:
+            ch["top_surface_line_width"] = "0.42"
+        steps.append((f"Layer {lh:g} → {nxt:g}mm (giá đo 0.16→0.20: −45m34s) — bước cuối cùng",
+                      ch))
+    return steps
+
+
 def _secs(t: str | None) -> int | None:
     """'9h 47m 18s' -> giay."""
     if not t:
@@ -94,11 +165,18 @@ def apply_preset(src: str, dst: str, preset: dict, drop_vlh: bool = True) -> Non
                     zout.writestr(it, zin.read(it.filename))
 
 
-def run_modes(src: str, workdir: str, modes=("fast", "balanced", "quality")) -> dict:
-    """Slice BASELINE + tung che do -> bang so sanh bang SO THAT (khong doan)."""
+def run_modes(src: str, workdir: str, modes=("fast", "balanced", "quality"),
+              plate: int = 1) -> dict:
+    """Slice BASELINE + tung che do -> bang so sanh bang SO THAT (khong doan).
+
+    plate: khay de slice so sanh (file nhieu khay chon duoc khay — user 2026-07-16).
+    Che do nao VUOT NGAN SACH (+1h30 so voi default, do bang total_predication =
+    so GUI) thi tu CAT theo trim_ladder + slice lai den khi lot — moi buoc cat ghi
+    ro da cat gi va tiet kiem BAO NHIEU do that.
+    """
     os.makedirs(workdir, exist_ok=True)
     name = os.path.splitext(os.path.basename(src))[0]
-    rep: dict = {"name": name, "modes": {}}
+    rep: dict = {"name": name, "modes": {}, "plate": plate}
 
     if src.lower().endswith(".stl"):
         import stl_to_3mf
@@ -108,28 +186,56 @@ def run_modes(src: str, workdir: str, modes=("fast", "balanced", "quality")) -> 
         base = os.path.join(workdir, name + "__base.3mf")
         shutil.copyfile(src, base)
 
-    ok, res, st = slicer_cli.slice_3mf(base, os.path.join(workdir, "b0"))
+    ok, res, st = slicer_cli.slice_3mf(base, os.path.join(workdir, "b0"), plate=plate)
     if not ok:
         return {"error": res}
-    rep["baseline"] = {**st, "secs": _secs(st.get("time"))}
+    rep["baseline"] = {**st, "secs": st.get("total_secs") or _secs(st.get("time"))}
 
-    an = analyzer.analyze(base)
+    an = analyzer.analyze(base, plate=plate)
     rep["analysis"] = {k: an.get(k) for k in
                        ("mesh", "flow", "variable_layer", "issues", "rotations")}
 
+    b = rep["baseline"]
+    cap = (b["secs"] + BUDGET_S + BUDGET_TOL_S) if b.get("secs") else None
+    rep["budget"] = {"budget_s": BUDGET_S, "tol_s": BUDGET_TOL_S, "cap_secs": cap}
+
     for mi, mode in enumerate(modes):
         ex = an["presets"][mode]
+        p = dict(ex["preset"])
         f3 = os.path.join(workdir, f"{name}__{mode}.3mf")
-        apply_preset(base, f3, ex["preset"])
-        ok2, res2, st2 = slicer_cli.slice_3mf(f3, os.path.join(workdir, f"m{mi}"))
+        apply_preset(base, f3, p)
+        ok2, res2, st2 = slicer_cli.slice_3mf(f3, os.path.join(workdir, f"m{mi}"),
+                                              plate=plate)
         if not ok2:
             rep["modes"][mode] = {"error": res2}
             continue
-        b = rep["baseline"]
-        s2 = _secs(st2.get("time"))
+        s2 = st2.get("total_secs") or _secs(st2.get("time"))
+
+        # === GUARD NGAN SACH: vuot cap -> cat tung buoc theo gia do that ===
+        trims: list[dict] = []
+        while cap and s2 and s2 > cap:
+            steps = trim_ladder(p)
+            if not steps:
+                break                        # het cai duoc phep cat (lever ky thuat giu)
+            desc, changes = steps[0]
+            p.update(changes)
+            apply_preset(base, f3, p)
+            ok3, res3, st3 = slicer_cli.slice_3mf(f3, os.path.join(workdir, f"m{mi}"),
+                                                  plate=plate)
+            if not ok3:
+                trims.append({"step": desc, "error": res3})
+                break
+            s3 = st3.get("total_secs") or _secs(st3.get("time"))
+            trims.append({"step": desc, "before_secs": s2, "after_secs": s3,
+                          "saved_secs": (s2 - s3) if s2 and s3 else None})
+            res2, st2, s2 = res3, st3, s3
+
         rep["modes"][mode] = {
             **st2, "secs": s2, "label": ex["mode_label"], "why": ex["why"],
-            "preset": ex["preset"], "file": res2,
+            "preset": p, "file": res2,
+            "budget": {"cap_secs": cap, "fits": bool(cap and s2 and s2 <= cap),
+                       "over_secs": max(0, s2 - cap) if cap and s2 else None,
+                       "trims": trims},
             "time_pct": round((1 - s2 / b["secs"]) * 100, 1) if s2 and b.get("secs") else None,
             "weight_pct": round((1 - st2["weight_g"] / b["weight_g"]) * 100, 1)
                           if st2.get("weight_g") and b.get("weight_g") else None,

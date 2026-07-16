@@ -1673,7 +1673,8 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced",
         why.append(f"VẬT CAO {h_mm:.0f}mm → TỰ GIẢM để chống lệch trục (đã ghi sẵn trong preset, "
                    f"không phải chỉnh tay): " + tall_summary(h_mm, mode) +
                    ". Gia tốc mới là THỦ PHẠM CHÍNH khi bàn đảo chiều (nguồn chính thức A1: "
-                   "SparkLab). Đo slice thật: chỉ chậm ~7% (đổi lấy khỏi fail).")
+                   "SparkLab). Giá đo thật (A/B BUCKET khay 1): accel 4000 = +7.8%, "
+                   "accel 3000 = +11.9% — đổi lấy khỏi fail, KHÔNG bị cắt khi ép ngân sách.")
 
     vl = r.get("variable_layer")
     if vl and vl["extra_layers"] > VLH_WARN_LAYERS:
