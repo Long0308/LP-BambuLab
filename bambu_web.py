@@ -39,9 +39,40 @@ import notify
 import ai_chat
 import telegram_bot
 
-# Theo doi moc tien do + ma loi cua BAN IN hien tai (bao 30/50%, loi hien ro —
-# user chot 2026-07-16). Reset khi doi file.
-MILE = {"file": None, "sent": set(), "err": 0}
+# Theo doi moc tien do + ma loi cua BAN IN hien tai (bao 30/50/75%, loi hien ro —
+# user chot 2026-07-16). vchecked: cac moc DA soi AI vision. Reset khi doi file.
+MILE = {"file": None, "sent": set(), "err": 0, "vchecked": set()}
+
+# Moc TU SOI CAMERA bang AI vision (user chot 2026-07-17): vung 65-90% la luc loi
+# vat cao lo mat (ru nhua/lech truc/xo ~2/3 chieu cao). ON -> chi ghi log (khong
+# spam); NGHI NGO/HONG -> bao khan + anh + link.
+VISION_CHECK_PCTS = (65, 75, 80, 90)
+
+
+def _vision_check(pct: int, fn: str) -> None:
+    """Chup camera -> AI vision soi loi (spaghetti/ru/lech/xo/venh) -> bao neu xau."""
+    jpg = camera_stream.get_frame(IP, CODE, wait_s=10)
+    if not jpg:
+        notify._log(f"[vision {pct}%] khong lay duoc frame")   # noqa: SLF001
+        return
+    a = ai_chat.ask_vision(
+        "Đây là ảnh camera bàn in đang chạy. Soi kỹ các lỗi: spaghetti (nhựa rối), "
+        "nhựa RỦ/chảy xệ, LỆCH TRỤC (khối in nghiêng/so le lớp), XƠ/kéo sợi trên bề "
+        "mặt, cong vênh mép. DÒNG ĐẦU trả lời đúng 1 trong 3: 'KQ: ON' / "
+        "'KQ: NGHI NGO' / 'KQ: HONG'. QUY TẮC BẮT BUỘC: chỉ trả NGHI NGO/HONG khi "
+        "bạn THẤY RÕ ít nhất 1 lỗi cụ thể và nêu được nó ở phần lý do; không thấy "
+        "lỗi nào thì PHẢI trả 'KQ: ON' — kết luận phải khớp lý do. "
+        "Sau đó 1-3 dòng lý do ngắn.",
+        [jpg], context=_status_text())
+    verdict = (a or "").strip().upper()[:60]
+    notify._log(f"[vision {pct}%] {verdict[:40] or 'AI KHONG PHAN HOI'}")  # noqa: SLF001
+    if not a:
+        return
+    if "NGHI NGO" in verdict or "HONG" in verdict:
+        bad = "HỎNG" if "HONG" in verdict and "NGHI" not in verdict else "NGHI NGỜ"
+        notify.send(f"Bambu A1: AI soi camera {pct}% — {bad} ⚠️",
+                    f"{fn}\n{a[:500]}\nMỞ CAMERA: {notify.hub_url()}", urgent=True)
+        notify.send_photo_telegram(jpg, caption=f"Ảnh AI vừa soi ({pct}%) — {bad}")
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PRINTER_NAME = "LongPham A1-3"
@@ -624,7 +655,7 @@ def on_message(c, u, msg):
         fn = os.path.basename(str(gf or "")) or "(khong ro file)"
         # MOC TIEN DO 30% / 50% (100% = FINISH ben duoi) — user chot 2026-07-16
         if gf and gf != MILE["file"]:
-            MILE.update(file=gf, sent=set(), err=0)
+            MILE.update(file=gf, sent=set(), err=0, vchecked=set())
         if gc == "RUNNING":
             try:
                 pct = int(snap.get("mc_percent") or 0)
@@ -642,7 +673,16 @@ def on_message(c, u, msg):
                 notify.send(f"Bambu A1: mốc {max(hit)}% ⏳",
                             f"{fn} — thực tế {pct}%, lớp {snap.get('layer_num')}/"
                             f"{snap.get('total_layer_num')}, còn ~{rem // 60}h{rem % 60:02d}m"
-                            + (f", ~{w}g nhựa." if w else "."))
+                            + (f", ~{w}g nhựa." if w else ".")
+                            + f"\n{notify.hub_url()}")
+            # AI VISION tu soi camera o vung nguy hiem vat cao (65-90%) — thread
+            # rieng (vision 6-30s, khong duoc nghen MQTT); chi 1 moc/lan.
+            vhit = [m for m in VISION_CHECK_PCTS
+                    if pct >= m and m not in MILE["vchecked"]]
+            if vhit:
+                MILE["vchecked"].update(vhit)
+                threading.Thread(target=_vision_check, args=(max(vhit), fn),
+                                 daemon=True).start()
         # LOI PHAI HIEN RO: bao ngay khi xuat hien MA LOI (ke ca chua doi trang thai)
         err = 0
         for k in ("print_error", "mc_print_error_code"):
