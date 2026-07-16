@@ -62,6 +62,25 @@ verified=True.
 
 ---
 
+## ✅ THÊM PHIÊN NÀY (đêm 2026-07-16): CAMERA + CHUÔNG
+
+- `camera_stream.py`: camera A1 tích hợp qua cổng 6000 (TLS + bblp + Access Code,
+  frame JPEG header 16B — OpenBambuAPI). 1 thread bơm cache frame, n viewer = 1 kết
+  nối, tự ngắt sau 15s không ai xem. Đo thật: frame đầu ~2s, poll sau 0.2s, nguồn
+  ~1 frame/2s (giới hạn phần cứng A1 — KHÔNG tối ưu fps được).
+- `/api/camera` (MJPEG) + `/api/camera.jpg`; UI dashboard dùng **double-buffer poll
+  1.2s** (không dùng MJPEG trong <img> — xé hình trên mạng chậm).
+- `notify.py`: ntfy/Telegram/Discord qua `.env` (đọc lại mỗi lần — sửa không cần
+  restart). Hook MQTT: FINISH ✅ / FAILED 🚨 / PAUSE giữa chừng 🚨 (chỉ khi CHUYỂN
+  trạng thái). `/api/notify-test` + nút test trên dashboard + chuông web WebAudio.
+- **Telegram ĐÃ cấu hình chạy thật** (bot LPHome_A1_2026_bot, token+chat_id trong
+  `.env` — gitignore, KHÔNG push). User đã nhận tin test.
+- Audit FIL_EXPORT 13 nhựa vs official 2 tầng: fix ASA inherits 404, PETG HF bug
+  2 tầng, ABS mvs 29→16, TPU 4 số, SILK/CF mvs hạ về official, họ PLA bàn 65.
+- Ý tưởng phiên sau: đính kèm ẢNH camera vào tin Telegram khi báo (sendPhoto —
+  notify.py + camera_stream.get_frame ghép là xong); user cân nhắc /revoke token
+  đã lộ trong chat rồi thay .env.
+
 ## VIỆC PHIÊN SAU
 
 0. **KẾT QUẢ GOLD SET (đã chạy xong 2026-07-16, 83 file Downloads)** —
