@@ -37,6 +37,7 @@ import optimize_e2e
 import camera_stream
 import notify
 import ai_chat
+import telegram_bot
 
 # Theo doi moc tien do + ma loi cua BAN IN hien tai (bao 30/50%, loi hien ro —
 # user chot 2026-07-16). Reset khi doi file.
@@ -645,32 +646,50 @@ def on_message(c, u, msg):
                 pass
         if err and err != MILE["err"]:
             MILE["err"] = err
-            notify.send("Bambu A1: MÁY BÁO LỖI 🚨",
-                        f"Mã lỗi {err} (hex {err:X}) — file {fn}. Mở dashboard xem "
-                        f"chi tiết + camera; tra mã tại wiki.bambulab.com.", urgent=True)
+            # BAO DONG 10 TIN don dap (user: "nhu bao dong day") + LINK mo camera ngay
+            notify.alarm("Bambu A1: MÁY BÁO LỖI 🚨",
+                         f"Mã lỗi {err} (hex {err:X}) — file {fn}.\n"
+                         f"MỞ CAMERA KIỂM TRA NGAY: {notify.hub_url()}\n"
+                         f"Tra mã lỗi: wiki.bambulab.com", times=10)
+            # kem 1 anh camera hien truong (best-effort, khong chan luong bao)
+            def _snap():
+                notify.send_photo_telegram(
+                    camera_stream.get_frame(IP, CODE, wait_s=10) or b"",
+                    caption=f"Hiện trường lúc báo lỗi {err} — {fn}")
+            threading.Thread(target=_snap, daemon=True).start()
         elif not err:
             MILE["err"] = 0
         # CHUONG ve dien thoai (ntfy/Telegram/Discord — cau hinh .env, xem notify.py).
         # Chi bao khi CHUYEN trang thai that — MQTT bao cao lien tuc, khong duoc spam.
         if prev and gc and prev != gc:
             if prev == "RUNNING" and gc == "FINISH":
-                # 100%: AI soan loi nhan (fallback cau chuan neu AI cham/het luot free)
+                # 100%: AI soan loi nhan + ANH thanh pham tu camera + link hub
                 def _fin(fn=fn):
                     tip = ai_chat.ask(
                         f"Bản in '{fn}' vừa hoàn thành 100% trên Bambu A1. Viết đúng 2 câu "
                         f"tiếng Việt: 1 câu báo xong thân thiện + 1 mẹo gỡ bản in an toàn.",
                         max_tokens=200) or ("Đợi bàn nguội hẳn rồi hãy gỡ — bản in tự "
                                             "bong, không cong đế, không trầy bàn PEI.")
-                    notify.send("Bambu A1: In XONG ✅ 100%", f"{fn}\n{tip}")
+                    notify.send("Bambu A1: In XONG ✅ 100%",
+                                f"{fn}\n{tip}\n{notify.hub_url()}")
+                    notify.send_photo_telegram(
+                        camera_stream.get_frame(IP, CODE, wait_s=10) or b"",
+                        caption=f"📸 Thành phẩm: {fn}")
                 threading.Thread(target=_fin, daemon=True).start()
             elif gc == "FAILED":
-                notify.send("Bambu A1: In THAT BAI",
-                            f"{fn} — kiem tra may ngay"
-                            + (f" (ma loi {MILE['err']} / hex {MILE['err']:X})" if MILE["err"] else "")
-                            + ".", urgent=True)
+                # ma loi da bao dong 10 tin o tren roi thi khoi lap lai 10 tin nua
+                if MILE["err"]:
+                    notify.send("Bambu A1: In THẤT BẠI (đã báo động ở trên)",
+                                f"{fn} — mã lỗi {MILE['err']} (hex {MILE['err']:X}).\n"
+                                f"{notify.hub_url()}", urgent=True)
+                else:
+                    notify.alarm("Bambu A1: In THẤT BẠI 🚨",
+                                 f"{fn} — kiểm tra máy ngay.\n"
+                                 f"MỞ CAMERA: {notify.hub_url()}", times=10)
             elif prev == "RUNNING" and gc == "PAUSE":
-                notify.send("Bambu A1: TAM DUNG giua chung",
-                            f"{fn} — co the het nhua / loi; vao xem camera.", urgent=True)
+                notify.alarm("Bambu A1: TẠM DỪNG giữa chừng ⚠️",
+                             f"{fn} — có thể hết nhựa / lỗi.\n"
+                             f"MỞ CAMERA: {notify.hub_url()}", times=3)
 
 
 def mqtt_loop():
@@ -2815,8 +2834,37 @@ class H(BaseHTTPRequestHandler):
         self._send(200, json.dumps({"ok": ok, "msg": msg}), "application/json; charset=utf-8")
 
 
+def _status_text() -> str:
+    """Trang thai gon cho bot Telegram + lam boi canh cho AI."""
+    with LOCK:
+        d = dict(STATE["data"])
+        on = STATE["connected"]
+    if not on and not d:
+        return "Chưa kết nối được máy in (máy tắt?)."
+    try:
+        rem = int(d.get("mc_remaining_time") or 0)
+    except (TypeError, ValueError):
+        rem = 0
+    st = {"IDLE": "Đang rảnh", "RUNNING": "ĐANG IN", "PAUSE": "TẠM DỪNG",
+          "FINISH": "In XONG", "FAILED": "In LỖI"}.get(d.get("gcode_state"), d.get("gcode_state") or "?")
+    return (f"{st} · {d.get('mc_percent', '?')}% · lớp {d.get('layer_num', '?')}/"
+            f"{d.get('total_layer_num', '?')} · còn ~{rem // 60}h{rem % 60:02d}m\n"
+            f"File: {d.get('subtask_name') or d.get('gcode_file') or '—'}")
+
+
+def _temps_text() -> str:
+    with LOCK:
+        d = dict(STATE["data"])
+    return (f"Nozzle {d.get('nozzle_temper', '?')}→{d.get('nozzle_target_temper', '?')}°C · "
+            f"Bàn {d.get('bed_temper', '?')}→{d.get('bed_target_temper', '?')}°C\n"
+            f"Khay AMS: {', '.join(_ams_tray_types()) or 'chưa sync'}")
+
+
 def main():
     threading.Thread(target=mqtt_loop, daemon=True).start()
+    # Bot Telegram 2 chieu (nut bam nhanh + hoi dap AI) — chi chay khi da cau hinh .env
+    telegram_bot.start({"status": _status_text, "temps": _temps_text,
+                        "frame": lambda: camera_stream.get_frame(IP, CODE, wait_s=8)})
     srv = ThreadingHTTPServer(("0.0.0.0", PORT), H)
     print("=" * 56)
     print("  BAMBU WEB DASHBOARD + DIEU KHIEN dang chay")

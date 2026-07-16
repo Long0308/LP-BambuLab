@@ -23,6 +23,7 @@ from __future__ import annotations
 import json
 import os
 import threading
+import time
 import urllib.request
 
 import printer_config
@@ -36,10 +37,15 @@ def _env() -> dict:
     except Exception:                                     # noqa: BLE001
         pass
     for k in ("NTFY_TOPIC", "NTFY_SERVER", "TELEGRAM_BOT_TOKEN",
-              "TELEGRAM_CHAT_ID", "DISCORD_WEBHOOK"):
+              "TELEGRAM_CHAT_ID", "DISCORD_WEBHOOK", "HUB_URL"):
         if os.environ.get(k):
             data[k] = os.environ[k]
     return data
+
+
+def hub_url() -> str:
+    """Link dashboard (Tailscale) — dinh kem vao tin bao loi de user mo camera ngay."""
+    return (_env().get("HUB_URL") or "https://administrator.tail2d2fb4.ts.net/").strip()
 
 
 def channels() -> list[str]:
@@ -110,3 +116,34 @@ def send(title: str, body: str, urgent: bool = False) -> None:
 def send_sync(title: str, body: str, urgent: bool = False) -> list[str]:
     """Gui dong bo — cho /api/notify-test tra ket qua tung kenh."""
     return _send_all(title, body, urgent)
+
+
+def alarm(title: str, body: str, times: int = 10, gap_s: float = 3.0) -> None:
+    """BAO DONG DON DAP — gui lien tiep `times` tin cach nhau vai giay de danh thuc
+    (user chot 2026-07-16: loi la spam 10 tin nhu bao dong). Chay thread nen."""
+    def _run():
+        for i in range(times):
+            _send_all(f"{title} ({i + 1}/{times})", body, urgent=True)
+            time.sleep(gap_s)
+    threading.Thread(target=_run, daemon=True).start()
+
+
+def send_photo_telegram(jpg: bytes, caption: str = "") -> bool:
+    """Gui ANH (frame camera) vao Telegram — best-effort, loi thi thoi."""
+    e = _env()
+    tok, chat = e.get("TELEGRAM_BOT_TOKEN"), e.get("TELEGRAM_CHAT_ID")
+    if not (tok and chat and jpg):
+        return False
+    import uuid
+    b = uuid.uuid4().hex
+    body = (f"--{b}\r\nContent-Disposition: form-data; name=\"chat_id\"\r\n\r\n{chat}\r\n"
+            f"--{b}\r\nContent-Disposition: form-data; name=\"caption\"\r\n\r\n{caption}\r\n"
+            f"--{b}\r\nContent-Disposition: form-data; name=\"photo\"; "
+            f"filename=\"cam.jpg\"\r\nContent-Type: image/jpeg\r\n\r\n").encode("utf-8")
+    body += jpg + f"\r\n--{b}--\r\n".encode("utf-8")
+    try:
+        _post(f"https://api.telegram.org/bot{tok}/sendPhoto", body,
+              {"Content-Type": f"multipart/form-data; boundary={b}"})
+        return True
+    except Exception:                                   # noqa: BLE001
+        return False
