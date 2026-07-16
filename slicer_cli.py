@@ -47,16 +47,33 @@ _LAYER_PAT = re.compile(r";\s*total layer number:\s*(\d+)", re.I)
 _WEIGHT_PAT = re.compile(r";\s*total filament weight \[g\]\s*:\s*([\d.]+)", re.I)
 
 
-def stats_from_gcode3mf(path: str) -> dict:
-    """Doc thoi gian in / so lop / gam nhua tu header G-code trong .gcode.3mf."""
+def stats_from_gcode3mf(path: str, plate: int = 1) -> dict:
+    """Doc thoi gian in / so lop / gam nhua tu header G-code trong .gcode.3mf.
+
+    plate: lay dung KHAY nao (1-based).
+
+    BUG DA SUA: truoc day duyet z.namelist() roi lay gcode DAU TIEN gap. Nhung
+    --slice 0 = slice HET cac khay, va zip xep NGUOC (plate_3, plate_2, plate_1)
+    -> luon bao so cua khay CUOI. Vd BUCKET.3mf: hub bao 1h29m (khay 3, cai de
+    be ti) trong khi user in khay 1 that = 3h16m. Moi con so time/gam deu sai khay.
+    """
     out: dict = {}
     try:
         z = zipfile.ZipFile(path)
     except (zipfile.BadZipFile, OSError):
         return out
     with z:
-        for n in z.namelist():
-            if re.search(r"Metadata/plate_\d+\.gcode$", n, re.I):
+        gcodes = sorted(
+            (n for n in z.namelist() if re.search(r"Metadata/plate_\d+\.gcode$", n, re.I)),
+            key=lambda n: int(re.search(r"plate_(\d+)\.gcode$", n, re.I).group(1)))
+        if not gcodes:
+            return out
+        want = next((n for n in gcodes
+                     if int(re.search(r"plate_(\d+)", n, re.I).group(1)) == plate), gcodes[0])
+        out["plate"] = int(re.search(r"plate_(\d+)", want, re.I).group(1))
+        out["plates_total"] = len(gcodes)
+        for n in (want,):
+            if True:
                 with z.open(n) as fp:
                     head = fp.read(500 * 1024).decode("utf-8", "ignore")
                 m = _TIME_PAT.search(head)
