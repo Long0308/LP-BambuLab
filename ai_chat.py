@@ -130,7 +130,7 @@ def ask_vision(question: str, images: list[bytes], context: str = "",
     model = env.get("OPENROUTER_VISION_MODEL") or DEFAULT_MODEL
     user = question if not context else f"{question}\n\n[Bối cảnh máy in hiện tại]\n{context}"
     content: list = [{"type": "text", "text": user}]
-    for jpg in images[:2]:                              # toi da 2 anh cho nhe
+    for jpg in images[:3]:                              # toi da 3 anh (loat chong FP ban chay)
         content.append({"type": "image_url", "image_url": {
             "url": "data:image/jpeg;base64," + base64.b64encode(jpg).decode("ascii")}})
     msgs = [{"role": "system", "content": SYSTEM},

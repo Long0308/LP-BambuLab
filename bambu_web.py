@@ -49,21 +49,51 @@ MILE = {"file": None, "sent": set(), "err": 0, "vchecked": set()}
 VISION_CHECK_PCTS = (65, 75, 80, 90)
 
 
+VISION_PROMPT = (
+    "Đây là LOẠT ẢNH camera bàn in chụp cách nhau ~4 GIÂY. Máy A1 là bed-slinger — "
+    "BÀN DI CHUYỂN liên tục nên trong 1 ảnh khối in có thể TRÔNG NGHIÊNG do góc "
+    "chụp lúc bàn đang chạy xa tâm (false positive thật đã gặp 2026-07-17; không "
+    "đọc được toạ độ bàn nên bù bằng chụp loạt — luôn có ảnh lúc bàn gần tâm). "
+    "QUY TẮC: chỉ kết luận LỆCH TRỤC khi độ nghiêng giống nhau Ở MỌI ẢNH; nghiêng "
+    "chỉ 1 ảnh = bàn đang chạy, KHÔNG phải lỗi. Soi các lỗi: spaghetti (nhựa rối), "
+    "nhựa RỦ/chảy xệ, LỆCH TRỤC, XƠ/kéo sợi, cong vênh mép. DÒNG ĐẦU trả đúng 1 "
+    "trong 3: 'KQ: ON' / 'KQ: NGHI NGO' / 'KQ: HONG'. Chỉ NGHI NGO/HONG khi THẤY "
+    "RÕ lỗi nhất quán và nêu được nó; không thì PHẢI 'KQ: ON' — kết luận khớp lý "
+    "do. Sau đó 1-3 dòng lý do ngắn.")
+
+
+def _burst_frames(n: int = 3, gap_s: float = 4.0) -> list[bytes]:
+    """Loat n frame cach nhau gap_s giay — ban bed-slinger dao dong qua lai nen
+    trong loat luon co frame luc ban gan TAM camera; nghieng that = nhat quan moi
+    frame. (Khong doc duoc toa do ban qua MQTT khi dang in -> bu bang thong ke.)"""
+    out: list[bytes] = []
+    for i in range(n):
+        f = camera_stream.get_frame(IP, CODE, wait_s=10 if not out else 6)
+        if f and (not out or f != out[-1]):
+            out.append(f)
+        if i < n - 1:
+            time.sleep(gap_s)
+    return out
+
+
 def _vision_check(pct: int, fn: str) -> None:
-    """Chup camera -> AI vision soi loi (spaghetti/ru/lech/xo/venh) -> bao neu xau."""
-    jpg = camera_stream.get_frame(IP, CODE, wait_s=10)
-    if not jpg:
+    """Chup loat frame -> AI vision soi loi (spaghetti/ru/lech/xo/venh) -> bao neu xau."""
+    frames = _burst_frames()
+    if not frames:
         notify._log(f"[vision {pct}%] khong lay duoc frame")   # noqa: SLF001
         return
-    a = ai_chat.ask_vision(
-        "Đây là ảnh camera bàn in đang chạy. Soi kỹ các lỗi: spaghetti (nhựa rối), "
-        "nhựa RỦ/chảy xệ, LỆCH TRỤC (khối in nghiêng/so le lớp), XƠ/kéo sợi trên bề "
-        "mặt, cong vênh mép. DÒNG ĐẦU trả lời đúng 1 trong 3: 'KQ: ON' / "
-        "'KQ: NGHI NGO' / 'KQ: HONG'. QUY TẮC BẮT BUỘC: chỉ trả NGHI NGO/HONG khi "
-        "bạn THẤY RÕ ít nhất 1 lỗi cụ thể và nêu được nó ở phần lý do; không thấy "
-        "lỗi nào thì PHẢI trả 'KQ: ON' — kết luận phải khớp lý do. "
-        "Sau đó 1-3 dòng lý do ngắn.",
-        [jpg], context=_status_text())
+    jpg = frames[-1]
+    # Hinh hoc A1 cho AI: camera CO DINH tren khung, ban chay truc Y (gay nghieng
+    # phoi canh), gian nang truc Z theo lop — Z suy duoc tu layer_num (MQTT khong
+    # phat toa do Y nen khong sync tam ban duoc; muon frame chuan tung lop thi bat
+    # Timelapse truyen thong cua may — ban ve vi tri park moi lop).
+    with LOCK:
+        _d = dict(STATE["data"])
+    geo = (f"Hình học: camera cố định trên khung máy, nhìn thấp lên bàn; bàn chạy "
+           f"tới-lui trục Y liên tục. Khối in tới lớp {_d.get('layer_num', '?')}/"
+           f"{_d.get('total_layer_num', '?')} — càng cao thì đỉnh khối càng gần mép "
+           f"trên khung hình.")
+    a = ai_chat.ask_vision(VISION_PROMPT, frames, context=_status_text() + "\n" + geo)
     verdict = (a or "").strip().upper()[:60]
     notify._log(f"[vision {pct}%] {verdict[:40] or 'AI KHONG PHAN HOI'}")  # noqa: SLF001
     if not a:
