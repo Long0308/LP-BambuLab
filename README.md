@@ -22,6 +22,12 @@ trí nhớ hay từ nhánh `master` trên GitHub (xem [NOTICE](NOTICE) — mục
 | `optimize_e2e.py` | Slice THẬT baseline + 3 chế độ bằng Bambu Studio CLI để so sánh số thật. |
 | `slicer_cli.py` / `stl_to_3mf.py` | Gọi CLI slice + bọc STL trần thành `.3mf` mang config A1. |
 | `printer_config.py` | Đọc/ghi `printer.local.json` dùng chung cho các script. |
+| `camera_stream.py` | Camera **tích hợp** của A1 qua LAN cổng 6000 (TLS + Access Code) — không cần mua camera rời. Cache frame: n người xem = 1 kết nối tới máy. |
+| `notify.py` | Chuông về điện thoại: ntfy / Telegram / Discord. Lỗi = báo động 10 tin dồn dập + ảnh hiện trường. |
+| `telegram_bot.py` | Bot Telegram 2 chiều: nút nhanh (tình hình / ảnh / phân tích AI vision / nhiệt / mẹo / hỏi lỗi), lệnh tạm dừng–tiếp tục–dừng (xác nhận 2 bước), hỏi đáp AI. Chỉ trả lời đúng chat id của bạn. |
+| `ai_chat.py` | Hỏi đáp + vision qua OpenRouter, nhúng **bảng số đã kiểm chứng** của hub vào system prompt (không thì model free bịa số), fallback free → free → trả phí. |
+| `bench_ab.py` | A/B slice từng lever trên khay chỉ định (`--plate N`) — giá đo thật cho ngân sách thời gian. |
+| `gold_run.py` | Chạy `run_modes` trên cả thư mục file (bộ chuẩn hồi quy 83 file). |
 | `boxson-PLAMatte-Decor-*.json` | Preset mẫu (process + filament) — import được. |
 | `*.cpp` | Mã nguồn Bambu Studio, dùng làm ground truth. AGPL-3.0 — xem [NOTICE](NOTICE). |
 
@@ -37,6 +43,64 @@ python bambu_web.py 8787                              # dashboard: http://<IP-PC
 
 `printer.local.json` **không được commit** (nó chứa access code). Khuôn mẫu ở `printer.local.example.json`.
 
+## Camera bàn in (không cần mua camera)
+
+A1 có camera 1080p tích hợp — hub đọc trực tiếp qua **LAN cổng 6000** (TLS tự ký,
+user `bblp` + Access Code, giao thức OpenBambuAPI) rồi phục vụ lại:
+
+- Dashboard: card **📹 Camera bàn in** (bấm mở mới kết nối, đóng là tự ngắt).
+- `GET /api/camera.jpg` — 1 frame mới nhất; `GET /api/camera` — MJPEG stream.
+- UI dùng **double-buffer poll 1.2s** (tải trọn frame mới mới tráo ảnh) — không xé
+  hình trên mạng chậm. Nguồn chỉ phát ~1 frame/2s (giới hạn phần cứng A1).
+- Nút **🔍 AI soi bản in**: chụp **loạt 3 frame cách 4s** → AI vision kết luận
+  ỔN / NGHI NGỜ / HỎNG. Chụp loạt để tránh báo nhầm "lệch trục" khi bàn
+  bed-slinger đang chạy (đã dính thật).
+
+## Chuông thông báo về điện thoại
+
+Chép `.env.example` → `.env` rồi điền kênh muốn dùng (sửa `.env` **không cần
+restart** hub). Test bằng nút **📱 Gửi thử chuông điện thoại** trên dashboard.
+
+**Telegram (khuyên dùng, ~3 phút):**
+1. Nhắn **@BotFather** → `/newbot` → đặt tên → nhận token dạng `123456:ABC-xyz`.
+2. Mở bot vừa tạo → bấm **Start** (bắt buộc — không thì bot không nhắn được cho bạn).
+3. Lấy chat id: hỏi **@userinfobot**, hoặc để hub tự dò qua `getUpdates` sau khi bạn nhắn "hi".
+4. Điền `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` vào `.env`.
+
+**ntfy (nhẹ nhất cho iPhone):** cài app ntfy → Subscribe 1 topic tự đặt khó đoán →
+điền `NTFY_TOPIC`. **Discord:** Server Settings → Integrations → Webhooks → New →
+copy URL vào `DISCORD_WEBHOOK`.
+
+Hub tự báo (kèm link `HUB_URL` để mở camera ngay):
+- ⏳ mốc **30 / 50 / 75%** (kèm lớp, thời gian còn lại, gam nhựa) — mốc đã qua khi
+  restart được đánh dấu im lặng, không bắn lặp;
+- ✅ **100% in xong**: lời nhắn AI soạn + **ảnh thành phẩm** từ camera;
+- 🚨 **mã lỗi máy / in thất bại**: **báo động 10 tin dồn dập** (cách 3s) + ảnh hiện trường;
+- ⚠️ tạm dừng giữa chừng (thường hết nhựa): 3 tin;
+- 🔍 AI **tự soi camera ở 65/75/80/90%** (vùng lỗi vật cao hay lộ): luôn gửi ảnh +
+  kết luận; xấu thì thêm tin khẩn.
+
+Mạng VN hay bóp `api.telegram.org` chập chờn — `notify.py` đã retry ×3. Nhật ký
+gửi tin nằm ở `notify.log`.
+
+## Bot Telegram 2 chiều
+
+Gõ `/start` trong bot → bàn phím nút thường trực: **📊 Tình hình in · 📷 Ảnh bàn
+in · 🔍 Phân tích bản in qua AI Vision · 🌡️ Nhiệt & khay · 💡 Mẹo in · 🧯 Hỏi lỗi ·
+⏸ Tạm dừng · ▶️ Tiếp tục · ⏹ DỪNG HẲN** (dừng hẳn phải gõ `DUNG XAC NHAN` trong
+60s — chống bấm nhầm). Gõ câu hỏi bất kỳ = AI trả lời, biết trạng thái máy thật;
+câu hỏi nhắc tới ảnh/nhìn/sản phẩm sẽ tự kèm ảnh camera cho AI vision. Bot **chỉ
+trả lời `TELEGRAM_CHAT_ID`** — người lạ nhắn là im lặng tuyệt đối.
+
+## AI (OpenRouter)
+
+Lấy key tại openrouter.ai → điền `OPENROUTER_API_KEY`. Mặc định model **free**
+($0); chuỗi fallback tự động khi free hết lượt: free chính → free dự phòng →
+`gpt-5-nano` trả phí (~$0.0001/câu). Vision mặc định `gemini-2.5-flash-lite`
+($0.10/1M — thắng đấu loại trên frame thật: duy nhất mô tả đúng vật thể đang in).
+System prompt nhúng bảng nhiệt/tốc/bàn **đã audit 2 tầng profile official** — không
+nhúng thì model free trả lời "PLA Matte 190°C" (sai; số đúng là 230°C chống kẹt).
+
 ## Bảo mật
 
 **Không bao giờ đặt cấu hình máy in vào `.mcp.json`.** Claude Code tự động nạp
@@ -49,6 +113,10 @@ AI chỉ đọc và phân tích.** Hai lớp bảo vệ đang bật:
 
 1. Cấu hình nằm ở `printer.local.json` (không phải `.mcp.json`), và `.mcp.json` bị gitignore.
 2. `.claude/settings.json` đặt `"disabledMcpjsonServers": ["bambu-printer"]`.
+
+Mọi secret (Access Code, `TELEGRAM_BOT_TOKEN`, `OPENROUTER_API_KEY`…) chỉ nằm trong
+`.env` / `printer.local.json` — cả hai đều **gitignore**, không bao giờ lên repo.
+Bot Telegram lộ token thì vào @BotFather `/revoke` là cấp lại được ngay.
 
 ## Ba cái bẫy đã tốn thời gian để tìm ra
 
