@@ -772,11 +772,35 @@ def on_message(c, u, msg):
                 pass
         if err and err != MILE["err"]:
             MILE["err"] = err
-            # BAO DONG 10 TIN don dap (user: "nhu bao dong day") + LINK mo camera ngay
+            # BAO DONG 10 TIN + ma HEX nhu man hinh may + NGHIA tieng Viet (neu co
+            # trong bang da xac minh) + nhac RESUME duoc tu bot/web (user chot:
+            # 'bao 302022663 tho thi ai hieu — phai noi ket nhua + cho resume')
+            hexc = _hms_hex(err)
+            meaning = HMS_VN.get(hexc)
+            hmsl = snap.get("hms") or []
+            hmstxt = " · ".join(f"{_hms_hex(int(h.get('attr', 0)))} "
+                                f"{_hms_hex(int(h.get('code', 0)))}"
+                                for h in hmsl if isinstance(h, dict))
             notify.alarm("Bambu A1: MÁY BÁO LỖI 🚨",
-                         f"Mã lỗi {err} (hex {err:X}) — file {fn}.\n"
-                         f"MỞ CAMERA KIỂM TRA NGAY: {notify.hub_url()}\n"
-                         f"Tra mã lỗi: wiki.bambulab.com", times=10)
+                         f"Mã [{hexc}]" + (f" · HMS: {hmstxt}" if hmstxt else "") +
+                         f" — file {fn}.\n" +
+                         (f"👉 {meaning}\n" if meaning else "") +
+                         f"Xử lý xong → bấm ▶️ Tiếp tục ngay trong bot này (bàn phím "
+                         f"dưới) hoặc trên web — y hệt nút Resume trên màn hình máy.\n"
+                         f"MỞ CAMERA: {notify.hub_url()}\n"
+                         f"Tra mã: wiki.bambulab.com", times=10)
+            if not meaning:
+                # ma la -> AI giai thich (tin RIENG, khong chan bao dong; AI phai
+                # noi 'chua chac' neu khong biet, tranh bia)
+                def _err_ai(hexc=hexc):
+                    a = ai_chat.ask(
+                        f"Máy Bambu A1 báo mã lỗi HMS [{hexc}] khi đang in. Nếu bạn "
+                        f"BIẾT CHẮC mã này nghĩa gì: giải thích 1 câu + 3 bước xử lý "
+                        f"ngắn. Nếu KHÔNG chắc: nói thẳng 'chưa chắc mã này' và chỉ "
+                        f"cách tra wiki.bambulab.com. Tiếng Việt.")
+                    if a:
+                        notify.send(f"Giải thích mã [{hexc}]", a[:800])
+                threading.Thread(target=_err_ai, daemon=True).start()
             # kem 1 anh camera hien truong (best-effort, khong chan luong bao)
             def _snap():
                 notify.send_photo_telegram(
@@ -1342,12 +1366,23 @@ function vibrate(p){ try{ if(navigator.vibrate) navigator.vibrate(p); }catch(e){
 function notify(title,body){ try{ if("Notification" in window && Notification.permission==="granted") new Notification(title,{body:body||""}); }catch(e){} }
 function enableSound(){ ensureAudio(); tone(880,.12,"sine",0); tone(1174,.14,"sine",130); try{ if("Notification" in window && Notification.permission==="default") Notification.requestPermission(); }catch(e){} const b=document.getElementById("sndBtn"); if(b){ b.classList.add("on"); b.querySelector("span").textContent="Âm bật"; } toast("Đã bật âm thanh + thông báo"); }
 function dismissAlert(){ dismissed=curAlert; document.getElementById("alert").style.display="none"; }
-function setAlert(type,msg){
+function setAlert(type,msg,showResume){
   const el=document.getElementById("alert"); const key=type?(type+":"+msg):null;
-  if(!type){ el.style.display="none"; curAlert=null; return; }
+  if(!type){ el.style.display="none"; curAlert=null; const ob=document.getElementById("alertresume"); if(ob)ob.remove(); return; }
   if(key===dismissed) return;
   el.className="al-"+type; el.style.display="flex";
   document.getElementById("alertmsg").textContent=msg;
+  /* Nut 'Tiep tuc (da xu ly xong)' — nhu nut Resume tren man hinh may */
+  const ob=document.getElementById("alertresume");
+  if(showResume){
+    if(!ob){
+      const b=document.createElement("button"); b.id="alertresume";
+      b.textContent="▶️ Tiếp tục (đã xử lý xong)";
+      b.style.cssText="margin-left:10px;background:linear-gradient(160deg,#34d399,#16a34a);color:#fff;border:none;border-radius:10px;padding:9px 14px;font-weight:800;cursor:pointer;flex-shrink:0";
+      b.onclick=function(){ cmd("resume"); b.textContent="Đã gửi lệnh…"; };
+      el.appendChild(b);
+    }
+  } else if(ob){ ob.remove(); }
   if(curAlert!==key){ curAlert=key; lastBeepTs=Date.now();
     if(type==="done"){ soundDone(); notify("Bambu A1 — IN XONG",msg); vibrate([120,60,120]); }
     else if(type==="error"){ soundError(); notify("Bambu A1 — LỖI",msg); vibrate([220,90,220,90,220]); }
@@ -1528,11 +1563,16 @@ async function tick(){
     } else {
       doneShown=false;
       let type=null,msg=null;
-      if(err&&err!==0){ type="error"; msg="Máy báo LỖI (mã "+err+")"; }
-      else if(gc==="FAILED"){ type="error"; msg="Bản in THẤT BẠI"; }
-      else if(hms>0){ type="error"; msg=hms+" cảnh báo HMS trên máy"; }
+      /* Ma loi hien HEX giong man hinh may: 302051349 -> [1200-8007]; kem HMS chi tiet */
+      const hx=n=>{const s=("00000000"+((n>>>0).toString(16).toUpperCase())).slice(-8);return s.slice(0,4)+"-"+s.slice(4);};
+      const hmsCodes=(d.hms&&d.hms.length)?d.hms.map(h=>hx(h.attr)+" "+hx(h.code)).join(" · "):"";
+      if(err&&err!==0){ type="error"; msg="Máy báo LỖI ["+hx(err)+(hmsCodes?(" · "+hmsCodes):"")+"] — xem camera, xử lý xong bấm Tiếp tục"; }
+      else if(gc==="FAILED"){ type="error"; msg="Bản in THẤT BẠI"+(hmsCodes?(" ["+hmsCodes+"]"):""); }
+      else if(hms>0){ type="error"; msg="Cảnh báo HMS: "+hmsCodes; }
       else if(prevState==="RUNNING"&&gc==="IDLE"){ type="error"; msg="Máy đang in bỗng DỪNG đột ngột!"; }
-      if(type) setAlert(type,msg); else setAlert(null);
+      /* Loi kieu tam-dung (ket dun, het nhua...) -> nut Tiep tuc NGAY TRONG banner,
+         y het nut 'Resume (problem solved)' tren man hinh may (cung lenh MQTT) */
+      if(type) setAlert(type,msg,gc==="PAUSE"); else setAlert(null);
     }
     wasConnected=true;
   }
@@ -3074,6 +3114,20 @@ def _status_html() -> str:
 
 def _err_code() -> int:
     return int(MILE.get("err") or 0)
+
+
+def _hms_hex(n: int) -> str:
+    """302022663 -> '1200-8007' — dinh dang HEX y het man hinh may in."""
+    s = f"{n & 0xFFFFFFFF:08X}"
+    return f"{s[:4]}-{s[4:]}"
+
+
+# Ma HMS da XAC MINH tren may that (chi ghi ma chac chan — con lai de AI/wiki):
+HMS_VN = {
+    "1200-8007": "ĐÙN NHỰA THẤT BẠI — kẹt extruder / kẹt sợi (màn hình máy: 'Failed "
+                 "to extrude'). Đúng ca Matte đen hay gặp: kiểm tra sợi ở extruder, "
+                 "nặng thì nâng nozzle 280°C hoá lỏng cặn rồi rút (cold pull).",
+}
 
 
 def _temps_text() -> str:
