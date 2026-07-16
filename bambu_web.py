@@ -43,10 +43,10 @@ import telegram_bot
 # user chot 2026-07-16). vchecked: cac moc DA soi AI vision. Reset khi doi file.
 MILE = {"file": None, "sent": set(), "err": 0, "vchecked": set()}
 
-# Moc TU SOI CAMERA bang AI vision (user chot 2026-07-17): vung 65-90% la luc loi
-# vat cao lo mat (ru nhua/lech truc/xo ~2/3 chieu cao). ON -> chi ghi log (khong
-# spam); NGHI NGO/HONG -> bao khan + anh + link.
-VISION_CHECK_PCTS = (65, 75, 80, 90)
+# Moc TU SOI CAMERA bang AI vision (user chot lan 2, 2026-07-17: chi 70 va 90 —
+# vung loi vat cao lo mat ma khong soi qua day). ON -> gui anh + ket luan;
+# NGHI NGO/HONG -> them tin khan + link.
+VISION_CHECK_PCTS = (70, 90)
 
 
 VISION_PROMPT = (
