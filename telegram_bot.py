@@ -32,13 +32,14 @@ B_STATUS, B_PHOTO = "📊 Tình hình in", "📷 Ảnh bàn in"
 B_ANALYZE, B_TEMP = "🔍 Phân tích bản in qua AI Vision", "🌡️ Nhiệt & khay"
 B_ANALYZE_OLD = "🔍 Phân tích bản in"   # ban phim cu con cache tren may user van an
 B_TIP, B_ERR = "💡 Mẹo in", "🧯 Hỏi lỗi"
+B_USAGE = "💰 Chi phí AI"
 B_PAUSE, B_RESUME, B_STOP = "⏸ Tạm dừng", "▶️ Tiếp tục", "⏹ DỪNG HẲN"
 STOP_WORD = "DUNG XAC NHAN"
 
 _KEYBOARD = {"keyboard": [
     [{"text": B_STATUS}, {"text": B_PHOTO}],
     [{"text": B_ANALYZE}, {"text": B_TEMP}],
-    [{"text": B_TIP}, {"text": B_ERR}],
+    [{"text": B_TIP}, {"text": B_ERR}, {"text": B_USAGE}],
     [{"text": B_PAUSE}, {"text": B_RESUME}, {"text": B_STOP}],
 ], "resize_keyboard": True, "is_persistent": True}
 
@@ -158,6 +159,8 @@ def _handle(token: str, chat: str, text: str, hooks: dict) -> None:  # noqa: PLR
                             context=hooks["status"]()) or ""
             _send(token, chat, f"🚨 Mã lỗi <b>{err}</b> (hex {err:X})\n{a}\n"
                                f"Tra chính thức: wiki.bambulab.com · {notify.hub_url()}")
+    elif t in (B_USAGE, "/usage"):
+        _send(token, chat, ai_chat.usage_report())
     elif t == B_PAUSE:
         ok, msg = hooks["cmd"]("pause")
         _send(token, chat, "⏸ Đã gửi lệnh TẠM DỪNG." if ok else f"Lỗi: {msg}")
@@ -203,6 +206,7 @@ def _register_commands(token: str) -> None:
             {"command": "start", "description": "Mở bàn phím nút nhanh"},
             {"command": "status", "description": "📊 Tình hình in"},
             {"command": "photo", "description": "📷 Ảnh bàn in từ camera"},
+            {"command": "usage", "description": "💰 Chi phí AI / số dư / còn bao nhiêu lần"},
             {"command": "help", "description": "Hướng dẫn dùng bot"},
         ]}, timeout=20)
     except Exception:                                    # noqa: BLE001

@@ -13,9 +13,36 @@ from __future__ import annotations
 
 import base64
 import json
+import os
+import threading
 import urllib.request
 
 import printer_config
+
+# Bo dem SU DUNG local (ai_usage.json canh file nay — gitignore): dem so lan
+# chat/vision/roi-xuong-tra-phi de bao cao "con uoc bao nhieu lan" tren Telegram.
+_USAGE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ai_usage.json")
+_USAGE_LOCK = threading.Lock()
+
+
+def _count(kind: str) -> None:
+    with _USAGE_LOCK:
+        try:
+            d = json.load(open(_USAGE_PATH, encoding="utf-8"))
+        except (OSError, ValueError):
+            d = {}
+        d[kind] = int(d.get(kind, 0)) + 1
+        try:
+            json.dump(d, open(_USAGE_PATH, "w", encoding="utf-8"))
+        except OSError:
+            pass
+
+
+def _counts() -> dict:
+    try:
+        return json.load(open(_USAGE_PATH, encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
 
 DEFAULT_MODEL = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
 
@@ -109,6 +136,9 @@ def ask(question: str, context: str = "", system: str = SYSTEM,
     for m in _chain(model):
         out = _call(m, key, msgs, max_tokens, timeout)
         if out:
+            _count("chat")
+            if not m.endswith(":free"):
+                _count("chat_paid")
             return out
     return None
 
@@ -138,5 +168,50 @@ def ask_vision(question: str, images: list[bytes], context: str = "",
     for m in _chain(model, vision=True):                # vision free -> paid co vision
         out = _call(m, key, msgs, max_tokens, timeout)
         if out:
+            _count("vision")
+            if not m.endswith(":free"):
+                _count("vision_paid")
             return out
     return None
+
+
+def usage_report() -> str:
+    """Bao cao chi phi AI cho Telegram: so du, hub da dung, uoc con bao nhieu lan.
+
+    So tien tu OpenRouter API that (/auth/key = chi tieu cua KEY nay, /credits =
+    tai khoan); so LAN tu bo dem local. Gia vision ~$0.0004/lan (gemini-2.5-flash-
+    lite $0.10/1M, ~3 anh/lan — do that 2026-07-17: 12 lan soi + chat = $0.0032).
+    """
+    key, _ = _cfg()
+    if not key:
+        return "Chưa cấu hình OPENROUTER_API_KEY."
+    bal = spent_key = None
+    try:
+        req = urllib.request.Request("https://openrouter.ai/api/v1/auth/key",
+                                     headers={"Authorization": f"Bearer {key}"})
+        d = json.loads(urllib.request.urlopen(req, timeout=15).read()).get("data") or {}
+        spent_key = float(d.get("usage") or 0)
+        req = urllib.request.Request("https://openrouter.ai/api/v1/credits",
+                                     headers={"Authorization": f"Bearer {key}"})
+        c = json.loads(urllib.request.urlopen(req, timeout=15).read()).get("data") or {}
+        bal = float(c.get("total_credits") or 0) - float(c.get("total_usage") or 0)
+    except Exception:                                   # noqa: BLE001
+        pass
+    n = _counts()
+    nv, nc = int(n.get("vision", 0)), int(n.get("chat", 0))
+    vp, cp = int(n.get("vision_paid", 0)), int(n.get("chat_paid", 0))
+    # gia vision trung binh THAT cua hub: tien key / so lan tra phi (fallback 0.0004)
+    v_cost = (spent_key / vp) if (spent_key and vp) else 0.0004
+    lines = ["💰 <b>Chi phí AI (OpenRouter)</b>"]
+    if bal is not None:
+        lines.append(f"Số dư tài khoản: <b>${bal:.2f}</b>")
+    if spent_key is not None:
+        lines.append(f"Hub đã tiêu (key này): <b>${spent_key:.4f}</b>")
+    lines.append(f"Đã gọi: {nc} chat ({cp} lần rơi xuống trả phí) · {nv} vision "
+                 f"({vp} trả phí)")
+    lines.append(f"Giá vision TB: ~${v_cost:.4f}/lần soi")
+    if bal is not None and v_cost > 0:
+        lines.append(f"→ Còn ước <b>~{int(bal / v_cost):,} lần phân tích vision</b>")
+    lines.append("Chat text: FREE $0 (Nemotron Super 120B) — hết lượt free trong "
+                 "ngày mới rơi xuống gpt-5-nano ~$0.0001/câu.")
+    return "\n".join(lines)

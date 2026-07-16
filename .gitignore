@@ -42,3 +42,4 @@ server.log
 
 # nhat ky gui thong bao (runtime)
 notify.log
+ai_usage.json
