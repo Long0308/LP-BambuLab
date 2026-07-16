@@ -36,6 +36,11 @@ import analyzer
 import optimize_e2e
 import camera_stream
 import notify
+import ai_chat
+
+# Theo doi moc tien do + ma loi cua BAN IN hien tai (bao 30/50%, loi hien ro —
+# user chot 2026-07-16). Reset khi doi file.
+MILE = {"file": None, "sent": set(), "err": 0}
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PRINTER_NAME = "LongPham A1-3"
@@ -615,14 +620,54 @@ def on_message(c, u, msg):
             maybe_fetch_job(gf)
         if prev == "RUNNING" and gc == "FINISH":
             _on_finish(snap)
+        fn = os.path.basename(str(gf or "")) or "(khong ro file)"
+        # MOC TIEN DO 30% / 50% (100% = FINISH ben duoi) — user chot 2026-07-16
+        if gf and gf != MILE["file"]:
+            MILE.update(file=gf, sent=set(), err=0)
+        if gc == "RUNNING":
+            try:
+                pct = int(snap.get("mc_percent") or 0)
+                rem = int(snap.get("mc_remaining_time") or 0)
+            except (TypeError, ValueError):
+                pct, rem = 0, 0
+            for m in (30, 50):
+                if pct >= m and m not in MILE["sent"]:
+                    MILE["sent"].add(m)
+                    notify.send(f"Bambu A1: {pct}% ⏳",
+                                f"{fn} — lớp {snap.get('layer_num')}/{snap.get('total_layer_num')}, "
+                                f"còn ~{rem // 60}h{rem % 60:02d}m.")
+        # LOI PHAI HIEN RO: bao ngay khi xuat hien MA LOI (ke ca chua doi trang thai)
+        err = 0
+        for k in ("print_error", "mc_print_error_code"):
+            try:
+                err = err or int(snap.get(k) or 0)
+            except (TypeError, ValueError):
+                pass
+        if err and err != MILE["err"]:
+            MILE["err"] = err
+            notify.send("Bambu A1: MÁY BÁO LỖI 🚨",
+                        f"Mã lỗi {err} (hex {err:X}) — file {fn}. Mở dashboard xem "
+                        f"chi tiết + camera; tra mã tại wiki.bambulab.com.", urgent=True)
+        elif not err:
+            MILE["err"] = 0
         # CHUONG ve dien thoai (ntfy/Telegram/Discord — cau hinh .env, xem notify.py).
         # Chi bao khi CHUYEN trang thai that — MQTT bao cao lien tuc, khong duoc spam.
         if prev and gc and prev != gc:
-            fn = os.path.basename(str(gf or "")) or "(khong ro file)"
             if prev == "RUNNING" and gc == "FINISH":
-                notify.send("Bambu A1: In XONG ✅", f"{fn} — lay ban in thoi.")
+                # 100%: AI soan loi nhan (fallback cau chuan neu AI cham/het luot free)
+                def _fin(fn=fn):
+                    tip = ai_chat.ask(
+                        f"Bản in '{fn}' vừa hoàn thành 100% trên Bambu A1. Viết đúng 2 câu "
+                        f"tiếng Việt: 1 câu báo xong thân thiện + 1 mẹo gỡ bản in an toàn.",
+                        max_tokens=200) or ("Đợi bàn nguội hẳn rồi hãy gỡ — bản in tự "
+                                            "bong, không cong đế, không trầy bàn PEI.")
+                    notify.send("Bambu A1: In XONG ✅ 100%", f"{fn}\n{tip}")
+                threading.Thread(target=_fin, daemon=True).start()
             elif gc == "FAILED":
-                notify.send("Bambu A1: In THAT BAI", f"{fn} — kiem tra may ngay.", urgent=True)
+                notify.send("Bambu A1: In THAT BAI",
+                            f"{fn} — kiem tra may ngay"
+                            + (f" (ma loi {MILE['err']} / hex {MILE['err']:X})" if MILE["err"] else "")
+                            + ".", urgent=True)
             elif prev == "RUNNING" and gc == "PAUSE":
                 notify.send("Bambu A1: TAM DUNG giua chung",
                             f"{fn} — co the het nhua / loi; vao xem camera.", urgent=True)
@@ -982,6 +1027,17 @@ async function saveCfg(){
   </div>
 </div>
 
+<div class="card">
+  <h3 style="margin-top:0">🤖 Hỏi đáp AI <span class="mut" style="font-size:12px">· Nemotron free · biết trạng thái máy + kho số đã kiểm chứng của hub</span></h3>
+  <div id="ailog" style="max-height:280px;overflow-y:auto;font-size:13px;line-height:1.6"></div>
+  <div style="display:flex;gap:8px;margin-top:8px">
+    <input id="aiq" placeholder="Vd: in tới đâu rồi? / PLA Matte để nhiệt bao nhiêu?"
+      style="flex:1;min-width:0;background:#0c111a;color:var(--txt);border:1px solid var(--line);border-radius:10px;padding:11px;font-size:13px"
+      onkeydown="if(event.key==='Enter')aiAsk()">
+    <button class="ubtn" style="width:auto;padding:10px 18px" onclick="aiAsk()">Hỏi</button>
+  </div>
+</div>
+
 <div class="linkrow">
   <a class="infolink" href="/info"><svg viewBox="0 0 24 24"><path d="M11 7h2v2h-2zM11 11h2v6h-2zM12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16z"/></svg> Thông tin G-code</a>
   <a class="infolink" href="/files"><svg viewBox="0 0 24 24"><path d="M10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2z"/></svg> File trên máy · chọn in</a>
@@ -1094,6 +1150,25 @@ async function notifyTest(){
     el.textContent=j.ok?("✓ đã gửi: "+j.sent.join(", ")):j.msg;
   }catch(e){el.textContent="lỗi: "+e;}
 }
+/* ===== HOI DAP AI ===== */
+let AIBUSY=false;
+async function aiAsk(){
+  const inp=document.getElementById("aiq"), log=document.getElementById("ailog");
+  const q=(inp.value||"").trim(); if(!q||AIBUSY) return;
+  AIBUSY=true; inp.value="";
+  log.innerHTML+='<div style="margin:6px 0;text-align:right"><span style="background:rgba(56,189,248,.15);border-radius:10px;padding:6px 10px;display:inline-block">'+esc2(q)+'</span></div>';
+  log.innerHTML+='<div id="aiwait" class="mut" style="margin:6px 0">🤖 đang nghĩ…</div>';
+  log.scrollTop=log.scrollHeight;
+  try{
+    const j=await (await fetch("/api/ai-chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({q:q})})).json();
+    document.getElementById("aiwait").outerHTML=
+      '<div style="margin:6px 0"><span style="background:rgba(34,197,94,.12);border-left:3px solid var(--acc);border-radius:8px;padding:6px 10px;display:inline-block;white-space:pre-wrap">'+esc2(j.answer||"?")+'</span></div>';
+  }catch(e){
+    document.getElementById("aiwait").outerHTML='<div class="mut" style="margin:6px 0">lỗi mạng: '+esc2(String(e))+'</div>';
+  }
+  log.scrollTop=log.scrollHeight; AIBUSY=false;
+}
+function esc2(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;");}
 let prevState=null, wasConnected=false, connLost=false, curAlert=null, lastBeepTs=0, doneShown=false, dismissed=null, ac=null;
 const PENCIL='<svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.8 9.94l-3.75-3.75L3 17.25zM20.7 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>';
 
@@ -2627,6 +2702,37 @@ class H(BaseHTTPRequestHandler):
         if not self._same_origin():
             self._send(403, json.dumps({"ok": False, "msg": "Origin không khớp — chặn CSRF"}),
                        "application/json; charset=utf-8")
+            return
+        if self.path == "/api/ai-chat":
+            # Hoi dap AI (Nemotron/OpenRouter) — biet trang thai may THAT + kho so hub
+            body = self._read_json()
+            q = (body.get("q") or "").strip()[:2000]
+            if not q:
+                self._send(400, json.dumps({"ok": False, "msg": "Thiếu câu hỏi"}),
+                           "application/json; charset=utf-8"); return
+            if not ai_chat.enabled():
+                self._send(200, json.dumps({"ok": False, "answer":
+                    "Chưa cấu hình OPENROUTER_API_KEY trong .env."}, ensure_ascii=False),
+                    "application/json; charset=utf-8"); return
+            with LOCK:
+                dd = dict(STATE["data"])
+            rem = 0
+            try:
+                rem = int(dd.get("mc_remaining_time") or 0)
+            except (TypeError, ValueError):
+                pass
+            ctx = (f"Trạng thái: {dd.get('gcode_state')} · file "
+                   f"{dd.get('subtask_name') or dd.get('gcode_file')} · "
+                   f"{dd.get('mc_percent')}% · lớp {dd.get('layer_num')}/"
+                   f"{dd.get('total_layer_num')} · còn ~{rem // 60}h{rem % 60:02d}m · "
+                   f"nozzle {dd.get('nozzle_temper')}→{dd.get('nozzle_target_temper')}°C · "
+                   f"bàn {dd.get('bed_temper')}→{dd.get('bed_target_temper')}°C · "
+                   f"khay AMS: {', '.join(_ams_tray_types()) or 'chưa sync'}")
+            a = ai_chat.ask(q, context=ctx)
+            self._send(200, json.dumps(
+                {"ok": bool(a), "answer": a or "AI không phản hồi (model free có thể hết "
+                 "lượt hôm nay) — thử lại sau."}, ensure_ascii=False),
+                "application/json; charset=utf-8")
             return
         if self.path.startswith("/api/optimize"):
             self._do_optimize(); return

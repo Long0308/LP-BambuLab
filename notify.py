@@ -55,9 +55,18 @@ def channels() -> list[str]:
     return out
 
 
-def _post(url: str, data: bytes, headers: dict) -> None:
-    req = urllib.request.Request(url, data=data, headers=headers, method="POST")
-    urllib.request.urlopen(req, timeout=10).read()
+def _post(url: str, data: bytes, headers: dict, tries: int = 3) -> None:
+    """POST co RETRY — mang VN hay bop/chan api.telegram.org chap chon (do that:
+    luc duoc luc 'handshake timed out'), thu lai 2-3 lan la qua duoc phan lon."""
+    last: Exception | None = None
+    for _ in range(tries):
+        try:
+            req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+            urllib.request.urlopen(req, timeout=15).read()
+            return
+        except Exception as e:                          # noqa: BLE001
+            last = e
+    raise last if last else RuntimeError("post fail")
 
 
 def _send_all(title: str, body: str, urgent: bool) -> list[str]:
