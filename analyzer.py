@@ -1739,10 +1739,20 @@ FIL_EXPORT = {
                   "safe": {"nozzle_temperature": "230", "filament_max_volumetric_speed": "18",
                            "filament_flow_ratio": "0.98", "hot_plate_temp": "55"},
                   "why": "CF mai mon — can nozzle thep cung; flow vua."},
-    "PLA METAL": {"inherits": "Bambu PLA Metal @BBL A1", "verified": False,
+    "PLA METAL": {"inherits": "Bambu PLA Metal @BBL A1", "verified": True,  # ✓ BUCKET.3mf that
                   "safe": {"nozzle_temperature": "230", "filament_max_volumetric_speed": "12",
                            "filament_flow_ratio": "0.98", "hot_plate_temp": "55"},
                   "why": "Co BOT KIM LOAI don (nhu Matte co hat don) → mai mon + tich can, xu ly nhu Matte: 230°C + flow thap 12."},
+    # Generic PLA = preset RIENG cua Bambu (khong phai ho Bambu PLA Basic!). Ten xac
+    # minh 2 NGUON: filament_settings_id trong BUCKET.3mf that + GitHub official
+    # (resources/profiles/BBL/filament/Generic PLA @BBL A1.json). So safe = chuoi ke
+    # thua official: fdm_filament_pla (220°C, mvs 12) + Generic PLA @base (flow 0.98)
+    # + @BBL A1 override (ban 65°C).
+    "GENERIC PLA": {"inherits": "Generic PLA @BBL A1", "verified": True,   # ✓ 2 nguon
+                  "safe": {"nozzle_temperature": "220", "filament_max_volumetric_speed": "12",
+                           "filament_flow_ratio": "0.98", "hot_plate_temp": "65"},
+                  "why": "Nhua PLA hang thu 3 khong ro goc — dung dung preset Generic PLA official "
+                         "(220°C, mvs 12 than trong, ban 65) thay vi muon so Bambu PLA Basic."},
     # Ho PLA chung — bat moi bien the la (PLA Galaxy/Glow/Wood...) chua co ban rieng
     "PLA":       {"inherits": "Bambu PLA Basic @BBL A1", "verified": False,
                   "safe": {"nozzle_temperature": "220", "filament_max_volumetric_speed": "16",
