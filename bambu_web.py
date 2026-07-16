@@ -1872,8 +1872,11 @@ function render(j){
       h+='<div class="card"><h3 style="margin-top:0">Preset nhựa an toàn <span class="mut" style="font-size:12px">· tab Filament — tải .json riêng, cạnh file process</span></h3>';
       h+='<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">';
       h+='<select id="filsel" style="flex:1;min-width:200px;background:#0c111a;color:var(--txt);border:1px solid var(--line);border-radius:10px;padding:11px;font-size:13px">';
-      for(const t of af){const k=(t.sub||"").toUpperCase();
-        if(k&&!seen.has(k)){seen.add(k);h+='<option value="'+esc(t.sub)+'">Khe '+t.slot+' — '+esc(t.sub)+' (AMS thật)</option>';}}
+      /* HIEN DU MOI KHE AMS (ke ca trung loai) — user chon theo CUON dang nap, kem
+         ma mau de phan biet (Matte den canh bao ket khac Matte trang). Chi dedupe
+         danh sach generic ben duoi so voi loai da co trong khay. */
+      for(const t of af){const k=(t.sub||"").toUpperCase(); if(!k)continue; seen.add(k);
+        h+='<option value="'+esc(t.sub)+'">Khe '+(+t.slot||0)+' — '+esc(t.sub)+' '+esc(t.color||'')+' (AMS thật)</option>';}
       for(const o of opts){if(!seen.has(o)){seen.add(o);h+='<option value="'+esc(o)+'">'+esc(o)+'</option>';}}
       h+='</select>';
       h+='<button class="btn" style="width:auto;padding:11px 16px" onclick="dlFil()">⬇ Tải preset nhựa</button></div>';

@@ -639,6 +639,21 @@ def orientation_tips(rots: list) -> list:
 def _advise(r: dict) -> None:
     """Sinh canh bao + khuyen nghi tu so lieu (khong doan bua)."""
     r["tips"] = (r.get("tips") or []) + orientation_tips(r.get("rotations") or [])
+    # CONFIG CUA MAY KHAC: file tai tu mang hay nhung profile P1/P2/X1... — baseline
+    # "config trong file" khi do la cua MAY KHAC, so sanh voi A1 cua user la lech
+    # (case that: Modular_Storage_System nhung 0.24mm @BBL P2S -> baseline 8h20m,
+    # trong khi user mo tren A1 profile 0.20 chi 3h50m). Phai noi ro.
+    cfg0 = r.get("config") or {}
+    pid0 = str(cfg0.get("print_settings_id") or "")
+    pm0 = str(cfg0.get("printer_model") or "")
+    other = ("A1" not in pm0 and pm0) or ("@BBL" in pid0 and "A1" not in pid0 and pid0)
+    if other:
+        r["issues"].append(
+            f"CONFIG TRONG FILE LÀ CỦA MÁY KHÁC: {pm0 or '?'} · profile '{pid0 or '?'}' — "
+            f"KHÔNG phải A1. Mọi số baseline/so sánh bên dưới tính theo config đó, sẽ LỆCH "
+            f"so với khi bạn mở trên A1. Cách chuẩn: mở file trong Bambu Studio (chọn máy "
+            f"A1 + Sync info), lưu lại .3mf rồi upload lại — hoặc cứ dùng preset hub xuất "
+            f"(đã ép về profile A1 chuẩn).")
     th = r.get("thin") or {}
     # Chi canh bao khi >=8% mat mau la thanh mong VA mong that (0.3-1.2mm) — duoi
     # nguong nay la nhieu ray-cast, khong keu bao dong gia.
