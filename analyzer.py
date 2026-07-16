@@ -1009,6 +1009,7 @@ BS_LOC = {
     "support_style":                  ("Support",  "Support",            "Style"),
     "support_threshold_angle":        ("Support",  "Support",            "Threshold angle"),
     "support_on_build_plate_only":    ("Support",  "Support",            "On build plate only"),
+    "bridge_no_support":              ("Support",  "Advanced",           "Don't support bridges"),
     "support_interface_filament":     ("Support",  "Support filament",   "Support/raft interface"),
     "support_top_z_distance":         ("Support",  "Advanced",           "Top Z distance"),
     "support_bottom_z_distance":      ("Support",  "Advanced",           "Bottom Z distance"),
@@ -1255,6 +1256,16 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced",
         #  - Cang CAO nhanh tree cang lac -> model cao thi tree_strong (nhanh to).
         p["enable_support"] = "1"
         p["support_on_build_plate_only"] = "1"
+        # DON'T SUPPORT BRIDGES (PrintConfig bridge_no_support): go dau ranh/khe la
+        # NHIP NGAN bac giua 2 ma — de may bac cau (da co bridge flow + bridge speed
+        # + overhang slow-down), khong chong cot vao trong ranh hep (seo xau, kho
+        # boc, tiet kiem ~0 gio). User hoi dung case nay tren BUCKET 2026-07-16.
+        p["bridge_no_support"] = "1"
+        why.append("KHÔNG chống support vào vùng BRIDGE (Don't support bridges — Support ▸ "
+                   "Advanced): gờ đầu rãnh/khe là nhịp ngắn bắc giữa 2 má, A1 bắc cầu được "
+                   "(đã set bridge flow + bridge speed + hãm tốc overhang) — chống cột vào "
+                   "rãnh hẹp chỉ để lại sẹo khó gỡ. Muốn bỏ support đúng CHỖ KHÁC nữa: "
+                   "Studio ▸ Support painting ▸ quét 'Block support' lên vùng đó.")
         # Threshold = goc nghieng so voi mat NGANG, support khi mat doc DUOI nguong
         # (PrintConfig.cpp:5585). Default Bambu 30 — da tune cho quat A1 + PLA/PETG.
         # ABS/ASA nguoi mat cham (cooling thap) -> vong som hon -> nang 40 do support

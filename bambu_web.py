@@ -230,16 +230,48 @@ def _ams_tray_colors():
     return out
 
 
-def _run_analyze(name, src_path):
+def _run_analyze(name, src_path, plate=None):
     """Phan tich chay NEN — file lon (300k+ tam giac) mat 30-60s, khong the
-    giu request HTTP mo lau vay (Tailscale/trinh duyet cat -> tuong treo)."""
+    giu request HTTP mo lau vay (Tailscale/trinh duyet cat -> tuong treo).
+
+    plate: khay muon phan tich (file nhieu khay — tab khay goi lai voi so nay)."""
     try:
         _fils = _ams_filament_presets()                  # preset filament tu AMS that
         res = analyzer.analyze(src_path, ams=_ams_tray_types(),
-                               color=_ams_first_color(), ams_colors=_ams_tray_colors())
+                               color=_ams_first_color(), ams_colors=_ams_tray_colors(),
+                               plate=plate)
         res["ok"] = True
         res["name"] = name
         res["ams_filaments"] = _fils
+        # Combo box nhua (T3): danh sach key xuat duoc preset an toan
+        res["fil_options"] = list(analyzer.FIL_EXPORT.keys())
+        # Tab khay (T2): Bambu Studio da render san Metadata/plate_N.png trong .3mf
+        # -> boc ra dia (file goc bi xoa sau phan tich), UI lay qua /api/plateimg.
+        try:
+            import zipfile
+            from urllib.parse import quote
+            img_dir = os.path.join(SLICE_DIR, "plateimg")
+            os.makedirs(img_dir, exist_ok=True)
+            # don anh cu >7 ngay — khong phinh dia vo han (review LOW-9)
+            now = time.time()
+            for old in os.listdir(img_dir):
+                fp_old = os.path.join(img_dir, old)
+                try:
+                    if now - os.path.getmtime(fp_old) > 7 * 86400:
+                        os.remove(fp_old)
+                except OSError:
+                    pass
+            with zipfile.ZipFile(src_path) as z:
+                znames = set(z.namelist())
+                for p in res.get("plates") or []:
+                    png = f"Metadata/plate_{p['id']}.png"
+                    if png in znames:
+                        with open(os.path.join(img_dir,
+                                  f"{name}.plate_{p['id']}.png"), "wb") as f:
+                            f.write(z.read(png))
+                        p["img"] = f"/api/plateimg?name={quote(name)}&plate={p['id']}"
+        except Exception:                                # noqa: BLE001
+            pass    # anh khay chi la minh hoa — thieu anh van phan tich binh thuong
         with ANJOB_LOCK:
             ANJOB.update(state="done", msg="Xong", result=res)
     except Exception as e:                                # noqa: BLE001
@@ -252,13 +284,16 @@ def _run_analyze(name, src_path):
             pass
 
 
-def _run_optimize(name, src_path):
-    """Slice BASELINE + 3 che do -> bao cao so sanh bang SO THAT. Khong dung may in."""
+def _run_optimize(name, src_path, plate=None):
+    """Slice BASELINE + 3 che do -> bao cao so sanh bang SO THAT. Khong dung may in.
+
+    plate: khay dang chon tren tab (file nhieu khay) — bao cao tinh dung khay do."""
     try:
         with OPTJOB_LOCK:
             OPTJOB.update(state="running", name=name,
                           msg="Slice baseline + 3 chế độ (4 lần slice)…", report=None)
-        rep = optimize_e2e.run_modes(src_path, os.path.join(SLICE_DIR, "e2e"))
+        rep = optimize_e2e.run_modes(src_path, os.path.join(SLICE_DIR, "e2e"),
+                                     plate=plate or 1)
         with OPTJOB_LOCK:
             if rep.get("error"):
                 OPTJOB.update(state="error", msg=rep["error"])
@@ -274,12 +309,13 @@ def _run_optimize(name, src_path):
             pass
 
 
-def _slice_and_push(name, src_path, mode=None, push=True):
+def _slice_and_push(name, src_path, mode=None, push=True, plate=0):
     """Chay nen: slice file du an (config A1 that + khay AMS) -> day .gcode.3mf
     xuong may in (push=True) HOAC giu lai cho user TAI VE (push=False).
 
     push=False: user mo file trong Bambu Studio/Handy de REVIEW roi tu bam in —
     khong tu day xuong may. Toan bo do 1 cu bam upload cua NGUOI DUNG khoi dong.
+    plate>0: file nhieu khay — slice + bao so DUNG khay user dang chon tren tab.
     """
     base = re.sub(r"\.(3mf|stl)$", "", name, flags=re.I)
     out_name = base + ".gcode.3mf"
@@ -1695,6 +1731,25 @@ ANALYZE_PAGE = r"""<!doctype html><html lang="vi"><head>
 <script>
 let FILE=null;
 function toast(m){const t=document.getElementById("toast");t.textContent=m;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),3500);}
+/* T3: tai preset FILAMENT .json (file rieng — user chot khong nhet vao 3mf) */
+async function dlFil(){
+  const sel=document.getElementById("filsel"); if(!sel||!sel.value) return;
+  try{
+    const j=await (await fetch("/api/filpreset?fil="+encodeURIComponent(sel.value))).json();
+    if(!j.ok){toast(j.msg||"Không sinh được preset");return;}
+    const info=document.getElementById("filinfo");
+    if(info) info.innerHTML=(j.verified
+        ?'✓ inherits <b>'+esc(j.inherits)+'</b> — tên preset gốc ĐÃ XÁC MINH'
+        :'⚠ inherits <b>'+esc(j.inherits)+'</b> — tên suy luận, nếu Studio báo lỗi import hãy kiểm tra tên preset gốc')
+      +'<br>'+esc(j.why||'');
+    const blob=new Blob([JSON.stringify(j.preset,null,4)],{type:"application/json"});
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(blob);
+    a.download=((j.preset&&j.preset.name)||"LP-filament-safe")+".json";
+    a.click(); URL.revokeObjectURL(a.href);
+    toast("Đã tải preset "+(j.key||sel.value));
+  }catch(e){toast("Lỗi tải preset: "+e);}
+}
 function esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;");}
 function reset(msg){
   const bt=document.getElementById("bt"), lb=document.getElementById("lb");
@@ -1704,12 +1759,20 @@ function reset(msg){
 function go(){
   const inp=document.getElementById("fp"); FILE=inp.files&&inp.files[0]; inp.value="";
   if(!FILE) return;
+  send(null);
+}
+/* Tab khay: phan tich lai theo khay N — FILE van con trong bien, gui lai kem plate= */
+function rePlate(n){
+  if(!FILE){toast("Chọn lại file — trình duyệt không còn giữ nội dung");return;}
+  send(n);
+}
+function send(plate){
   const bt=document.getElementById("bt"), lb=document.getElementById("lb");
   bt.disabled=true;
   document.getElementById("out").innerHTML="";
   const mb=(FILE.size/1048576).toFixed(1);
   const xhr=new XMLHttpRequest();
-  xhr.open("POST","/api/analyze?name="+encodeURIComponent(FILE.name));
+  xhr.open("POST","/api/analyze?name="+encodeURIComponent(FILE.name)+(plate?("&plate="+plate):""));
   xhr.upload.onprogress=e=>{
     if(!e.lengthComputable) return;
     const p=Math.round(e.loaded/e.total*100);
@@ -1738,7 +1801,25 @@ async function pollAn(){
 }
 function render(j){
   const m=j.mesh||{}; let h="";
-  h+='<div class="card"><h3 style="margin-top:0">'+esc(j.name)+'</h3>';
+  /* Khay dang chon — optimize/slice/push deu di theo khay nay (review HIGH-3) */
+  window.__plate=+j.plate||1; window.__platesN=(j.plates||[]).length;
+  /* ===== TAB KHAY (T2): file nhieu khay -> chon khay, moi khay so do rieng ===== */
+  if(j.plates&&j.plates.length>1){
+    h+='<div class="card"><h3 style="margin-top:0">Khay trong file <span class="mut" style="font-size:12px">· '+j.plates.length+' khay — bấm để phân tích khay đó</span></h3>';
+    h+='<div style="display:flex;gap:10px;flex-wrap:wrap">';
+    for(const p of j.plates){
+      const pid=+p.id||0, act=pid===(+j.plate||1);   /* ep so — phong ngua XSS neu upstream doi kieu */
+      h+='<div onclick="rePlate('+pid+')" style="cursor:pointer;text-align:center;border:2px solid '+(act?'#22c55e':'var(--line)')+';border-radius:12px;padding:8px;background:'+(act?'rgba(34,197,94,.10)':'#0c111a')+'">'
+       +(p.img?'<img src="'+esc(p.img)+'" alt="khay '+pid+'" style="width:108px;height:108px;object-fit:contain;border-radius:8px;background:#0a0e14">'
+              :'<div class="mut" style="width:108px;height:108px;display:flex;align-items:center;justify-content:center;font-size:11px">không có ảnh</div>')
+       +'<div style="font-weight:700;font-size:12.5px;margin-top:5px">'+(act?'▶ ':'')+'Khay '+pid+'</div>'
+       +'<div class="mut" style="font-size:11px;max-width:116px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(p.name)+'">'+esc(p.name)+'</div>'
+       +'<div class="mut" style="font-size:11px">'+(+p.n_obj||0)+' vật thể</div></div>';
+    }
+    h+='</div><div class="mut" style="margin-top:8px">Mỗi khay in riêng 1 lần — kích thước/overhang/bám bàn/preset đều tính THEO KHAY đang chọn.</div></div>';
+  }
+  h+='<div class="card"><h3 style="margin-top:0">'+esc(j.name)
+   +(j.plate_name?' <span class="mut" style="font-size:12px">· khay '+j.plate+": "+esc(j.plate_name)+'</span>':'')+'</h3>';
   h+='<div class="grid">'
     +kv("Kích thước",(m.dims||[]).join(" × ")+" mm")
     +kv("Số tam giác",(m.triangles||0).toLocaleString())
@@ -1783,6 +1864,22 @@ function render(j){
     h+='</div>';
   }
 
+  /* ===== COMBO NHUA (T3): chon nhua -> tai preset FILAMENT .json rieng =====
+     User chot: file .json RIENG canh file process, KHONG nhet vao 3mf. */
+  {
+    const opts=j.fil_options||[], af=j.ams_filaments||[], seen=new Set();
+    if(opts.length){
+      h+='<div class="card"><h3 style="margin-top:0">Preset nhựa an toàn <span class="mut" style="font-size:12px">· tab Filament — tải .json riêng, cạnh file process</span></h3>';
+      h+='<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">';
+      h+='<select id="filsel" style="flex:1;min-width:200px;background:#0c111a;color:var(--txt);border:1px solid var(--line);border-radius:10px;padding:11px;font-size:13px">';
+      for(const t of af){const k=(t.sub||"").toUpperCase();
+        if(k&&!seen.has(k)){seen.add(k);h+='<option value="'+esc(t.sub)+'">Khe '+t.slot+' — '+esc(t.sub)+' (AMS thật)</option>';}}
+      for(const o of opts){if(!seen.has(o)){seen.add(o);h+='<option value="'+esc(o)+'">'+esc(o)+'</option>';}}
+      h+='</select>';
+      h+='<button class="btn" style="width:auto;padding:11px 16px" onclick="dlFil()">⬇ Tải preset nhựa</button></div>';
+      h+='<div id="filinfo" class="mut" style="margin-top:8px;font-size:12px;line-height:1.5">Số AN TOÀN theo cuộn (nhiệt / trần chảy / flow / bàn) — nguồn official + cộng đồng đã kiểm chứng. Import: Bambu Studio ▸ tab Filament ▸ ⚙ ▸ Import.</div></div>';
+    }
+  }
   if(j.issues&&j.issues.length){ h+='<div class="card"><h3 style="margin-top:0">Vấn đề phát hiện</h3>';
     for(const i of j.issues) h+='<div class="iss">'+esc(i)+'</div>'; h+='</div>'; }
   if(j.tips&&j.tips.length){ h+='<div class="card"><h3 style="margin-top:0">Khuyến nghị</h3>';
@@ -1928,7 +2025,8 @@ function optimize(){
   if(!FILE){ toast("Chọn lại file"); return; }
   const b=document.getElementById("e2e"); b.disabled=true; b.textContent="Đang slice baseline + 3 chế độ…";
   const xhr=new XMLHttpRequest();
-  xhr.open("POST","/api/optimize?name="+encodeURIComponent(FILE.name));
+  xhr.open("POST","/api/optimize?name="+encodeURIComponent(FILE.name)
+    +(window.__platesN>1?("&plate="+(window.__plate||1)):""));
   xhr.onload=()=>{ let j={}; try{j=JSON.parse(xhr.responseText);}catch(e){}
     if(j.ok&&j.queued) pollOpt(); else { b.disabled=false; toast("Lỗi: "+(j.msg||xhr.status)); } };
   xhr.onerror=()=>{ b.disabled=false; toast("Mất kết nối"); };
@@ -1961,6 +2059,18 @@ function renderE2E(r){
   for(const k of MS){
     const d=(r.modes||{})[k]; if(!d||d.error) continue;
     h+='<div class="card"><h3 style="margin-top:0">'+esc(d.label)+' — vì sao</h3>';
+    /* Ngân sách thời gian (chuyên gia tư vấn, không cứng nhắc): note + các bước đã cắt
+       kèm GIÁ ĐO THẬT của từng bước — user thấy rõ đã đánh đổi gì và vì sao. */
+    const bud=d.budget||{};
+    if(bud.note) h+='<div class="iss" style="border-left-color:#f59e0b;background:rgba(245,158,11,.10)">⏱ '+esc(bud.note)+'</div>';
+    if(bud.trims&&bud.trims.length){
+      h+='<div class="tip">✂️ Đã cắt '+bud.trims.length+' bước để giữ ngân sách (+1h30 mục tiêu / +2h sai số) — lever kỹ thuật (vật cao/chống kẹt/brim/support) GIỮ NGUYÊN:';
+      for(const t of bud.trims){
+        const sv=t.saved_secs?(' → tiết kiệm '+Math.round(t.saved_secs/60)+' phút (đo thật)'):'';
+        h+='<br>• '+esc(t.step||'')+sv;
+      }
+      h+='</div>';
+    }
     for(const w of d.why) h+='<div class="tip">'+esc(w)+'</div>';
     h+='<button class="btn" style="margin-top:9px" onclick="dlp(\''+k+'\')">Tải preset '+esc(d.label)+' (.json)</button></div>';
   }
@@ -1993,7 +2103,8 @@ async function slice(download){
   const m=(document.getElementById("smode")||{value:""}).value;
   const db=document.getElementById("dlbox"); if(db) db.innerHTML="";
   const xhr=new XMLHttpRequest();
-  xhr.open("POST","/api/upload?name="+encodeURIComponent(FILE.name)+(m?"&mode="+m:"")+(download?"&download=1":""));
+  xhr.open("POST","/api/upload?name="+encodeURIComponent(FILE.name)+(m?"&mode="+m:"")+(download?"&download=1":"")
+    +(window.__platesN>1?("&plate="+(window.__plate||1)):""));
   xhr.onload=()=>{ let j={}; try{j=JSON.parse(xhr.responseText);}catch(e){}
     if(j.ok&&j.queued){ toast(download?"Đang slice để tải về…":"Đang slice trên máy tính…"); poll(); }
     else if(j.ok){ toast("Đã đẩy xuống máy: "+j.name); }
@@ -2104,6 +2215,35 @@ class H(BaseHTTPRequestHandler):
             self.send_header("Cache-Control", "no-store")
             self.end_headers()
             self.wfile.write(blob)
+        elif path.startswith("/api/plateimg"):
+            # Anh khay (T2) — png Bambu Studio render san, _run_analyze da boc ra dia
+            from urllib.parse import urlparse, parse_qs, unquote
+            q = parse_qs(urlparse(path).query)
+            nm = os.path.basename(unquote(q.get("name", [""])[0]).replace("\\", "/")).strip()
+            try:
+                pl = int(q.get("plate", ["1"])[0])
+            except ValueError:
+                pl = 1
+            fp = os.path.join(SLICE_DIR, "plateimg", f"{nm}.plate_{pl}.png")
+            if nm and os.path.isfile(fp):
+                with open(fp, "rb") as f:
+                    self._send(200, f.read(), "image/png")
+            else:
+                self._send(404, "no plate image", "text/plain")
+        elif path.startswith("/api/filpreset"):
+            # Preset filament an toan (T3) — combo box chon nhua -> tai .json rieng
+            from urllib.parse import urlparse, parse_qs, unquote
+            q = parse_qs(urlparse(path).query)
+            fil = unquote(q.get("fil", [""])[0]).strip()
+            custom = unquote(q.get("custom", [""])[0]).strip()
+            r = analyzer.filament_preset(fil, custom)
+            if not r:
+                self._send(404, json.dumps(
+                    {"ok": False, "msg": f"Không có preset an toàn cho '{fil}'"},
+                    ensure_ascii=False), "application/json; charset=utf-8")
+            else:
+                self._send(200, json.dumps({"ok": True, **r}, ensure_ascii=False),
+                           "application/json; charset=utf-8")
         elif path.startswith("/api/filemeta"):
             fpath = self._qs_path()
             if not fpath:
@@ -2262,15 +2402,28 @@ class H(BaseHTTPRequestHandler):
             mode = None
         # download=1 -> CHI slice de tai ve (khong day xuong may)
         push = q.get("download", ["0"])[0] not in ("1", "true", "yes")
-        threading.Thread(target=_slice_and_push, args=(name, src, mode, push), daemon=True).start()
+        # plate=N (file nhieu khay, tab dang chon): slice DUNG khay do — stats/gcode
+        # khop khay user nhin, khong con canh "so cua khay 1 nhung in khay khac"
+        # (review HIGH-3). Khong truyen -> 0 = slice het nhu cu.
+        try:
+            plate = int(q.get("plate", ["0"])[0])
+        except ValueError:
+            plate = 0
+        threading.Thread(target=_slice_and_push, args=(name, src, mode, push, plate),
+                         daemon=True).start()
         self._send(200, json.dumps({"ok": True, "queued": True, "name": name}),
                    "application/json; charset=utf-8")
 
     def _do_analyze(self):
         """Nhan file -> tra ve NGAY (queued) -> thread nen phan tich -> UI poll."""
         from urllib.parse import urlparse, parse_qs, unquote
-        raw = unquote(parse_qs(urlparse(self.path).query).get("name", [""])[0])
+        q = parse_qs(urlparse(self.path).query)
+        raw = unquote(q.get("name", [""])[0])
         name = os.path.basename(raw.replace("\\", "/")).strip()
+        try:
+            plate = int(q.get("plate", ["0"])[0]) or None   # tab khay goi lai voi plate=N
+        except ValueError:
+            plate = None
         if not name.lower().endswith((".3mf", ".stl")):
             self._send(400, json.dumps({"ok": False, "msg": "Chỉ phân tích .3mf hoặc .stl"}),
                        "application/json; charset=utf-8")
@@ -2302,14 +2455,19 @@ class H(BaseHTTPRequestHandler):
             self._send(500, json.dumps({"ok": False, "msg": f"Ghi file lỗi: {e}"}),
                        "application/json; charset=utf-8")
             return
-        threading.Thread(target=_run_analyze, args=(name, tmp), daemon=True).start()
+        threading.Thread(target=_run_analyze, args=(name, tmp, plate), daemon=True).start()
         self._send(200, json.dumps({"ok": True, "queued": True}),
                    "application/json; charset=utf-8")
 
     def _do_optimize(self):
         from urllib.parse import urlparse, parse_qs, unquote
-        raw = unquote(parse_qs(urlparse(self.path).query).get("name", [""])[0])
+        q = parse_qs(urlparse(self.path).query)
+        raw = unquote(q.get("name", [""])[0])
         name = os.path.basename(raw.replace("\\", "/")).strip()
+        try:
+            plate = int(q.get("plate", ["0"])[0]) or None   # khay dang chon tren tab
+        except ValueError:
+            plate = None
         if not name.lower().endswith((".3mf", ".stl")):
             self._send(400, json.dumps({"ok": False, "msg": "Chỉ nhận .3mf / .stl"}),
                        "application/json; charset=utf-8"); return
@@ -2326,7 +2484,7 @@ class H(BaseHTTPRequestHandler):
         tmp = os.path.join(SLICE_DIR, "opt_" + name)
         with open(tmp, "wb") as f:
             f.write(self.rfile.read(n))
-        threading.Thread(target=_run_optimize, args=(name, tmp), daemon=True).start()
+        threading.Thread(target=_run_optimize, args=(name, tmp, plate), daemon=True).start()
         self._send(200, json.dumps({"ok": True, "queued": True}),
                    "application/json; charset=utf-8")
 
