@@ -87,11 +87,13 @@ def _chain(primary: str, vision: bool = False) -> list[str]:
         env = printer_config._parse_dotenv(printer_config.env_path())  # noqa: SLF001
     except Exception:                                   # noqa: BLE001
         env = {}
+    # Vision: gpt-5-nano DO THAT khong tra loi anh -> du phong vision la Nano Omni
+    # free (co vision, da test OK), roi moi toi paid text-capable cuoi chuoi.
     paid = env.get("OPENROUTER_PAID_MODEL") or "openai/gpt-5-nano"
     chain = [primary]
-    if not vision and DEFAULT_MODEL not in chain:
-        chain.append(DEFAULT_MODEL)                     # Nano Omni free du phong
-    if paid not in chain:
+    if DEFAULT_MODEL not in chain:
+        chain.append(DEFAULT_MODEL)                     # Nano Omni free du phong (co vision)
+    if not vision and paid not in chain:
         chain.append(paid)
     return chain
 
