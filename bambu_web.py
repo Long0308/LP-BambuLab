@@ -653,9 +653,21 @@ def on_message(c, u, msg):
         if prev == "RUNNING" and gc == "FINISH":
             _on_finish(snap)
         fn = os.path.basename(str(gf or "")) or "(khong ro file)"
-        # MOC TIEN DO 30% / 50% (100% = FINISH ben duoi) — user chot 2026-07-16
-        if gf and gf != MILE["file"]:
+        # MOC TIEN DO 30/50/75 (100% = FINISH ben duoi) — user chot 2026-07-16
+        try:
+            pct0 = int(snap.get("mc_percent") or 0)
+        except (TypeError, ValueError):
+            pct0 = 0
+        # In lai CUNG file (FINISH/FAILED -> RUNNING): mo lai bo dem tu dau
+        if prev in ("FINISH", "FAILED", "IDLE") and gc == "RUNNING" and prev != gc:
             MILE.update(file=gf, sent=set(), err=0, vchecked=set())
+        if gf and gf != MILE["file"]:
+            # File moi hoac hub vua RESTART giua chung: moc DA QUA danh dau IM LANG —
+            # khong thi moi lan restart lai ban lai 'moc 50%' (notify.log ghi 3 tin
+            # trung 00:23/00:30/00:35 dem 2026-07-17 do 3 lan restart lien tiep).
+            MILE.update(file=gf, err=0,
+                        sent={m for m in (30, 50, 75) if pct0 >= m},
+                        vchecked={v for v in VISION_CHECK_PCTS if pct0 >= v})
         if gc == "RUNNING":
             try:
                 pct = int(snap.get("mc_percent") or 0)
@@ -1088,8 +1100,10 @@ async function saveCfg(){
       <input type="checkbox" id="bellchk" onchange="bellTog()"> 🔔 Chuông trên trang (In XONG / LỖI / TẠM DỪNG)
     </label>
     <button class="ubtn" style="width:auto;padding:8px 14px;font-size:12.5px" onclick="notifyTest()">📱 Gửi thử chuông điện thoại</button>
+    <button class="ubtn" style="width:auto;padding:8px 14px;font-size:12.5px" onclick="aiVision()">🔍 AI soi bản in</button>
     <span class="mut" id="ntfyst" style="font-size:12px"></span>
   </div>
+  <div id="visout" style="display:none;margin-top:8px;font-size:13px;line-height:1.55;background:rgba(56,189,248,.08);border-left:3px solid var(--cyan,#38bdf8);border-radius:8px;padding:8px 11px;white-space:pre-wrap"></div>
 </div>
 
 <div class="card">
@@ -1214,6 +1228,18 @@ async function notifyTest(){
     const j=await (await fetch("/api/notify-test")).json();
     el.textContent=j.ok?("✓ đã gửi: "+j.sent.join(", ")):j.msg;
   }catch(e){el.textContent="lỗi: "+e;}
+}
+/* ===== AI SOI CAMERA (vision) ===== */
+let VBUSY=false;
+async function aiVision(){
+  if(VBUSY) return; VBUSY=true;
+  const o=document.getElementById("visout");
+  o.style.display="block"; o.textContent="🔍 Đang chụp camera + AI soi lỗi (5-30s)…";
+  try{
+    const j=await (await fetch("/api/vision-check")).json();
+    o.textContent=j.answer||"?";
+  }catch(e){o.textContent="Lỗi mạng: "+e;}
+  VBUSY=false;
 }
 /* ===== HOI DAP AI ===== */
 let AIBUSY=false;
@@ -2456,6 +2482,23 @@ class H(BaseHTTPRequestHandler):
                                        "Hub gửi thử — nhận được là cấu hình OK.")
                 self._send(200, json.dumps({"ok": True, "sent": res}, ensure_ascii=False),
                            "application/json; charset=utf-8")
+        elif path.startswith("/api/vision-check"):
+            # Nut 'AI soi ban in' tren dashboard — chup camera + vision, tra verdict
+            jpg = camera_stream.get_frame(IP, CODE, wait_s=10)
+            if not jpg:
+                self._send(200, json.dumps({"ok": False, "answer":
+                    "Không lấy được ảnh camera (máy tắt / đang kết nối)."},
+                    ensure_ascii=False), "application/json; charset=utf-8")
+                return
+            a = ai_chat.ask_vision(
+                "Đây là ảnh camera bàn in đang chạy. Soi kỹ các lỗi: spaghetti (nhựa "
+                "rối), nhựa RỦ/chảy xệ, LỆCH TRỤC, XƠ/kéo sợi, cong vênh mép. DÒNG ĐẦU: "
+                "'KQ: ON' / 'KQ: NGHI NGO' / 'KQ: HONG'. Chỉ NGHI NGO/HONG khi THẤY RÕ "
+                "lỗi cụ thể; không thấy thì PHẢI 'KQ: ON'. Sau đó 1-3 dòng lý do ngắn.",
+                [jpg], context=_status_text())
+            self._send(200, json.dumps(
+                {"ok": bool(a), "answer": a or "AI vision không phản hồi — thử lại."},
+                ensure_ascii=False), "application/json; charset=utf-8")
         elif path.startswith("/api/camera.jpg"):
             # 1 frame moi nhat tu camera tich hop A1 (cong 6000) — fallback/thumbnail
             f = camera_stream.get_frame(IP, CODE, wait_s=8)
