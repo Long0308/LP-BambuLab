@@ -3035,6 +3035,7 @@ def main():
         "status": _status_text, "status_html": _status_html, "temps": _temps_text,
         "frame": lambda: camera_stream.get_frame(IP, CODE, wait_s=8),
         "thumb": _job_thumb, "cmd": cmd_print, "err": _err_code,
+        "burst": _burst_frames,
     })
     srv = ThreadingHTTPServer(("0.0.0.0", PORT), H)
     print("=" * 56)

@@ -118,16 +118,21 @@ def _handle(token: str, chat: str, text: str, hooks: dict) -> None:  # noqa: PLR
         else:
             _send(token, chat, "Camera chưa có hình (máy tắt / đang kết nối) — thử lại.")
     elif t in (B_ANALYZE, B_ANALYZE_OLD):
-        _send(token, chat, "🔍 Đang chụp camera + phân tích bằng AI vision…", html=False)
-        imgs = _images(hooks)
+        _send(token, chat, "🔍 Đang chụp LOẠT 3 ảnh (cách 4s, chống nhầm do bàn đang "
+                           "chạy) + AI vision phân tích…", html=False)
+        # burst 3 frame tu bambu_web (chong FP ban bed-slinger dang di chuyen);
+        # khong co hook thi fallback 1 frame + render thumb
+        imgs = (hooks.get("burst") or (lambda: []))() or _images(hooks)
         if not imgs:
             _send(token, chat, "Không lấy được ảnh camera — máy tắt?")
             return
         a = ai_chat.ask_vision(
-            "Ảnh 1 là camera bàn in THẬT (nếu có ảnh 2 thì đó là render model chuẩn để "
-            "đối chiếu hình dạng). Kiểm tra bản in: có spaghetti/bong lớp/lệch trục/xơ "
-            "nhựa/cong vênh không? Nhận xét ngắn gọn từng ý, chốt 1 dòng: ✅ ỔN / "
-            "⚠️ NGHI NGỜ / ❌ HỎNG.", imgs, context=hooks["status"]()) \
+            "Đây là LOẠT ảnh camera bàn in chụp cách nhau ~4 giây (máy A1 bed-slinger, "
+            "bàn di chuyển liên tục — khối in có thể TRÔNG nghiêng ở 1 ảnh do bàn đang "
+            "chạy; chỉ kết luận LỆCH TRỤC khi nghiêng NHẤT QUÁN ở mọi ảnh). Kiểm tra: "
+            "spaghetti/bong lớp/lệch trục/xơ nhựa/cong vênh? Nhận xét ngắn từng ý, "
+            "chốt 1 dòng: ✅ ỔN / ⚠️ NGHI NGỜ / ❌ HỎNG.",
+            imgs, context=hooks["status"]()) \
             or "AI vision không phản hồi (hết lượt free hôm nay?) — xem ảnh bằng nút 📷."
         # PHAN TICH VISION LUON KEM ANH (user chot 2026-07-17) — anh nguyen do phan
         # giai camera lam caption cua chinh tam anh AI vua soi
