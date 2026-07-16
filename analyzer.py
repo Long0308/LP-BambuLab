@@ -55,12 +55,47 @@ def _mesh_tris(xml: str, mats: list) -> list:
     return [(V[i], V[j], V[k]) for i, j, k in T if i < len(V) and j < len(V) and k < len(V)]
 
 
-def load_3mf_tris(z: zipfile.ZipFile, names: list, notes: list | None = None) -> list:
-    """Doc TOAN BO mesh trong .3mf va ap transform xoay/di chuyen cua Bambu Studio.
+def plates_3mf(z: zipfile.ZipFile) -> list:
+    """Doc danh sach KHAY (plate) that trong .3mf Bambu.
+
+    Vi sao BAT BUOC: 1 file .3mf co the chua nhieu khay (vd BUCKET.3mf co 3 khay
+    TWO TONE / ONE COLOUR / NODESTACK). Gop het lai roi do bounding box thi ra
+    so RAC (bbox trum ca 3 khay = 407x352mm, khong phai vat that nao ca).
+    Khay khai bao trong Metadata/model_settings.config: <plate> + <model_instance>.
+    """
+    try:
+        ms = z.read("Metadata/model_settings.config").decode("utf-8", "ignore")
+    except (KeyError, OSError):
+        return []
+    names = set(z.namelist())
+    out = []
+    for blk in re.findall(r"<plate>.*?</plate>", ms, re.S):
+        pid = re.search(r'key="plater_id"\s+value="(\d+)"', blk)
+        pnm = re.search(r'key="plater_name"\s+value="([^"]*)"', blk)
+        objs = re.findall(r'key="object_id"\s+value="(\d+)"', blk)
+        if not pid:
+            continue
+        i = int(pid.group(1))
+        thumb = f"Metadata/plate_{i}.png"
+        out.append({
+            "id": i,
+            "name": (pnm.group(1) if pnm else "").strip() or f"Khay {i}",
+            "objects": objs,                       # object_id thuoc khay nay
+            "thumb": thumb if thumb in names else None,   # anh Bambu Studio render san
+        })
+    return sorted(out, key=lambda p: p["id"])
+
+
+def load_3mf_tris(z: zipfile.ZipFile, names: list, notes: list | None = None,
+                  only_objects: list | None = None) -> list:
+    """Doc mesh trong .3mf va ap transform xoay/di chuyen cua Bambu Studio.
 
     Bambu luu phep xoay o <component transform> + <item transform> trong
     3D/3dmodel.model goc — toa do dinh trong 3D/Objects/*.model KHONG doi.
     Doc dinh tho ma bo qua transform thi xoay kieu gi ket qua cung nhu cu.
+
+    only_objects: chi lay object_id thuoc 1 KHAY (xem plates_3mf). None = lay het
+    (dung cho file 1 khay / STL boc).
     """
     models = [n for n in names if n.lower().endswith(".model")]
     root = next((n for n in models if "objects" not in n.lower()), None)
@@ -78,11 +113,14 @@ def load_3mf_tris(z: zipfile.ZipFile, names: list, notes: list | None = None) ->
                          "KHÔNG khớp hướng đặt thật trong Bambu Studio.")
         items[it.group(1)] = mat
 
+    keep = set(only_objects) if only_objects else None
     tris: list = []
     for om in re.finditer(r'<object\b[^>]*\bid="(\d+)"[^>]*>(.*?)</object>', xml, re.S):
         oid, body = om.group(1), om.group(2)
         if oid not in items:
             continue                 # object khong duoc build -> bo qua
+        if keep is not None and oid not in keep:
+            continue                 # object cua KHAY KHAC -> bo (tranh gop 3 khay lam 1)
         if "<mesh" in body:          # mesh nhung truc tiep trong root (3mf ngoai Bambu)
             tris += _mesh_tris(body, [items[oid]])
         for cm in re.finditer(r'<component\b[^>]*/?>', body):
@@ -478,8 +516,12 @@ def top_shell_layers(lh: float, infill_pct: float, target_mm: float = 1.0) -> tu
     return n, reason
 
 
-def analyze_3mf(path: str, color: str | None = None) -> dict:
-    """Phan tich 1 file .3mf (du an hoac da slice)."""
+def analyze_3mf(path: str, color: str | None = None, plate: int | None = None) -> dict:
+    """Phan tich 1 file .3mf (du an hoac da slice).
+
+    plate: so khay muon phan tich (1-based). None = khay dau tien.
+    BAT BUOC tach khay: file nhieu khay ma gop lai thi bbox/overhang/cao deu SAI.
+    """
     res: dict = {"kind": "3mf", "issues": [], "tips": []}
     with zipfile.ZipFile(path) as z:
         names = z.namelist()
@@ -496,8 +538,26 @@ def analyze_3mf(path: str, color: str | None = None) -> dict:
             "sparse_infill_speed", "top_shell_layers", "bottom_shell_layers",
             "filament_type")}   # filament_type: de tu phat hien cap PLA/PETG cho interface
 
+        # KHAY: file .3mf co the co nhieu khay -> phai tach, gop lai la ra so RAC
+        plates = plates_3mf(z)
+        res["plates"] = [{"id": p["id"], "name": p["name"],
+                          "n_obj": len(p["objects"]), "has_thumb": bool(p["thumb"])}
+                         for p in plates]
+        cur = None
+        if plates:
+            cur = next((p for p in plates if p["id"] == plate), plates[0])
+            res["plate"] = cur["id"]
+            res["plate_name"] = cur["name"]
+            if len(plates) > 1:
+                res["tips"].append(
+                    f"📑 File có {len(plates)} KHAY: " +
+                    " · ".join(f"{p['id']}. {p['name']}" for p in plates) +
+                    f". Đang phân tích khay {cur['id']} ({cur['name']}) — mỗi khay in riêng 1 lần, "
+                    "chọn tab khay khác để xem số của khay đó.")
+
         # mesh — doc qua load_3mf_tris de AP TRANSFORM xoay cua Bambu Studio
-        tris = load_3mf_tris(z, names, notes=res["tips"])
+        tris = load_3mf_tris(z, names, notes=res["tips"],
+                             only_objects=(cur["objects"] if cur else None))
         if tris:
             res["mesh"] = mesh_stats(tris)
             res["faces"] = face_analysis(tris)
@@ -1607,6 +1667,111 @@ FILAMENT_REF = {
 }
 
 
+# --- Xuat FILAMENT preset (tab Filament) — TACH khoi FILAMENT_REF (tab canh bao) ---
+# "inherits" PHAI trung TEN THAT preset filament cua A1, sai la Studio khong import duoc.
+#   ✓ = da xac minh trong slice_template.3mf (filament_settings_id that cua may nay)
+#   ~ = suy theo dung quy tac "Bambu {ten} @BBL A1", chua doi chieu duoc tren may
+# "safe" = SO AN TOAN (user chon): cong dong cho Matte/den, official Bambu cho con lai.
+#   bed lay tu bang khuyen nghi wiki heat-creep (PLA 45-60 / PETG 60-80 / ABS-ASA 90-100 / TPU 35-45)
+FIL_EXPORT = {
+    "PLA LITE":  {"inherits": "Bambu PLA Lite @BBL A1", "verified": True,   # ✓ template
+                  "safe": {"nozzle_temperature": "210", "filament_max_volumetric_speed": "16",
+                           "filament_flow_ratio": "0.98", "hot_plate_temp": "55"},
+                  "why": "210°C official Bambu (KHONG phai 220) + flow 16 nhu template that."},
+    "PLA MATTE": {"inherits": "Bambu PLA Matte @BBL A1", "verified": True,  # ✓ template
+                  "safe": {"nozzle_temperature": "230", "filament_max_volumetric_speed": "12",
+                           "filament_flow_ratio": "0.98", "hot_plate_temp": "55"},
+                  "why": "SO AN TOAN cong dong: 230°C + HA volumetric 22→12 (chong ket manh nhat) + flow 0.98."},
+    "PLA BASIC": {"inherits": "Bambu PLA Basic @BBL A1", "verified": False,
+                  "safe": {"nozzle_temperature": "220", "filament_max_volumetric_speed": "21",
+                           "filament_flow_ratio": "0.98", "hot_plate_temp": "55"},
+                  "why": "PLA chuan, de in — giu so official."},
+    "PLA SILK":  {"inherits": "Bambu PLA Silk @BBL A1", "verified": False,
+                  "safe": {"nozzle_temperature": "230", "filament_max_volumetric_speed": "16",
+                           "filament_flow_ratio": "0.98", "hot_plate_temp": "55"},
+                  "why": "Silk can 230 giu do bong, flow thap chong keo soi."},
+    "PLA CF":    {"inherits": "Bambu PLA-CF @BBL A1", "verified": False,
+                  "safe": {"nozzle_temperature": "230", "filament_max_volumetric_speed": "18",
+                           "filament_flow_ratio": "0.98", "hot_plate_temp": "55"},
+                  "why": "CF mai mon — can nozzle thep cung; flow vua."},
+    "PLA METAL": {"inherits": "Bambu PLA Metal @BBL A1", "verified": False,
+                  "safe": {"nozzle_temperature": "230", "filament_max_volumetric_speed": "12",
+                           "filament_flow_ratio": "0.98", "hot_plate_temp": "55"},
+                  "why": "Co BOT KIM LOAI don (nhu Matte co hat don) → mai mon + tich can, xu ly nhu Matte: 230°C + flow thap 12."},
+    # Ho PLA chung — bat moi bien the la (PLA Galaxy/Glow/Wood...) chua co ban rieng
+    "PLA":       {"inherits": "Bambu PLA Basic @BBL A1", "verified": False,
+                  "safe": {"nozzle_temperature": "220", "filament_max_volumetric_speed": "16",
+                           "filament_flow_ratio": "0.98", "hot_plate_temp": "55"},
+                  "why": "Bien the PLA la — dung so PLA Basic THAN TRONG (flow 16 thay vi 21)."},
+    "PETG BASIC":{"inherits": "Bambu PETG Basic @BBL A1", "verified": True,  # ✓ template
+                  "safe": {"nozzle_temperature": "245", "filament_max_volumetric_speed": "13",
+                           "filament_flow_ratio": "0.94", "hot_plate_temp": "70"},
+                  "why": "Lay NGUYEN so that trong template may nay (13 / 0.94 / ban 70)."},
+    "PETG":      {"inherits": "Bambu PETG HF @BBL A1", "verified": False,
+                  "safe": {"nozzle_temperature": "245", "filament_max_volumetric_speed": "21",
+                           "filament_flow_ratio": "0.95", "hot_plate_temp": "70"},
+                  "why": "PETG HF chay nhanh hon ban Basic."},
+    "ABS":       {"inherits": "Bambu ABS @BBL A1", "verified": False,
+                  "safe": {"nozzle_temperature": "270", "filament_max_volumetric_speed": "29",
+                           "filament_flow_ratio": "0.98", "hot_plate_temp": "90"},
+                  "why": "Ban 90 theo wiki (ABS 90-100). A1 khung HO van de vênh."},
+    "ASA":       {"inherits": "Bambu ASA @BBL A1", "verified": False,
+                  "safe": {"nozzle_temperature": "270", "filament_max_volumetric_speed": "18",
+                           "filament_flow_ratio": "0.98", "hot_plate_temp": "90"},
+                  "why": "Nhu ABS, chiu UV tot hon."},
+    "TPU":       {"inherits": "Bambu TPU 95A HF @BBL A1", "verified": False,
+                  "safe": {"nozzle_temperature": "235", "filament_max_volumetric_speed": "15",
+                           "filament_flow_ratio": "0.98", "hot_plate_temp": "40"},
+                  "why": "TPU ban 35-45 (wiki) — mem, phai in cham."},
+}
+
+
+def _fil_export(name: str) -> tuple[str, dict] | None:
+    """Tra bang xuat filament theo ten khay AMS — khop cu the truoc roi den ho nhua."""
+    n = (name or "").upper().strip()
+    if n in FIL_EXPORT:
+        return n, FIL_EXPORT[n]
+    for key in FIL_EXPORT:
+        if n.startswith(key) or key in n:
+            return key, FIL_EXPORT[key]
+    fam = n.split()[0] if n else ""
+    return (fam, FIL_EXPORT[fam]) if fam in FIL_EXPORT else None
+
+
+def filament_preset(name: str, custom: str = "") -> dict | None:
+    """Sinh preset FILAMENT (tab Filament) cho 1 cuon — de import vao Bambu Studio.
+
+    Schema bam theo file that user tu export (boxson-PLAMatte-Decor-filament.json):
+    khong co key "type", moi gia tri la LIST string, co filament_settings_id + inherits.
+    """
+    hit = _fil_export(name)
+    if not hit:
+        return None
+    key, ex = hit
+    safe = ex["safe"]
+    extra = re.sub(r"[^A-Za-z0-9_-]+", "-", (custom or "").strip()).strip("-")[:24]
+    # GIU acronym viet hoa giong preset_name(): "PLA MATTE" -> "PLA-Matte" (khong phai "Pla-Matte")
+    acr = {"PLA", "PETG", "ABS", "ASA", "TPU", "PVA", "PC", "PA", "PET", "HIPS", "PCTG", "PP", "CF", "GF"}
+    fil = "-".join(w.upper() if w.upper() in acr else w.capitalize()
+                   for w in re.split(r"[^A-Za-z0-9]+", key) if w)
+    pname = f"LP-{fil}" + (("-" + extra) if extra else "") + "-safe"
+    p = {
+        "from": "User",
+        "inherits": ex["inherits"],
+        "name": pname,
+        "filament_settings_id": [pname],
+        "filament_extruder_variant": ["Direct Drive Standard"],
+        "version": "2.7.0.8",
+    }
+    for k, v in safe.items():
+        p[k] = [v]
+    # lop dau dung cung nhiet/ban -> khong bi under-melt ngay lop 1 (nguyen nhan ket som)
+    p["nozzle_temperature_initial_layer"] = [safe["nozzle_temperature"]]
+    p["hot_plate_temp_initial_layer"] = [safe["hot_plate_temp"]]
+    return {"key": key, "preset": p, "why": ex["why"], "verified": ex["verified"],
+            "inherits": ex["inherits"], "safe": safe}
+
+
 def _fil_ref(name: str) -> dict | None:
     """Tra thu vien theo ten khay AMS — khop cu the truoc (PLA MATTE) roi ho nhua."""
     n = (name or "").upper().strip()
@@ -1651,12 +1816,14 @@ def ams_advice(ams: list, colors: list | None = None) -> list:
 
 
 def analyze(path: str, mode: str = "balanced", ams: list | None = None,
-            color: str | None = None, ams_colors: list | None = None) -> dict:
+            color: str | None = None, ams_colors: list | None = None,
+            plate: int | None = None) -> dict:
     """ams: loai nhua THAT trong khay AMS (tu MQTT, vd ['PLA LITE','PETG BASIC']).
     ams_colors: hex mau tung khay (cung thu tu) de bat mau DEN -> canh bao clog.
+    plate: so KHAY trong .3mf (None = khay 1). File nhieu khay phai tach tung khay.
     None/[] = khong sync duoc may -> chi suy theo khai bao trong file."""
     r = (analyze_stl(path, color) if path.lower().endswith(".stl")
-         else analyze_3mf(path, color))
+         else analyze_3mf(path, color, plate))
     r["ams"] = [str(t).upper() for t in (ams or []) if t]
     r["ams_advice"] = ams_advice(r["ams"], ams_colors)
     import os as _os
