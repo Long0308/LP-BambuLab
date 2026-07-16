@@ -33,7 +33,7 @@ SAFE_KEYS = (
     "layer_height", "wall_loops", "wall_generator", "wall_sequence",
     "sparse_infill_density", "sparse_infill_pattern",
     "top_shell_layers", "bottom_shell_layers",
-    "enable_support", "support_type", "support_style",
+    "enable_support", "support_type", "support_style", "bridge_no_support",
     "support_on_build_plate_only", "support_threshold_angle",
     "support_interface_filament", "support_top_z_distance", "support_bottom_z_distance",
     "support_interface_spacing", "support_interface_pattern",
@@ -53,12 +53,14 @@ SAFE_KEYS = (
 )
 
 
-# ===== NGAN SACH THOI GIAN (user chot 2026-07-16) =====
-# Preset khong duoc lam thoi gian in vuot qua DEFAULT (0.20mm Standard @BBL A1)
-# qua 1h30m; cho phep sai so nho. So sanh bang total_predication (result.json) —
-# CUNG THANG voi so Bambu Studio GUI hien thi (gom flush/moi nhua).
-BUDGET_S = 90 * 60
-BUDGET_TOL_S = 5 * 60
+# ===== NGAN SACH THOI GIAN (user chot 2026-07-16, dieu chinh cung ngay) =====
+# MUC TIEU: preset khong vuot DEFAULT (0.20mm Standard @BBL A1) qua +1h30m.
+# SAI SO CHAP NHAN: den +2h van OK — "dung co ep", chi cat khi vuot +2h.
+# Cac fix loi KY THUAT (warping/keo soi/vat cao/brim/support hoc ranh) LUON giu,
+# khong bao gio bi cat vi ngan sach. So sanh bang total_predication (result.json)
+# — CUNG THANG voi so Bambu Studio GUI hien thi (gom flush/moi nhua).
+BUDGET_S = 90 * 60          # muc tieu +1h30
+BUDGET_TOL_S = 30 * 60      # sai so user cho phep: +1h30 den +2h
 
 
 def _v1(v) -> str:
@@ -76,6 +78,9 @@ def trim_ladder(p: dict) -> list[tuple[str, dict]]:
       - inner/sparse/solid speed (tran luu luong mvs — chong ket nhua Matte/Metal)
       - enable_overhang_speed + overhang_* (chong xau mat hang), bridge_flow/speed
       - support* (chong vong/hong hinh), initial_layer_* (bam ban), brim (bam ban)
+    Ngoai le co chu dich o buoc layer-notch: initial_layer_print_height chi TANG
+    theo layer moi (giu quy tac = layer chinh, bam ban khong yeu di) va cac speed
+    mvs scale XUONG theo tran moi — la dong bo rang buoc, khong phai cat lever.
     """
     steps: list[tuple[str, dict]] = []
     if p.get("ironing_type") not in (None, "no ironing"):
@@ -103,10 +108,12 @@ def trim_ladder(p: dict) -> list[tuple[str, dict]]:
     tsl = int(_v1(p.get("top_shell_layers") or 0) or 0)
     bsl = int(_v1(p.get("bottom_shell_layers") or 0) or 0)
     if tsl > 5 or bsl > 3:
-        steps.append((f"Vỏ trên/dưới {tsl}/{bsl} → {max(tsl - 1, 5)}/{max(bsl - 1, 3)} "
-                      f"(giá đo 6/4: −6m07s chiều ngược)",
-                      {"top_shell_layers": str(max(tsl - 1, 5)),
-                       "bottom_shell_layers": str(max(bsl - 1, 3))}))
+        # Ve thang san 5/3 trong 1 buoc — moi buoc cat = 1 lan slice CLI that,
+        # giam 1 lop/lan la ton nhieu lan slice vo ich (review MEDIUM-4).
+        steps.append((f"Vỏ trên/dưới {tsl}/{bsl} → {min(tsl, 5)}/{min(bsl, 3)} "
+                      f"(giá đo 6/4→5/3: −6m07s)",
+                      {"top_shell_layers": str(min(tsl, 5)),
+                       "bottom_shell_layers": str(min(bsl, 3))}))
     # CUOI CUNG moi dung den layer height (danh doi van lop — ban chat che do):
     lh = float(_v1(p.get("layer_height") or 0.2))
     nxt = {0.12: 0.16, 0.16: 0.2, 0.2: 0.24}.get(lh)
@@ -115,12 +122,26 @@ def trim_ladder(p: dict) -> list[tuple[str, dict]]:
         ilh = float(_v1(p.get("initial_layer_print_height") or lh))
         if ilh < nxt:
             ch["initial_layer_print_height"] = f"{nxt:g}"
-        # duong in mat tren phai >= layer height, khong la CLI loi -51
+        # duong in mat tren phai >= layer height, khong la CLI loi -51. Bump TOI
+        # THIEU (= layer moi) de giu fix mat-tren-lam-tam cang hep cang tot
+        # (review LOW-7 — khong nhay thang ve 0.42).
         tw = float(_v1(p.get("top_surface_line_width") or 9) or 9)
         if tw < nxt:
-            ch["top_surface_line_width"] = "0.42"
-        steps.append((f"Layer {lh:g} → {nxt:g}mm (giá đo 0.16→0.20: −45m34s) — bước cuối cùng",
-                      ch))
+            ch["top_surface_line_width"] = f"{nxt:g}"
+        # RANG BUOC KY THUAT (chong ket): toc do inner/sparse/solid/top duoc suy tu
+        # tran mvs TAI layer CU — layer day len thi tran ha xuong (mvs / (lh x lw)).
+        # Phai scale ve <= tran moi: v_new = v_old x lh_cu / lh_moi, khong la chinh
+        # tay ngan sach lai VI PHAM luat chong ket cua hub. top_surface_speed CUNG
+        # phai scale (review HIGH-1 — truoc thieu, giu so cu la vuot tran moi).
+        for k in ("inner_wall_speed", "sparse_infill_speed",
+                  "internal_solid_infill_speed", "top_surface_speed"):
+            if p.get(k):
+                ch[k] = [str(int(int(_v1(p[k])) * lh / nxt))]
+        if p.get("outer_wall_speed") and ch.get("inner_wall_speed"):
+            ch["outer_wall_speed"] = [str(min(int(_v1(p["outer_wall_speed"])),
+                                              int(_v1(ch["inner_wall_speed"]))))]
+        steps.append((f"Layer {lh:g} → {nxt:g}mm (giá đo 0.16→0.20: −45m34s; tốc độ scale "
+                      f"theo trần mvs mới) — bước cuối cùng", ch))
     return steps
 
 
@@ -196,8 +217,10 @@ def run_modes(src: str, workdir: str, modes=("fast", "balanced", "quality"),
                        ("mesh", "flow", "variable_layer", "issues", "rotations")}
 
     b = rep["baseline"]
-    cap = (b["secs"] + BUDGET_S + BUDGET_TOL_S) if b.get("secs") else None
-    rep["budget"] = {"budget_s": BUDGET_S, "tol_s": BUDGET_TOL_S, "cap_secs": cap}
+    tgt = (b["secs"] + BUDGET_S) if b.get("secs") else None        # muc tieu +1h30
+    cap = (tgt + BUDGET_TOL_S) if tgt else None                    # sai so den +2h
+    rep["budget"] = {"budget_s": BUDGET_S, "tol_s": BUDGET_TOL_S,
+                     "target_secs": tgt, "cap_secs": cap}
 
     for mi, mode in enumerate(modes):
         ex = an["presets"][mode]
@@ -213,7 +236,12 @@ def run_modes(src: str, workdir: str, modes=("fast", "balanced", "quality"),
 
         # === GUARD NGAN SACH: vuot cap -> cat tung buoc theo gia do that ===
         trims: list[dict] = []
-        while cap and s2 and s2 > cap:
+        # Chot an toan: moi buoc ladder ap xong deu tu bien mat khoi ladder, nhung
+        # van can can tren phong sau nay sua ladder vo tinh tao buoc khong-tu-tat
+        # (review MEDIUM-4) — moi vong = 1 lan slice CLI that, khong duoc quay vo han.
+        for _guard in range(10):
+            if not (cap and s2 and s2 > cap):
+                break
             steps = trim_ladder(p)
             if not steps:
                 break                        # het cai duoc phep cat (lever ky thuat giu)
@@ -230,12 +258,32 @@ def run_modes(src: str, workdir: str, modes=("fast", "balanced", "quality"),
                           "saved_secs": (s2 - s3) if s2 and s3 else None})
             res2, st2, s2 = res3, st3, s3
 
+        # Tu van khong cung nhac: lot muc tieu thi im; vuot muc tieu nhung trong
+        # sai so thi GIU chat luong va noi ro; chi khi vuot sai so moi da cat o tren.
+        note = None
+        if tgt and s2:
+            if s2 <= tgt:
+                pass
+            elif s2 <= cap:
+                note = (f"Vượt mục tiêu +1h30 ({_hm(s2 - b['secs'])} so với default) nhưng "
+                        f"trong sai số +2h bạn cho phép — GIỮ nguyên chất lượng, không cắt.")
+            elif trims:
+                # Nhanh nay chi vao khi s2 VAN > cap sau khi da cat het — noi that,
+                # dung nhan "da ve trong sai so" (review HIGH-2: note cu noi doi).
+                note = (f"Đã cắt {len(trims)} bước theo giá đo thật nhưng VẪN vượt sai số +2h "
+                        f"({_hm(s2 - b['secs'])} so với default) — phần còn lại toàn lever kỹ thuật "
+                        f"(warping/kéo sợi/vật cao/brim/support), giữ nguyên theo ưu tiên của bạn.")
+            else:
+                note = (f"Vượt sai số +2h ({_hm(s2 - b['secs'])} so với default) nhưng không có "
+                        f"gì cắt được ngoài lever kỹ thuật — giữ nguyên theo ưu tiên của bạn.")
         rep["modes"][mode] = {
             **st2, "secs": s2, "label": ex["mode_label"], "why": ex["why"],
             "preset": p, "file": res2,
-            "budget": {"cap_secs": cap, "fits": bool(cap and s2 and s2 <= cap),
+            "budget": {"target_secs": tgt, "cap_secs": cap,
+                       "fits": bool(cap and s2 and s2 <= cap),
+                       "within_target": bool(tgt and s2 and s2 <= tgt),
                        "over_secs": max(0, s2 - cap) if cap and s2 else None,
-                       "trims": trims},
+                       "note": note, "trims": trims},
             "time_pct": round((1 - s2 / b["secs"]) * 100, 1) if s2 and b.get("secs") else None,
             "weight_pct": round((1 - st2["weight_g"] / b["weight_g"]) * 100, 1)
                           if st2.get("weight_g") and b.get("weight_g") else None,

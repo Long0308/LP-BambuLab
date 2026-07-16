@@ -117,10 +117,13 @@ def _download(host: str, code: str, gcode_file: str) -> bytes | None:
 _USED_G = re.compile(r'used_g="([\d.]+)"')
 # File DA MAU: Bambu ghi nhieu so tren 1 dong phan cach phay ("106.56,12.77")
 # -> capture ca chuoi roi cong; ([\d.]+) cu dung o dau phay, thieu nhua #2+.
+# File DA MAU: nhieu so 1 dong phan cach phay ("106.56,12.77", co the co space
+# sau phay) -> capture ca chuoi roi CONG. [\d., ] khong co \n nen khong an sang
+# dong sau. CUNG do dung sai voi slicer_cli._WEIGHT_PAT + hub HTML (review MEDIUM-6).
 _HDR_PATS = (
-    re.compile(r"total filament weight \[g\]\s*[:=]\s*([\d.,]+)", re.I),
-    re.compile(r"filament used \[g\]\s*[:=]\s*([\d.,]+)", re.I),
-    re.compile(r"total filament used \[g\]\s*[:=]\s*([\d.,]+)", re.I),
+    re.compile(r"total filament weight \[g\]\s*[:=]\s*([\d., ]+)", re.I),
+    re.compile(r"filament used \[g\]\s*[:=]\s*([\d., ]+)", re.I),
+    re.compile(r"total filament used \[g\]\s*[:=]\s*([\d., ]+)", re.I),
 )
 
 

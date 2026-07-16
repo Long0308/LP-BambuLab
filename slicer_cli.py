@@ -48,7 +48,8 @@ _LAYER_PAT = re.compile(r";\s*total layer number:\s*(\d+)", re.I)
 # File DA MAU ghi nhieu so tren 1 dong, phan cach phay: "106.56,12.77" (khay 1
 # BUCKET.3mf = nhua #1 + nhua #3). Regex cu ([\d.]+) dung o dau phay -> chi lay
 # nhua dau tien, thieu ~11%. Phai bat ca chuoi roi CONG het.
-_WEIGHT_PAT = re.compile(r";\s*total filament weight \[g\]\s*:\s*([\d.,\s]+)", re.I)
+# [\d., ] (space, KHONG \s): chiu duoc "106.56, 12.77" ma khong an sang dong sau
+_WEIGHT_PAT = re.compile(r";\s*total filament weight \[g\]\s*:\s*([\d., ]+)", re.I)
 
 
 def stats_from_gcode3mf(path: str, plate: int = 1) -> dict:

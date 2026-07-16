@@ -3016,7 +3016,7 @@ async function analyze(file){
        const mt=/;\s*model printing time:\s*([^;\n\r]+)/i.exec(txt);
        /* File ĐA MÀU: Bambu ghi nhiều số 1 dòng phân cách phẩy ("106.56,12.77") → CỘNG hết.
           Regex cũ ([\d.]+) dừng ở dấu phẩy — chỉ lấy nhựa #1, thiếu ~11% (BUCKET khay 1). */
-       const mw=/;\s*total filament weight \[g\]\s*:\s*([\d.,]+)/i.exec(txt);
+       const mw=/;\s*total filament weight \[g\]\s*:\s*([\d., ]+)/i.exec(txt);
        const wsum=mw?mw[1].split(",").reduce((a,x)=>a+(parseFloat(x)||0),0):null;
        if(mt||mw)slice={time:mt?hmsToSec(mt[1]):(slice&&slice.time),weight:wsum!=null?+wsum.toFixed(2):(slice&&slice.weight),fil:(slice&&slice.fil)||[],src:"gcode"};
        break;
