@@ -34,6 +34,8 @@ import filament_ftp
 import slicer_cli
 import analyzer
 import optimize_e2e
+import camera_stream
+import notify
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PRINTER_NAME = "LongPham A1-3"
@@ -613,6 +615,17 @@ def on_message(c, u, msg):
             maybe_fetch_job(gf)
         if prev == "RUNNING" and gc == "FINISH":
             _on_finish(snap)
+        # CHUONG ve dien thoai (ntfy/Telegram/Discord — cau hinh .env, xem notify.py).
+        # Chi bao khi CHUYEN trang thai that — MQTT bao cao lien tuc, khong duoc spam.
+        if prev and gc and prev != gc:
+            fn = os.path.basename(str(gf or "")) or "(khong ro file)"
+            if prev == "RUNNING" and gc == "FINISH":
+                notify.send("Bambu A1: In XONG ✅", f"{fn} — lay ban in thoi.")
+            elif gc == "FAILED":
+                notify.send("Bambu A1: In THAT BAI", f"{fn} — kiem tra may ngay.", urgent=True)
+            elif prev == "RUNNING" and gc == "PAUSE":
+                notify.send("Bambu A1: TAM DUNG giua chung",
+                            f"{fn} — co the het nhua / loi; vao xem camera.", urgent=True)
 
 
 def mqtt_loop():
@@ -951,6 +964,24 @@ async function saveCfg(){
     <svg viewBox="0 0 24 24"><path d="M6 6h12v12H6z"/></svg>DỪNG</button>
 </div>
 
+<div class="card">
+  <details id="cambox" ontoggle="camTog()">
+    <summary style="cursor:pointer;font-weight:800;font-size:14px">📹 Camera bàn in — live từ camera A1 tích hợp (bấm để mở)</summary>
+    <div style="margin-top:10px;text-align:center">
+      <img id="camimg" alt="camera bàn in" style="max-width:100%;border-radius:12px;background:#0a0e14;min-height:120px">
+      <div class="mut" style="margin-top:6px;font-size:12px">Lấy thẳng từ camera A1 qua LAN (cổng 6000, cùng Access Code) —
+      đóng khung này là tự ngắt kết nối. Xem được cả qua Tailscale trên điện thoại.</div>
+    </div>
+  </details>
+  <div style="display:flex;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap">
+    <label style="display:flex;gap:6px;align-items:center;font-size:13px;cursor:pointer">
+      <input type="checkbox" id="bellchk" onchange="bellTog()"> 🔔 Chuông trên trang (In XONG / LỖI / TẠM DỪNG)
+    </label>
+    <button class="ubtn" style="width:auto;padding:8px 14px;font-size:12.5px" onclick="notifyTest()">📱 Gửi thử chuông điện thoại</button>
+    <span class="mut" id="ntfyst" style="font-size:12px"></span>
+  </div>
+</div>
+
 <div class="linkrow">
   <a class="infolink" href="/info"><svg viewBox="0 0 24 24"><path d="M11 7h2v2h-2zM11 11h2v6h-2zM12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16z"/></svg> Thông tin G-code</a>
   <a class="infolink" href="/files"><svg viewBox="0 0 24 24"><path d="M10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2z"/></svg> File trên máy · chọn in</a>
@@ -1011,6 +1042,47 @@ async function saveCfg(){
 
 <script>
 const STAGE={IDLE:"Đang rảnh",PREPARE:"Đang chuẩn bị",RUNNING:"ĐANG IN",PAUSE:"Tạm dừng",FINISH:"In XONG",FAILED:"In LỖI",SLICING:"Đang slice"};
+/* ===== CAMERA A1 (lazy — chi ket noi khi mo khung) ===== */
+function camTog(){
+  const d=document.getElementById("cambox"),im=document.getElementById("camimg");
+  if(d&&d.open){im.src="/api/camera?"+Date.now();}
+  else if(im){im.removeAttribute("src");}
+}
+/* ===== CHUONG TREN TRANG (WebAudio — can 1 cu bam de mo khoa am thanh) ===== */
+let BELL=localStorage.getItem("lp_bell")==="1", AC=null, prevGc=null;
+function beep(freq,dur,times){
+  try{
+    AC=AC||new (window.AudioContext||window.webkitAudioContext)();
+    let t=AC.currentTime; times=times||1;
+    for(let i=0;i<times;i++){
+      const o=AC.createOscillator(),g=AC.createGain();
+      o.frequency.value=freq;o.connect(g);g.connect(AC.destination);
+      g.gain.setValueAtTime(0.25,t+i*(dur+0.12));
+      g.gain.exponentialRampToValueAtTime(0.001,t+i*(dur+0.12)+dur);
+      o.start(t+i*(dur+0.12));o.stop(t+i*(dur+0.12)+dur);
+    }
+  }catch(e){}
+}
+function bellTog(){
+  BELL=document.getElementById("bellchk").checked;
+  localStorage.setItem("lp_bell",BELL?"1":"0");
+  if(BELL){try{AC=AC||new (window.AudioContext||window.webkitAudioContext)();AC.resume();beep(880,0.12);}catch(e){}}
+}
+function bellCheck(gc){
+  if(prevGc&&gc&&gc!==prevGc&&BELL){
+    if(gc==="FINISH")beep(880,0.25,3);                     /* teng teng teng — xong */
+    else if(gc==="FAILED")beep(220,0.5,5);                 /* tram, keo dai — loi */
+    else if(gc==="PAUSE"&&prevGc==="RUNNING")beep(440,0.35,4); /* het nhua/tam dung */
+  }
+  prevGc=gc;
+}
+async function notifyTest(){
+  const el=document.getElementById("ntfyst"); el.textContent="đang gửi…";
+  try{
+    const j=await (await fetch("/api/notify-test")).json();
+    el.textContent=j.ok?("✓ đã gửi: "+j.sent.join(", ")):j.msg;
+  }catch(e){el.textContent="lỗi: "+e;}
+}
 let prevState=null, wasConnected=false, connLost=false, curAlert=null, lastBeepTs=0, doneShown=false, dismissed=null, ac=null;
 const PENCIL='<svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.8 9.94l-3.75-3.75L3 17.25zM20.7 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>';
 
@@ -1166,6 +1238,7 @@ async function tick(){
   document.getElementById("dot").className="dot "+(s.connected?"on":"off");
   document.getElementById("name").textContent=s.name||"—";
   const gc=d.gcode_state||"?";
+  bellCheck(gc);                       /* chuong tren trang khi doi trang thai */
   document.getElementById("stage").textContent=STAGE[gc]||gc;
   document.getElementById("job").textContent=d.subtask_name||d.gcode_file||"—";
   let pct=parseInt(d.mc_percent);if(isNaN(pct))pct=0;
@@ -1233,6 +1306,7 @@ async function tick(){
    document.getElementById("foot").textContent="Lỗi tải: "+e;
  }
 }
+document.getElementById("bellchk").checked=BELL;   /* nho lua chon chuong */
 tick();setInterval(tick,2000);
 </script></body></html>"""
 
@@ -2218,6 +2292,41 @@ class H(BaseHTTPRequestHandler):
             self.send_header("Cache-Control", "no-store")
             self.end_headers()
             self.wfile.write(blob)
+        elif path.startswith("/api/notify-test"):
+            # Bam nut test tren dashboard -> gui thu 1 tin toi MOI kenh da cau hinh
+            chs = notify.channels()
+            if not chs:
+                self._send(200, json.dumps({"ok": False, "msg":
+                    "Chưa cấu hình kênh nào — điền NTFY_TOPIC / TELEGRAM_BOT_TOKEN+CHAT_ID / "
+                    "DISCORD_WEBHOOK vào file .env rồi bấm lại (không cần restart)."},
+                    ensure_ascii=False), "application/json; charset=utf-8")
+            else:
+                res = notify.send_sync("Bambu A1: test chuông 🔔",
+                                       "Hub gửi thử — nhận được là cấu hình OK.")
+                self._send(200, json.dumps({"ok": True, "sent": res}, ensure_ascii=False),
+                           "application/json; charset=utf-8")
+        elif path.startswith("/api/camera.jpg"):
+            # 1 frame moi nhat tu camera tich hop A1 (cong 6000) — fallback/thumbnail
+            f = camera_stream.get_frame(IP, CODE, wait_s=8)
+            if f:
+                self._send(200, f, "image/jpeg")
+            else:
+                self._send(503, "Camera chưa có hình: " + (camera_stream.last_error() or
+                           "đang kết nối — thử lại sau vài giây"), "text/plain; charset=utf-8")
+        elif path.startswith("/api/camera"):
+            # MJPEG stream lien tuc (multipart/x-mixed-replace) — nhung <img> la chay.
+            # n tab cung xem van chi 1 ket noi toi may in (camera_stream cache frame).
+            try:
+                self.send_response(200)
+                self.send_header("Content-Type", "multipart/x-mixed-replace; boundary=lpcam")
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                for f in camera_stream.mjpeg_frames(IP, CODE):
+                    self.wfile.write(b"--lpcam\r\nContent-Type: image/jpeg\r\n"
+                                     b"Content-Length: " + str(len(f)).encode()
+                                     + b"\r\n\r\n" + f + b"\r\n")
+            except (ConnectionError, OSError):
+                pass                        # user dong tab/chuyen trang — binh thuong
         elif path.startswith("/api/plateimg"):
             # Anh khay (T2) — png Bambu Studio render san, _run_analyze da boc ra dia
             # LUU Y: `path` da bi cat query o dau do_GET -> phai parse tu self.path

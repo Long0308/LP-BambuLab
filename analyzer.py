@@ -1825,8 +1825,12 @@ FIL_EXPORT = {
 
 
 def _fil_export(name: str) -> tuple[str, dict] | None:
-    """Tra bang xuat filament theo ten khay AMS — khop cu the truoc roi den ho nhua."""
-    n = (name or "").upper().strip()
+    """Tra bang xuat filament theo ten khay AMS — khop cu the truoc roi den ho nhua.
+
+    Chuan hoa '-'/'_' -> ' ' vi tray_type Bambu ghi 'PLA-CF' (gach ngang) con bang
+    nay dung 'PLA CF' — khong chuan hoa thi CF roi nham ve ho PLA thuong.
+    """
+    n = re.sub(r"[-_]+", " ", (name or "").upper()).strip()
     if n in FIL_EXPORT:
         return n, FIL_EXPORT[n]
     for key in FIL_EXPORT:
@@ -1871,8 +1875,9 @@ def filament_preset(name: str, custom: str = "") -> dict | None:
 
 
 def _fil_ref(name: str) -> dict | None:
-    """Tra thu vien theo ten khay AMS — khop cu the truoc (PLA MATTE) roi ho nhua."""
-    n = (name or "").upper().strip()
+    """Tra thu vien theo ten khay AMS — khop cu the truoc (PLA MATTE) roi ho nhua.
+    Chuan hoa '-'/'_' -> ' ' (tray_type Bambu ghi 'PLA-CF' gach ngang)."""
+    n = re.sub(r"[-_]+", " ", (name or "").upper()).strip()
     if n in FILAMENT_REF:
         return FILAMENT_REF[n]
     for key in FILAMENT_REF:
