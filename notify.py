@@ -75,6 +75,16 @@ def _post(url: str, data: bytes, headers: dict, tries: int = 3) -> None:
     raise last if last else RuntimeError("post fail")
 
 
+def _log(line: str) -> None:
+    """Nhat ky gui tin -> notify.log (canh bambu_web) — soi duoc vi sao tin khong den."""
+    try:
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                               "notify.log"), "a", encoding="utf-8") as f:
+            f.write(time.strftime("%Y-%m-%d %H:%M:%S ") + line + "\n")
+    except OSError:
+        pass
+
+
 def _send_all(title: str, body: str, urgent: bool) -> list[str]:
     e = _env()
     sent: list[str] = []
@@ -105,6 +115,7 @@ def _send_all(title: str, body: str, urgent: bool) -> list[str]:
             sent.append("discord")
         except Exception as ex:                            # noqa: BLE001
             sent.append(f"discord:LOI {ex}")
+    _log(f"[{title}] -> {', '.join(sent) or 'KHONG CO KENH'}")
     return sent
 
 

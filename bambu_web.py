@@ -631,14 +631,16 @@ def on_message(c, u, msg):
                 rem = int(snap.get("mc_remaining_time") or 0)
             except (TypeError, ValueError):
                 pct, rem = 0, 0
-            for m in (30, 50, 75):
-                if pct >= m and m not in MILE["sent"]:
-                    MILE["sent"].add(m)
-                    w = _job_weight()
-                    notify.send(f"Bambu A1: {pct}% ⏳",
-                                f"{fn} — lớp {snap.get('layer_num')}/{snap.get('total_layer_num')}, "
-                                f"còn ~{rem // 60}h{rem % 60:02d}m"
-                                + (f", ~{w}g nhựa." if w else "."))
+            # Nhieu moc thoa cung luc (restart giua chung / nhay %) -> GOM 1 tin moc
+            # cao nhat, khoi ban 2-3 tin trung (thay that trong notify.log 00:15).
+            hit = [m for m in (30, 50, 75) if pct >= m and m not in MILE["sent"]]
+            if hit:
+                MILE["sent"].update(hit)
+                w = _job_weight()
+                notify.send(f"Bambu A1: {pct}% ⏳ (mốc {max(hit)}%)",
+                            f"{fn} — lớp {snap.get('layer_num')}/{snap.get('total_layer_num')}, "
+                            f"còn ~{rem // 60}h{rem % 60:02d}m"
+                            + (f", ~{w}g nhựa." if w else "."))
         # LOI PHAI HIEN RO: bao ngay khi xuat hien MA LOI (ke ca chua doi trang thai)
         err = 0
         for k in ("print_error", "mc_print_error_code"):
