@@ -115,10 +115,12 @@ def _download(host: str, code: str, gcode_file: str) -> bytes | None:
 
 
 _USED_G = re.compile(r'used_g="([\d.]+)"')
+# File DA MAU: Bambu ghi nhieu so tren 1 dong phan cach phay ("106.56,12.77")
+# -> capture ca chuoi roi cong; ([\d.]+) cu dung o dau phay, thieu nhua #2+.
 _HDR_PATS = (
-    re.compile(r"total filament weight \[g\]\s*[:=]\s*([\d.]+)", re.I),
-    re.compile(r"filament used \[g\]\s*[:=]\s*([\d.]+)", re.I),
-    re.compile(r"total filament used \[g\]\s*[:=]\s*([\d.]+)", re.I),
+    re.compile(r"total filament weight \[g\]\s*[:=]\s*([\d.,]+)", re.I),
+    re.compile(r"filament used \[g\]\s*[:=]\s*([\d.,]+)", re.I),
+    re.compile(r"total filament used \[g\]\s*[:=]\s*([\d.,]+)", re.I),
 )
 
 
@@ -154,7 +156,8 @@ def parse_weight(zip_bytes_or_path) -> float | None:
                 for pat in _HDR_PATS:
                     ms = pat.findall(head)
                     if ms:
-                        return round(sum(float(x) for x in ms), 2)
+                        return round(sum(float(x) for m in ms
+                                         for x in m.split(",") if x.strip()), 2)
     return None
 
 

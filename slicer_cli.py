@@ -44,7 +44,10 @@ def find_exe() -> str | None:
 
 _TIME_PAT = re.compile(r";\s*model printing time:\s*([^;\n]+)", re.I)
 _LAYER_PAT = re.compile(r";\s*total layer number:\s*(\d+)", re.I)
-_WEIGHT_PAT = re.compile(r";\s*total filament weight \[g\]\s*:\s*([\d.]+)", re.I)
+# File DA MAU ghi nhieu so tren 1 dong, phan cach phay: "106.56,12.77" (khay 1
+# BUCKET.3mf = nhua #1 + nhua #3). Regex cu ([\d.]+) dung o dau phay -> chi lay
+# nhua dau tien, thieu ~11%. Phai bat ca chuoi roi CONG het.
+_WEIGHT_PAT = re.compile(r";\s*total filament weight \[g\]\s*:\s*([\d.,\s]+)", re.I)
 
 
 def stats_from_gcode3mf(path: str, plate: int = 1) -> dict:
@@ -84,7 +87,8 @@ def stats_from_gcode3mf(path: str, plate: int = 1) -> dict:
                     out["layers"] = int(m.group(1))
                 m = _WEIGHT_PAT.search(head)
                 if m:
-                    out["weight_g"] = float(m.group(1))
+                    out["weight_g"] = round(sum(
+                        float(x) for x in m.group(1).split(",") if x.strip()), 2)
                 break
     return out
 
