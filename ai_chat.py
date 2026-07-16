@@ -11,6 +11,7 @@ luong bao chuong.
 """
 from __future__ import annotations
 
+import base64
 import json
 import urllib.request
 
@@ -60,19 +61,9 @@ def enabled() -> bool:
     return bool(_cfg()[0])
 
 
-def ask(question: str, context: str = "", system: str = SYSTEM,
-        timeout: int = 45, max_tokens: int = 700) -> str | None:
-    """Hoi 1 cau -> tra loi text, None neu loi/chua cau hinh (caller tu fallback)."""
-    key, model = _cfg()
-    if not key or not question.strip():
-        return None
-    user = question if not context else f"{question}\n\n[Bối cảnh máy in hiện tại]\n{context}"
-    body = json.dumps({
-        "model": model,
-        "messages": [{"role": "system", "content": system},
-                     {"role": "user", "content": user}],
-        "max_tokens": max_tokens,
-    }).encode("utf-8")
+def _call(model: str, key: str, messages: list, max_tokens: int, timeout: int) -> str | None:
+    body = json.dumps({"model": model, "messages": messages,
+                       "max_tokens": max_tokens}).encode("utf-8")
     req = urllib.request.Request(
         "https://openrouter.ai/api/v1/chat/completions", data=body, method="POST",
         headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json",
@@ -86,3 +77,40 @@ def ask(question: str, context: str = "", system: str = SYSTEM,
         return out or None
     except Exception:                                   # noqa: BLE001 — AI chi la trang tri
         return None
+
+
+def ask(question: str, context: str = "", system: str = SYSTEM,
+        timeout: int = 45, max_tokens: int = 700) -> str | None:
+    """Hoi 1 cau -> tra loi text, None neu loi/chua cau hinh (caller tu fallback)."""
+    key, model = _cfg()
+    if not key or not question.strip():
+        return None
+    user = question if not context else f"{question}\n\n[Bối cảnh máy in hiện tại]\n{context}"
+    return _call(model, key,
+                 [{"role": "system", "content": system},
+                  {"role": "user", "content": user}], max_tokens, timeout)
+
+
+def ask_vision(question: str, images: list[bytes], context: str = "",
+               timeout: int = 90, max_tokens: int = 800) -> str | None:
+    """Hoi kem ANH (frame camera / render model) — model VISION rieng.
+
+    Mac dinh Nemotron 3 Nano Omni free (co vision) — model hoi dap text (Super 120B)
+    KHONG nhin duoc anh nen phai tach. Doi bang OPENROUTER_VISION_MODEL trong .env.
+    """
+    key, _ = _cfg()
+    if not key or not images:
+        return None
+    try:
+        env = printer_config._parse_dotenv(printer_config.env_path())  # noqa: SLF001
+    except Exception:                                   # noqa: BLE001
+        env = {}
+    model = env.get("OPENROUTER_VISION_MODEL") or DEFAULT_MODEL
+    user = question if not context else f"{question}\n\n[Bối cảnh máy in hiện tại]\n{context}"
+    content: list = [{"type": "text", "text": user}]
+    for jpg in images[:2]:                              # toi da 2 anh cho nhe
+        content.append({"type": "image_url", "image_url": {
+            "url": "data:image/jpeg;base64," + base64.b64encode(jpg).decode("ascii")}})
+    return _call(model, key,
+                 [{"role": "system", "content": SYSTEM},
+                  {"role": "user", "content": content}], max_tokens, timeout)

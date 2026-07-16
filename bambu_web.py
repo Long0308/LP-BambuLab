@@ -631,12 +631,14 @@ def on_message(c, u, msg):
                 rem = int(snap.get("mc_remaining_time") or 0)
             except (TypeError, ValueError):
                 pct, rem = 0, 0
-            for m in (30, 50):
+            for m in (30, 50, 75):
                 if pct >= m and m not in MILE["sent"]:
                     MILE["sent"].add(m)
+                    w = _job_weight()
                     notify.send(f"Bambu A1: {pct}% ⏳",
                                 f"{fn} — lớp {snap.get('layer_num')}/{snap.get('total_layer_num')}, "
-                                f"còn ~{rem // 60}h{rem % 60:02d}m.")
+                                f"còn ~{rem // 60}h{rem % 60:02d}m"
+                                + (f", ~{w}g nhựa." if w else "."))
         # LOI PHAI HIEN RO: bao ngay khi xuat hien MA LOI (ke ca chua doi trang thai)
         err = 0
         for k in ("print_error", "mc_print_error_code"):
@@ -2834,8 +2836,19 @@ class H(BaseHTTPRequestHandler):
         self._send(200, json.dumps({"ok": ok, "msg": msg}), "application/json; charset=utf-8")
 
 
+def _job_weight() -> float | None:
+    with JOB_LOCK:
+        return JOB.get("weight")
+
+
+def _job_thumb() -> bytes | None:
+    """Anh render model dang in (Bambu nhung san trong file, cache qua FTP)."""
+    with JOB_LOCK:
+        return JOB.get("thumb")
+
+
 def _status_text() -> str:
-    """Trang thai gon cho bot Telegram + lam boi canh cho AI."""
+    """Trang thai gon (text tho) cho AI context + caption anh."""
     with LOCK:
         d = dict(STATE["data"])
         on = STATE["connected"]
@@ -2847,9 +2860,45 @@ def _status_text() -> str:
         rem = 0
     st = {"IDLE": "Đang rảnh", "RUNNING": "ĐANG IN", "PAUSE": "TẠM DỪNG",
           "FINISH": "In XONG", "FAILED": "In LỖI"}.get(d.get("gcode_state"), d.get("gcode_state") or "?")
+    w = _job_weight()
     return (f"{st} · {d.get('mc_percent', '?')}% · lớp {d.get('layer_num', '?')}/"
-            f"{d.get('total_layer_num', '?')} · còn ~{rem // 60}h{rem % 60:02d}m\n"
+            f"{d.get('total_layer_num', '?')} · còn ~{rem // 60}h{rem % 60:02d}m"
+            + (f" · ~{w}g nhựa" if w else "") + "\n"
             f"File: {d.get('subtask_name') or d.get('gcode_file') or '—'}")
+
+
+def _status_html() -> str:
+    """Bao cao DEP cho Telegram (parse_mode HTML): thanh tien do + lop + gio + nhua."""
+    import html as _html
+    with LOCK:
+        d = dict(STATE["data"])
+        on = STATE["connected"]
+    if not on and not d:
+        return "🔌 Chưa kết nối được máy in (máy tắt?)."
+    try:
+        pct = int(d.get("mc_percent") or 0)
+        rem = int(d.get("mc_remaining_time") or 0)
+    except (TypeError, ValueError):
+        pct, rem = 0, 0
+    icon, st = {"IDLE": ("💤", "Đang rảnh"), "RUNNING": ("🖨", "ĐANG IN"),
+                "PAUSE": ("⏸", "TẠM DỪNG"), "FINISH": ("✅", "In XONG"),
+                "FAILED": ("🚨", "In LỖI")}.get(d.get("gcode_state"),
+                                                ("❓", str(d.get("gcode_state") or "?")))
+    bar = "▓" * (pct // 10) + "░" * (10 - pct // 10)
+    fn = _html.escape(str(d.get("subtask_name") or d.get("gcode_file") or "—"))
+    w = _job_weight()
+    lines = [f"{icon} <b>{st}</b> — {fn}",
+             f"<code>{bar}</code> <b>{pct}%</b>",
+             f"🧱 Lớp: {d.get('layer_num', '?')}/{d.get('total_layer_num', '?')}",
+             f"⏳ Còn: ~{rem // 60}h{rem % 60:02d}m"]
+    if w:
+        lines.append(f"🎨 Nhựa: ~{w} g (theo file)")
+    lines.append(f"🔗 {notify.hub_url()}")
+    return "\n".join(lines)
+
+
+def _err_code() -> int:
+    return int(MILE.get("err") or 0)
 
 
 def _temps_text() -> str:
@@ -2862,9 +2911,12 @@ def _temps_text() -> str:
 
 def main():
     threading.Thread(target=mqtt_loop, daemon=True).start()
-    # Bot Telegram 2 chieu (nut bam nhanh + hoi dap AI) — chi chay khi da cau hinh .env
-    telegram_bot.start({"status": _status_text, "temps": _temps_text,
-                        "frame": lambda: camera_stream.get_frame(IP, CODE, wait_s=8)})
+    # Bot Telegram 2 chieu (nut nhanh + AI vision + dieu khien) — can .env
+    telegram_bot.start({
+        "status": _status_text, "status_html": _status_html, "temps": _temps_text,
+        "frame": lambda: camera_stream.get_frame(IP, CODE, wait_s=8),
+        "thumb": _job_thumb, "cmd": cmd_print, "err": _err_code,
+    })
     srv = ThreadingHTTPServer(("0.0.0.0", PORT), H)
     print("=" * 56)
     print("  BAMBU WEB DASHBOARD + DIEU KHIEN dang chay")
