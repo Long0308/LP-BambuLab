@@ -18,6 +18,7 @@ import os
 import re
 import subprocess
 import threading
+import time
 import zipfile
 
 # CLI ngon RAM/CPU nhu mo ca Bambu Studio. UPJOB va OPTJOB la 2 khoa RIENG o tang web
@@ -93,10 +94,27 @@ def stats_from_gcode3mf(path: str, plate: int = 1) -> dict:
     return out
 
 
-def slice_3mf(src: str, workdir: str, timeout: int = 1800) -> tuple[bool, str, dict]:
+def _kill_tree(pid: int) -> None:
+    """Kill ca cay process (CLI co the con chau giu handle)."""
+    subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)],
+                   capture_output=True, check=False)
+
+
+def slice_3mf(src: str, workdir: str, timeout: int = 1800,
+              plate: int = 0, retries: int = 2) -> tuple[bool, str, dict]:
     """Slice `src` -> (ok, duong_dan_gcode3mf_hoac_loi, stats).
 
+    plate: 0 = slice HET cac khay (mac dinh cu); N>0 = chi khay N (--slice N,
+    nhanh hon nhieu voi file da khay — dung cho A/B so sanh tung khay).
+
     Chi tinh toan tren may tinh — KHONG cham gi toi may in.
+
+    2 QUIRK DA GAP THAT (2026-07-16, do A/B BUCKET.3mf):
+      - CLI thi thoang TREO O BUOC THOAT sau khi DA ghi xong result.json + file xuat
+        (hay gap khi Bambu Studio GUI dang mo cung luc). capture_output pipe lam
+        subprocess cho den timeout 30' du viec da xong -> ghi log RA FILE + poll:
+        thay du output la kill cay process, lay ket qua.
+      - CLI doi khi crash ngau nhien (reslice-benchmark.ps1 cung ghi nhan) -> retry.
     """
     exe = find_exe()
     if not exe:
@@ -104,31 +122,51 @@ def slice_3mf(src: str, workdir: str, timeout: int = 1800) -> tuple[bool, str, d
     os.makedirs(workdir, exist_ok=True)
     out_name = "sliced.gcode.3mf"
     out_path = os.path.join(workdir, out_name)
-    try:
-        os.remove(out_path)
-    except OSError:
-        pass
-    try:
-        with CLI_LOCK:
-            subprocess.run(
-                [exe, "--slice", "0", "--export-3mf", out_name,
-                 "--outputdir", workdir, src],
-                capture_output=True, timeout=timeout, check=False)
-    except subprocess.TimeoutExpired:
-        return False, f"Slice qua {timeout // 60} phut — huy", {}
-    except OSError as e:
-        return False, f"Khong chay duoc CLI: {e}", {}
+    res_path = os.path.join(workdir, "result.json")
+    err_last = "?"
+    for _try in range(max(1, retries)):
+        for p in (out_path, res_path):
+            try:
+                os.remove(p)
+            except OSError:
+                pass
+        try:
+            with CLI_LOCK, open(os.path.join(workdir, "cli.log"), "w") as logf:
+                proc = subprocess.Popen(
+                    [exe, "--slice", str(plate), "--export-3mf", out_name,
+                     "--outputdir", workdir, src],
+                    stdout=logf, stderr=subprocess.STDOUT)
+                t0 = time.time()
+                while proc.poll() is None:
+                    if os.path.isfile(res_path) and os.path.isfile(out_path):
+                        time.sleep(3)          # cho CLI ghi not/flush file
+                        if proc.poll() is None:  # van treo du xong viec -> quirk 1
+                            _kill_tree(proc.pid)
+                        break
+                    if time.time() - t0 > timeout:
+                        _kill_tree(proc.pid)
+                        return False, f"Slice qua {timeout // 60} phut — huy", {}
+                    time.sleep(1)
+        except OSError as e:
+            return False, f"Khong chay duoc CLI: {e}", {}
 
-    rc, err = None, ""
-    try:
-        with open(os.path.join(workdir, "result.json"), encoding="utf-8") as f:
-            r = json.load(f)
-        rc, err = r.get("return_code"), r.get("error_string") or ""
-    except (OSError, ValueError):
-        pass
-    if rc != 0 or not os.path.isfile(out_path):
-        return False, f"Slice loi (return_code={rc}): {err}", {}
-    return True, out_path, stats_from_gcode3mf(out_path)
+        rc, err = None, ""
+        try:
+            with open(res_path, encoding="utf-8") as f:
+                r = json.load(f)
+            rc, err = r.get("return_code"), r.get("error_string") or ""
+        except (OSError, ValueError):
+            pass
+        if rc == 0 and os.path.isfile(out_path):
+            st = stats_from_gcode3mf(out_path, plate=plate or 1)
+            # total_predication = so GUI hien thi (gom flush/moi) — dung de doi chieu
+            # ngan sach thoi gian voi so user thay trong Bambu Studio.
+            sp = (r.get("sliced_plates") or [{}])[0]
+            if sp.get("total_predication"):
+                st["total_secs"] = int(sp["total_predication"])
+            return True, out_path, st
+        err_last = f"return_code={rc}: {err}"     # quirk 2: crash ngau nhien -> retry
+    return False, f"Slice loi ({err_last})", {}
 
 
 if __name__ == "__main__":
