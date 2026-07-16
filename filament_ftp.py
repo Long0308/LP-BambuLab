@@ -209,22 +209,32 @@ def _list_files_locked(host: str, code: str) -> list:
 
 
 def parse_thumbnail(zip_path) -> bytes | None:
-    """Lay anh preview model (PNG) — uu tien plate_*.png (giong man hinh may)."""
+    """Lay anh preview model (PNG) — uu tien anh cua KHAY DANG IN.
+
+    File .gcode.3mf duoc gui di in thuong chi chua GCODE cua khay duoc chon
+    (vd Metadata/plate_4.gcode) -> anh dung la plate_4.png, KHONG phai plate_1.
+    (User bat loi that 2026-07-17: file 5 khay, in khay 4 ma web hien anh khay 1
+    vi sort alphabet plate_1 thang.) File du an nhieu gcode -> giu plate dau tien.
+    """
     try:
         z = zipfile.ZipFile(zip_path)
     except (zipfile.BadZipFile, OSError):
         return None
     with z:
-        names = [n for n in z.namelist() if n.lower().endswith(".png")]
+        all_names = z.namelist()
+        gplates = {m.group(1) for n in all_names
+                   for m in [re.search(r"plate_(\d+)\.gcode$", n, re.I)] if m}
+        names = [n for n in all_names if n.lower().endswith(".png")]
         def rank(n):
             low = n.lower()
             if "plate_no_light" in low or "top_" in low or "pick_" in low:
-                return 3
-            if re.search(r"plate_\d+\.png$", low):
-                return 0        # anh render dep nhat
+                return 4
+            m = re.search(r"plate_(\d+)\.png$", low)
+            if m:
+                return 0 if m.group(1) in gplates else 2   # khay CO gcode = khay dang in
             if "thumbnail" in low:
                 return 1
-            return 2
+            return 3
         for n in sorted(names, key=rank):
             try:
                 b = z.read(n)
