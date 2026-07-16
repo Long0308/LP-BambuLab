@@ -79,16 +79,36 @@ def _call(model: str, key: str, messages: list, max_tokens: int, timeout: int) -
         return None
 
 
+def _chain(primary: str, vision: bool = False) -> list[str]:
+    """Chuoi FALLBACK model (user chot 2026-07-17: 'co tien trong tai khoan ma dung
+    free thi PHAI fallback'): free chinh -> free du phong -> TRA PHI re nhat.
+    gpt-5-nano ($0.05/1M input, co vision) — 1 cau ~\\$0.0001, coi nhu bao hiem."""
+    try:
+        env = printer_config._parse_dotenv(printer_config.env_path())  # noqa: SLF001
+    except Exception:                                   # noqa: BLE001
+        env = {}
+    paid = env.get("OPENROUTER_PAID_MODEL") or "openai/gpt-5-nano"
+    chain = [primary]
+    if not vision and DEFAULT_MODEL not in chain:
+        chain.append(DEFAULT_MODEL)                     # Nano Omni free du phong
+    if paid not in chain:
+        chain.append(paid)
+    return chain
+
+
 def ask(question: str, context: str = "", system: str = SYSTEM,
         timeout: int = 45, max_tokens: int = 700) -> str | None:
-    """Hoi 1 cau -> tra loi text, None neu loi/chua cau hinh (caller tu fallback)."""
+    """Hoi 1 cau -> tra loi text; tu FALLBACK qua chuoi model, None khi het chuoi."""
     key, model = _cfg()
     if not key or not question.strip():
         return None
     user = question if not context else f"{question}\n\n[Bối cảnh máy in hiện tại]\n{context}"
-    return _call(model, key,
-                 [{"role": "system", "content": system},
-                  {"role": "user", "content": user}], max_tokens, timeout)
+    msgs = [{"role": "system", "content": system}, {"role": "user", "content": user}]
+    for m in _chain(model):
+        out = _call(m, key, msgs, max_tokens, timeout)
+        if out:
+            return out
+    return None
 
 
 def ask_vision(question: str, images: list[bytes], context: str = "",
@@ -111,6 +131,10 @@ def ask_vision(question: str, images: list[bytes], context: str = "",
     for jpg in images[:2]:                              # toi da 2 anh cho nhe
         content.append({"type": "image_url", "image_url": {
             "url": "data:image/jpeg;base64," + base64.b64encode(jpg).decode("ascii")}})
-    return _call(model, key,
-                 [{"role": "system", "content": SYSTEM},
-                  {"role": "user", "content": content}], max_tokens, timeout)
+    msgs = [{"role": "system", "content": SYSTEM},
+            {"role": "user", "content": content}]
+    for m in _chain(model, vision=True):                # vision free -> paid co vision
+        out = _call(m, key, msgs, max_tokens, timeout)
+        if out:
+            return out
+    return None

@@ -164,6 +164,10 @@ def _handle(token: str, chat: str, text: str, hooks: dict) -> None:  # noqa: PLR
             _send(token, chat, "⏹ Đã gửi lệnh DỪNG HẲN." if ok else f"Lỗi: {msg}")
         else:
             _send(token, chat, "Hết hạn xác nhận — bấm ⏹ DỪNG HẲN lại nếu vẫn muốn dừng.")
+    elif t.startswith("/"):
+        # lenh go sai (vd /strart) — nhac lenh dung, khong dot luot AI vo ich
+        _send(token, chat, "Lệnh không có. Dùng: /start · /status · /photo · /help "
+                           "— hoặc bấm nút bên dưới.")
     else:
         # cau hoi tu do — nhac toi anh/nhin/san pham thi kem ANH cho AI vision
         if any(w in tl for w in _VISION_WORDS):
