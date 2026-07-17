@@ -46,6 +46,17 @@ def _counts() -> dict:
 
 DEFAULT_MODEL = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
 
+# Gia THAT 1 cau hoi cua hub (~463 token vao = system prompt co bang so + cau hoi,
+# ~120 token ra), tinh tu bang gia OpenRouter 2026-07-17. Dung cho bao cao /usage.
+# DeepSeek KHONG co ban free tren OpenRouter (tra 11 model) — v4-flash re nhat va
+# do that tra loi dung + nhanh nhat (5s vs 15s cua Nemotron free).
+CHAT_COST = {
+    "deepseek/deepseek-v4-flash": 0.000069,     # $0.098/1M in · $0.20/1M out
+    "deepseek/deepseek-v4-pro": 0.000306,       # $0.435/1M in · $0.87/1M out
+    "deepseek/deepseek-v3.2": 0.000173,
+    "openai/gpt-5-nano": 0.000071,
+}
+
 
 def _knowledge() -> str:
     """Kho so DA KIEM CHUNG cua hub — nhung vao system prompt de AI KHONG bia so
@@ -107,9 +118,14 @@ def _call(model: str, key: str, messages: list, max_tokens: int, timeout: int) -
 
 
 def _chain(primary: str, vision: bool = False) -> list[str]:
-    """Chuoi FALLBACK model (user chot 2026-07-17: 'co tien trong tai khoan ma dung
-    free thi PHAI fallback'): free chinh -> free du phong -> TRA PHI re nhat.
-    gpt-5-nano ($0.05/1M input, co vision) — 1 cau ~\\$0.0001, coi nhu bao hiem."""
+    """Chuoi FALLBACK model. Thu tu: model chinh (.env) -> free du phong -> paid.
+
+    Chat text mac dinh (user chot 2026-07-17 lan 2): deepseek-v4-flash TRA PHI
+    ($0.098/1M in, ~$0.0002/cau) — do that tren cau ky thuat: dung so 230/12,
+    5s (Nemotron free 15s), tieng Viet sach (free viet sai 'tran chay'/'ket khiet').
+    DeepSeek KHONG co ban free tren OpenRouter (tra 11 model, 2026-07-17) va KHONG
+    co vision -> vision van dung gemini-2.5-flash-lite, du phong Nano Omni free.
+    """
     try:
         env = printer_config._parse_dotenv(printer_config.env_path())  # noqa: SLF001
     except Exception:                                   # noqa: BLE001
@@ -212,6 +228,13 @@ def usage_report() -> str:
     lines.append(f"Giá vision TB: ~${v_cost:.4f}/lần soi")
     if bal is not None and v_cost > 0:
         lines.append(f"→ Còn ước <b>~{int(bal / v_cost):,} lần phân tích vision</b>")
-    lines.append("Chat text: FREE $0 (Nemotron Super 120B) — hết lượt free trong "
-                 "ngày mới rơi xuống gpt-5-nano ~$0.0001/câu.")
+    _, cm = _cfg()
+    if cm.endswith(":free"):
+        lines.append(f"Chat text: FREE $0 ({cm.split('/')[-1]}).")
+    else:
+        # Gia/cau tinh THAT theo do dai prompt hub (system + cau hoi + tra loi)
+        c = CHAT_COST.get(cm, 0.0002)
+        lines.append(f"Chat text: {cm.split('/')[-1]} ~${c:.6f}/câu")
+        if bal is not None:
+            lines.append(f"→ Hoặc ~{int(bal / c):,} câu chat")
     return "\n".join(lines)
