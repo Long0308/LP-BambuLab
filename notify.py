@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import threading
 import time
 import urllib.request
@@ -85,37 +86,58 @@ def _log(line: str) -> None:
         pass
 
 
-def _send_all(title: str, body: str, urgent: bool) -> list[str]:
+_TAG = re.compile(r"<[^>]+>")
+
+
+def _plain(s: str) -> str:
+    """Bo the HTML cho kenh khong hieu HTML (ntfy header / Discord) + tra lai
+    ky tu da escape. Telegram thi giu nguyen the."""
+    return (_TAG.sub("", s or "").replace("&lt;", "<").replace("&gt;", ">")
+            .replace("&amp;", "&"))
+
+
+def _send_all(title: str, body: str, urgent: bool, html: bool = True) -> list[str]:
+    """Gui 1 tin di moi kenh. body co the chua the HTML (ui_tg.card) — Telegram
+    render, ntfy/Discord tu lược the (user: 'moc tien do phai dep nhu tinh hinh in')."""
     e = _env()
     sent: list[str] = []
+    t_plain, b_plain = _plain(title), _plain(body)
     if e.get("NTFY_TOPIC"):
         try:
             _post(f"{e.get('NTFY_SERVER') or 'https://ntfy.sh'}/{e['NTFY_TOPIC']}",
-                  body.encode("utf-8"),
-                  {"Title": title.encode("utf-8").decode("latin-1"),  # header phai latin-1
+                  b_plain.encode("utf-8"),
+                  {"Title": t_plain.encode("utf-8").decode("latin-1"),  # header latin-1
                    "Priority": "urgent" if urgent else "high",
                    "Tags": "rotating_light" if urgent else "white_check_mark"})
             sent.append("ntfy")
         except Exception as ex:                            # noqa: BLE001
             sent.append(f"ntfy:LOI {ex}")
     if e.get("TELEGRAM_BOT_TOKEN") and e.get("TELEGRAM_CHAT_ID"):
-        try:
-            _post(f"https://api.telegram.org/bot{e['TELEGRAM_BOT_TOKEN']}/sendMessage",
-                  json.dumps({"chat_id": e["TELEGRAM_CHAT_ID"],
-                              "text": f"{'🚨' if urgent else '✅'} {title}\n{body}"}).encode(),
-                  {"Content-Type": "application/json"})
-            sent.append("telegram")
-        except Exception as ex:                            # noqa: BLE001
-            sent.append(f"telegram:LOI {ex}")
+        for attempt in (True, False):        # HTML loi (the la) -> gui lai dang tho
+            use_html = html and attempt
+            p = {"chat_id": e["TELEGRAM_CHAT_ID"],
+                 "text": (f"{title}\n{body}" if use_html
+                          else f"{'🚨' if urgent else '✅'} {t_plain}\n{b_plain}")}
+            if use_html:
+                p["parse_mode"] = "HTML"
+            try:
+                _post(f"https://api.telegram.org/bot{e['TELEGRAM_BOT_TOKEN']}/sendMessage",
+                      json.dumps(p).encode(), {"Content-Type": "application/json"})
+                sent.append("telegram")
+                break
+            except Exception as ex:                        # noqa: BLE001
+                if not use_html:                           # ca 2 lan deu hong
+                    sent.append(f"telegram:LOI {ex}")
     if e.get("DISCORD_WEBHOOK"):
         try:
             _post(e["DISCORD_WEBHOOK"],
-                  json.dumps({"content": f"{'🚨' if urgent else '✅'} **{title}**\n{body}"}).encode(),
+                  json.dumps({"content": f"{'🚨' if urgent else '✅'} **{t_plain}**\n"
+                                         f"{b_plain}"}).encode(),
                   {"Content-Type": "application/json"})
             sent.append("discord")
         except Exception as ex:                            # noqa: BLE001
             sent.append(f"discord:LOI {ex}")
-    _log(f"[{title}] -> {', '.join(sent) or 'KHONG CO KENH'}")
+    _log(f"[{t_plain}] -> {', '.join(sent) or 'KHONG CO KENH'}")
     return sent
 
 
@@ -137,6 +159,43 @@ def alarm(title: str, body: str, times: int = 10, gap_s: float = 3.0) -> None:
             _send_all(f"{title} ({i + 1}/{times})", body, urgent=True)
             time.sleep(gap_s)
     threading.Thread(target=_run, daemon=True).start()
+
+
+def send_photos_telegram(jpgs: list, caption: str = "") -> bool:
+    """Gui NHIEU anh thanh 1 ALBUM (sendMediaGroup) — user thay DUNG cac frame AI da
+    nhin, tu doi chieu duoc (user hoi 2026-07-17: 'AI phan tich anh nao?'). Caption
+    gan vao anh dau. Loi -> fallback gui 1 anh net nhat."""
+    e = _env()
+    tok, chat = e.get("TELEGRAM_BOT_TOKEN"), e.get("TELEGRAM_CHAT_ID")
+    jpgs = [j for j in (jpgs or []) if j]
+    if not (tok and chat and jpgs):
+        return False
+    if len(jpgs) == 1:
+        return send_photo_telegram(jpgs[0], caption)
+    import uuid
+    b = uuid.uuid4().hex
+    media, parts = [], []
+    for i, jpg in enumerate(jpgs[:10]):          # Telegram cho toi da 10 anh/album
+        name = f"f{i}"
+        m = {"type": "photo", "media": f"attach://{name}"}
+        if i == 0 and caption:
+            m["caption"] = caption[:1024]
+        media.append(m)
+        parts.append((name, jpg))
+    body = (f"--{b}\r\nContent-Disposition: form-data; name=\"chat_id\"\r\n\r\n{chat}\r\n"
+            f"--{b}\r\nContent-Disposition: form-data; name=\"media\"\r\n\r\n"
+            f"{json.dumps(media)}\r\n").encode("utf-8")
+    for name, jpg in parts:
+        body += (f"--{b}\r\nContent-Disposition: form-data; name=\"{name}\"; "
+                 f"filename=\"{name}.jpg\"\r\nContent-Type: image/jpeg\r\n\r\n").encode()
+        body += jpg + b"\r\n"
+    body += f"--{b}--\r\n".encode()
+    try:
+        _post(f"https://api.telegram.org/bot{tok}/sendMediaGroup", body,
+              {"Content-Type": f"multipart/form-data; boundary={b}"})
+        return True
+    except Exception:                                   # noqa: BLE001
+        return send_photo_telegram(max(jpgs, key=len), caption)
 
 
 def send_photo_telegram(jpg: bytes, caption: str = "") -> bool:

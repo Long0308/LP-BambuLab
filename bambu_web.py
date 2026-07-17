@@ -66,24 +66,41 @@ VISION_PROMPT = (
     "do. Sau đó 1-3 dòng lý do ngắn.")
 
 
-def _burst_frames(n: int = 4, gap_s: float = 4.0) -> list[bytes]:
+def _burst_frames(n: int = 6, gap_s: float = 2.5) -> list[bytes]:
     """Loat n frame cach nhau gap_s giay — ban bed-slinger dao dong qua lai nen
     trong loat luon co frame luc ban gan TAM camera; nghieng that = nhat quan moi
     frame. (Khong doc duoc toa do ban qua MQTT khi dang in -> bu bang thong ke.)
 
     CHONG ANH MEO (user bat tai moc 75% that: frame dinh luc ban phong nhanh ->
     motion blur nhu nhua chay): anh MO nen JPEG NHO hon han -> dung size byte lam
-    thuoc do do net, LOAI frame mo nhat khi du loat. Anh dai dien = frame LON nhat.
+    thuoc do do net.
+
+    VI SAO KHONG CHUP LUC BAN DUNG YEN (user hoi 2026-07-17): ban A1 KHONG BAO GIO
+    dung yen khi in, va MQTT A1 KHONG phat toa do Y realtime -> hub khong the canh
+    dung luc ban ve tam de bam may. Bu bang THONG KE: chup DU frame (6 x 2.5s), giu
+    3 frame NET NHAT (JPEG lon nhat = luc ban cham/dao chieu = gan 'dung yen' nhat),
+    bo cac frame mo do ban phong. Ca 3 frame nay deu duoc gui de user doi chieu.
     """
+    # FIX GOC RE anh nhoe: BAT DEN truoc khi chup (in dem den tat -> camera phoi
+    # sang dai -> nhoe du ban chay cham). Tra lai trang thai cu sau khi chup.
+    was_on = _light_is_on()
+    if not was_on:
+        cmd_light(True)
+        time.sleep(1.5)                      # cho camera can bang sang lai
     out: list[bytes] = []
-    for i in range(n):
-        f = camera_stream.get_frame(IP, CODE, wait_s=10 if not out else 6)
-        if f and (not out or f != out[-1]):
-            out.append(f)
-        if i < n - 1:
-            time.sleep(gap_s)
-    if len(out) >= 3:
-        out.remove(min(out, key=len))       # bo frame mo nhat (JPEG nho nhat)
+    try:
+        for i in range(n):
+            f = camera_stream.get_frame(IP, CODE, wait_s=10 if not out else 6)
+            if f and (not out or f != out[-1]):
+                out.append(f)
+            if i < n - 1:
+                time.sleep(gap_s)
+    finally:
+        if not was_on:
+            cmd_light(False)                 # user tat den thi tra lai nhu cu
+    if len(out) > 3:                         # giu 3 frame NET NHAT (theo thu tu chup)
+        keep = set(id(x) for x in sorted(out, key=len, reverse=True)[:3])
+        out = [x for x in out if id(x) in keep]
     return out
 
 
@@ -111,7 +128,11 @@ def _vision_check(pct: int, fn: str) -> None:
         return
     # LUON kem ANH ket qua soi (user chot 2026-07-17: 'phan tich vision phai kem
     # anh, on cung kem hinh') — anh nguyen do phan giai camera, caption = ket luan.
-    notify.send_photo_telegram(jpg, caption=f"🔍 AI soi {pct}% — {fn}\n{a[:900]}")
+    # Gui CA LOAT anh AI da nhin (album) — user tu doi chieu, khong phai tin loi
+    # suong (user hoi 2026-07-17: 'AI phan tich anh nao?').
+    ic, lab = ui_tg.verdict_of(a)
+    notify.send_photos_telegram(frames, caption=f"{ic} AI soi {pct}% — {lab}\n"
+                                                f"{fn}\n{a[:800]}")
     if "NGHI NGO" in verdict or "HONG" in verdict:
         bad = "HỎNG" if "HONG" in verdict and "NGHI" not in verdict else "NGHI NGỜ"
         notify.send(f"Bambu A1: AI soi camera {pct}% — {bad} ⚠️",
@@ -215,6 +236,28 @@ def _send(payload):
 
 def cmd_print(command):
     return _send({"print": {"sequence_id": str(MQTT["seq"]), "command": command, "param": ""}})
+
+
+def cmd_light(on: bool = True, node: str = "chamber_light"):
+    """Bat/tat den may in (MQTT ledctrl — spec OpenBambuAPI, da doi chieu 2026-07-17).
+
+    VI SAO CAN: camera A1 phoi sang theo anh sang phong. In DEM den tat -> exposure
+    dai -> frame NHOE/meo khi ban chay (user bat: anh 65/75% toi va meo, con anh bam
+    tay luc phong sang thi net cang du may VAN DANG IN). Bat den truoc khi chup la
+    fix DUNG GOC RE, khong phai chup nhieu frame roi loc.
+    """
+    return _send({"system": {"sequence_id": str(MQTT["seq"]), "command": "ledctrl",
+                             "led_node": node, "led_mode": "on" if on else "off",
+                             "led_on_time": 500, "led_off_time": 500,
+                             "loop_times": 1, "interval_time": 1000}})
+
+
+def _light_is_on() -> bool:
+    with LOCK:
+        for l in (STATE["data"].get("lights_report") or []):
+            if l.get("node") == "chamber_light":
+                return str(l.get("mode")) == "on"
+    return False
 
 
 def cmd_project_file(name, path):
@@ -751,11 +794,11 @@ def on_message(c, u, msg):
             if hit:
                 MILE["sent"].update(hit)
                 w = _job_weight()
-                notify.send(f"Bambu A1: mốc {max(hit)}% ⏳",
-                            f"{fn} — thực tế {pct}%, lớp {snap.get('layer_num')}/"
-                            f"{snap.get('total_layer_num')}, còn ~{rem // 60}h{rem % 60:02d}m"
-                            + (f", ~{w}g nhựa." if w else ".")
-                            + f"\n{notify.hub_url()}")
+                # DUNG CHUNG the voi nut '📊 Tình hình in' (user chot: moc tien do
+                # phai dep y het) — 1 ham, khong the lech nhau nua.
+                notify.send(f"⏳ <b>MỐC {max(hit)}%</b>",
+                            ui_tg.status_card(snap, True, weight=w,
+                                              hub=notify.hub_url()))
             # AI VISION tu soi camera o vung nguy hiem vat cao (65-90%) — thread
             # rieng (vision 6-30s, khong duoc nghen MQTT); chi 1 moc/lan.
             vhit = [m for m in VISION_CHECK_PCTS
@@ -3110,10 +3153,17 @@ HMS_VN = {
 
 
 def _temps_text() -> str:
-    """The NHIET & KHAY — ui_tg (cung ngon ngu UI voi the trang thai)."""
+    """The NHIET & KHAY — bo cuc kieu man hinh Device cua Studio: nhiet hien/dich,
+    quat, so do 4 khe co CHAM MAU + danh dau khe dang dung."""
     with LOCK:
         d = dict(STATE["data"])
-    return ui_tg.temps_card(d, _ams_tray_types())
+        ams = (STATE["data"].get("ams") or {})
+    try:
+        now = int(ams.get("tray_now", 255))
+        now = now if now < 4 else -1                 # 254/255 = khong khe nao
+    except (TypeError, ValueError):
+        now = -1
+    return ui_tg.temps_card(d, _ams_tray_types(), _ams_tray_colors(), now=now)
 
 
 def main():

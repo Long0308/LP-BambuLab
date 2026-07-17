@@ -73,9 +73,20 @@ def quote(text: str, expandable: bool = True) -> str:
     return f"{tag}{esc(text)}</blockquote>"
 
 
+def finish_at(rem_min: int) -> str:
+    """Gio XONG DU KIEN (bay gio + con lai) — Studio hien 'Estimated finish time',
+    user chot 2026-07-17: nhin gio xong de sap xep cong viec, tien hon 'con 1h27m'."""
+    import datetime
+    t = datetime.datetime.now() + datetime.timedelta(minutes=max(0, int(rem_min or 0)))
+    d = "" if t.day == datetime.datetime.now().day else " (mai)"
+    return t.strftime("%H:%M") + d
+
+
 def status_card(d: dict, connected: bool, weight: float | None = None,
                 hub: str = "") -> str:
-    """The TRANG THAI — dung chung cho nut '📊 Tình hình in' va boi canh AI."""
+    """The TRANG THAI — bo cuc bam theo thanh tien do cua Bambu Studio (user chot):
+    TEN FILE tren dau -> thanh + % -> lop · con lai -> GIO XONG DU KIEN -> link.
+    """
     if not connected and not d:
         return card("MÁY IN OFFLINE", icon=ICON["OFFLINE"],
                     body="Máy tắt hoặc mất kết nối — sẽ tự báo khi bật lại.")
@@ -86,29 +97,82 @@ def status_card(d: dict, connected: bool, weight: float | None = None,
     except (TypeError, ValueError):
         pct, rem = 0, 0
     fn = esc(d.get("subtask_name") or d.get("gcode_file") or "—")
-    rows = [("Tiến độ", f"<code>{bar(pct)}</code> <b>{pct}%</b>")]
+    ic = ICON.get(gc, ICON["info"])
+    out = [f"{ic} <b>{fn}</b>",                       # ten file TREN DAU nhu Studio
+           f"<code>{bar(pct, 14)}</code> <b>{pct}%</b> · {LABEL.get(gc, gc)}"]
     if gc == "RUNNING" or pct:
-        rows += [("Lớp", f"{d.get('layer_num', '?')}/{d.get('total_layer_num', '?')}"),
-                 ("Còn lại", f"~{hm(rem)}")]
+        line = f"🧱 Lớp {d.get('layer_num', '?')}/{d.get('total_layer_num', '?')}"
+        if rem:
+            line += f"  ·  ⏳ còn {hm(rem)}"
+        out.append(line)
+        if rem and gc == "RUNNING":
+            out.append(f"🏁 Xong lúc <b>~{finish_at(rem)}</b>")
     if weight:
-        rows.append(("Nhựa", f"~{weight} g"))
-    return card(f"{LABEL.get(gc, gc)} · {fn}", rows,
-                icon=ICON.get(gc, ICON["info"]), link=hub)
+        out.append(f"🎨 Nhựa ~{weight} g")
+    if hub:
+        out.append(f"🔗 {hub}")
+    return "\n".join(out)
 
 
-def temps_card(d: dict, ams: list, hub: str = "") -> str:
+def dot(hexcol: str) -> str:
+    """Ma mau cuon -> CHAM MAU emoji (Telegram khong render mau CSS). Bang mau co
+    ban gan dung theo RGB — de nhin phat biet khe nao cuon nao, nhu so do AMS trong
+    Bambu Studio (user chot 2026-07-17)."""
+    h = (hexcol or "").lstrip("#")[:6]
+    try:
+        rv, gv, bv = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    except ValueError:
+        return "⬜"
+    mx, mn = max(rv, gv, bv), min(rv, gv, bv)
+    if mx < 60:
+        return "⚫"
+    if mn > 200:
+        return "⚪"
+    if mx - mn < 30:
+        return "🔘"                                   # xam
+    if rv >= gv and rv >= bv:
+        if bv < 100 and gv > 170:
+            return "🟡"
+        if bv < 100 and gv > 60:
+            return "🟠"
+        return "🔴"
+    if gv >= rv and gv >= bv:
+        return "🟢"
+    return "🟣" if rv > 120 else "🔵"
+
+
+def temps_card(d: dict, ams: list, colors: list | None = None,
+               now: int = -1, hub: str = "") -> str:
+    """The NHIET & KHAY — bo cuc bam theo man hinh Device cua Bambu Studio:
+    nhiet 'hien tai / dich', quat %, va so do 4 khe co CHAM MAU + danh dau khe
+    DANG DUNG (user: 'thong so va nhua nhiet do lam dep nhu Studio')."""
     def _t(v):
         try:
             return f"{float(v):.0f}"
         except (TypeError, ValueError):
-            return "?"
-    rows = [("Đầu phun", f"<code>{_t(d.get('nozzle_temper')):>3}→"
-                         f"{_t(d.get('nozzle_target_temper')):>3}°C</code>"),
-            ("Bàn in", f"<code>{_t(d.get('bed_temper')):>3}→"
-                       f"{_t(d.get('bed_target_temper')):>3}°C</code>")]
-    for i, t in enumerate(ams[:4], 1):
-        rows.append((f"Khe {i}", esc(t)))
-    return card("NHIỆT & KHAY AMS", rows, icon="🌡")
+            return "—"
+    rows = [("🌡 Đầu phun", f"<b>{_t(d.get('nozzle_temper'))}</b> / "
+                            f"{_t(d.get('nozzle_target_temper'))} °C"),
+            ("🔥 Bàn in", f"<b>{_t(d.get('bed_temper'))}</b> / "
+                          f"{_t(d.get('bed_target_temper'))} °C")]
+    fan = d.get("cooling_fan_speed")
+    if fan not in (None, ""):
+        try:                                          # MQTT tra 0-15 -> doi ra %
+            fv = int(fan)
+            rows.append(("💨 Quạt", f"{fv if fv > 15 else round(fv / 15 * 100)}%"))
+        except (TypeError, ValueError):
+            pass
+    body = ""
+    if ams:
+        cols = colors or []
+        lines = ["", "<b>Khay AMS Lite</b>"]
+        for i, t in enumerate(ams[:4], 1):
+            c = cols[i - 1] if i - 1 < len(cols) else ""
+            mark = " ◀ <b>đang dùng</b>" if (i - 1) == now else ""
+            lines.append(f"{dot(c)} <code>Khe {i}</code>  {esc(t)}"
+                         f"{f'  <code>{esc(c)}</code>' if c else ''}{mark}")
+        body = "\n".join(lines)
+    return card("NHIỆT & KHAY", rows, body=body, icon="🌡", link=hub)
 
 
 def verdict_of(text: str) -> tuple[str, str]:

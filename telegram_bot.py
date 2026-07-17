@@ -138,12 +138,10 @@ def _handle(token: str, chat: str, text: str, hooks: dict) -> None:  # noqa: PLR
             or "AI vision không phản hồi (hết lượt free hôm nay?) — xem ảnh bằng nút 📷."
         # PHAN TICH VISION LUON KEM ANH (user chot 2026-07-17) — chon frame NET
         # nhat trong loat (JPEG lon nhat; frame mo do ban chay nen nho hon han)
-        photo = max(imgs, key=len) if len(imgs) > 2 else imgs[0]
         ic, lab = ui_tg.verdict_of(a)                    # ket luan -> icon + nhan
         cap = f"{ic} AI VISION: {lab}\n{a}"[:1000]       # caption anh: ket qua len dau
-        try:
-            _send_photo(token, chat, photo, caption=cap)
-        except Exception:                                # noqa: BLE001
+        # Gui CA LOAT anh AI da nhin (album) de user doi chieu
+        if not notify.send_photos_telegram(imgs, caption=cap):
             _send(token, chat, a, html=False)            # gui anh loi -> van co text
     elif t == B_TIP:
         a = ai_chat.ask("Cho 3 mẹo NGẮN, cụ thể, đúng với nhựa và bản in đang chạy "
