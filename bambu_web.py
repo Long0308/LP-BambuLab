@@ -38,6 +38,7 @@ import camera_stream
 import notify
 import ai_chat
 import telegram_bot
+import ui_tg
 
 # Theo doi moc tien do + ma loi cua BAN IN hien tai (bao 30/50/75%, loi hien ro —
 # user chot 2026-07-16). vchecked: cac moc DA soi AI vision. Reset khi doi file.
@@ -3083,33 +3084,11 @@ def _status_text() -> str:
 
 
 def _status_html() -> str:
-    """Bao cao DEP cho Telegram (parse_mode HTML): thanh tien do + lop + gio + nhua."""
-    import html as _html
+    """The TRANG THAI cho Telegram — dung ui_tg (1 nguon UI duy nhat cho moi tin)."""
     with LOCK:
         d = dict(STATE["data"])
         on = STATE["connected"]
-    if not on and not d:
-        return "🔌 Chưa kết nối được máy in (máy tắt?)."
-    try:
-        pct = int(d.get("mc_percent") or 0)
-        rem = int(d.get("mc_remaining_time") or 0)
-    except (TypeError, ValueError):
-        pct, rem = 0, 0
-    icon, st = {"IDLE": ("💤", "Đang rảnh"), "RUNNING": ("🖨", "ĐANG IN"),
-                "PAUSE": ("⏸", "TẠM DỪNG"), "FINISH": ("✅", "In XONG"),
-                "FAILED": ("🚨", "In LỖI")}.get(d.get("gcode_state"),
-                                                ("❓", str(d.get("gcode_state") or "?")))
-    bar = "▓" * (pct // 10) + "░" * (10 - pct // 10)
-    fn = _html.escape(str(d.get("subtask_name") or d.get("gcode_file") or "—"))
-    w = _job_weight()
-    lines = [f"{icon} <b>{st}</b> — {fn}",
-             f"<code>{bar}</code> <b>{pct}%</b>",
-             f"🧱 Lớp: {d.get('layer_num', '?')}/{d.get('total_layer_num', '?')}",
-             f"⏳ Còn: ~{rem // 60}h{rem % 60:02d}m"]
-    if w:
-        lines.append(f"🎨 Nhựa: ~{w} g (theo file)")
-    lines.append(f"🔗 {notify.hub_url()}")
-    return "\n".join(lines)
+    return ui_tg.status_card(d, on, weight=_job_weight(), hub=notify.hub_url())
 
 
 def _err_code() -> int:
@@ -3131,11 +3110,10 @@ HMS_VN = {
 
 
 def _temps_text() -> str:
+    """The NHIET & KHAY — ui_tg (cung ngon ngu UI voi the trang thai)."""
     with LOCK:
         d = dict(STATE["data"])
-    return (f"Nozzle {d.get('nozzle_temper', '?')}→{d.get('nozzle_target_temper', '?')}°C · "
-            f"Bàn {d.get('bed_temper', '?')}→{d.get('bed_target_temper', '?')}°C\n"
-            f"Khay AMS: {', '.join(_ams_tray_types()) or 'chưa sync'}")
+    return ui_tg.temps_card(d, _ams_tray_types())
 
 
 def main():

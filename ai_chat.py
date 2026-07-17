@@ -46,45 +46,114 @@ def _counts() -> dict:
 
 DEFAULT_MODEL = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
 
-# Gia THAT 1 cau hoi cua hub (~463 token vao = system prompt co bang so + cau hoi,
-# ~120 token ra), tinh tu bang gia OpenRouter 2026-07-17. Dung cho bao cao /usage.
+# Gia THAT 1 cau hoi cua hub. Tinh: system prompt ~3130 token (bang nhua + dac tinh
+# + vat cao + vi tri option + nguong hinh hoc + ma HMS — rut tu analyzer/bambu_web)
+# + cau hoi ~60 + tra loi ~120. Bang gia OpenRouter 2026-07-17. Dung cho /usage.
 # DeepSeek KHONG co ban free tren OpenRouter (tra 11 model) — v4-flash re nhat va
 # do that tra loi dung + nhanh nhat (5s vs 15s cua Nemotron free).
+_IN_TOK, _OUT_TOK = 4230, 130
 CHAT_COST = {
-    "deepseek/deepseek-v4-flash": 0.000069,     # $0.098/1M in · $0.20/1M out
-    "deepseek/deepseek-v4-pro": 0.000306,       # $0.435/1M in · $0.87/1M out
-    "deepseek/deepseek-v3.2": 0.000173,
-    "openai/gpt-5-nano": 0.000071,
+    "deepseek/deepseek-v4-flash": (_IN_TOK * 0.098 + _OUT_TOK * 0.20) / 1e6,   # ~$0.00034
+    "deepseek/deepseek-v4-pro": (_IN_TOK * 0.435 + _OUT_TOK * 0.87) / 1e6,     # ~$0.0015
+    "deepseek/deepseek-v3.2": (_IN_TOK * 0.269 + _OUT_TOK * 0.40) / 1e6,
+    "openai/gpt-5-nano": (_IN_TOK * 0.05 + _OUT_TOK * 0.40) / 1e6,
 }
 
 
 def _knowledge() -> str:
     """Kho so DA KIEM CHUNG cua hub — nhung vao system prompt de AI KHONG bia so
     nguoc voi ground truth (test that: model free tra loi 'Matte 190°C' — sai bet,
-    hub da chot 230°C chong ket). Import tre de khoi vong lap module."""
+    hub da chot 230°C chong ket). Import tre de khoi vong lap module.
+
+    RUT TU CHINH CODE (khong chep tay) -> sua analyzer la prompt tu doi, khong the
+    lech nhau — cung nguyen tac 'mot nguon duy nhat' nhu tall_rules().
+    """
     try:
         import analyzer
-        rows = []
-        for k, v in analyzer.FIL_EXPORT.items():
-            s = v["safe"]
-            rows.append(f"- {k}: {s['nozzle_temperature']}°C, tran chay "
-                        f"{s['filament_max_volumetric_speed']} mm³/s, flow "
-                        f"{s['filament_flow_ratio']}, bàn {s['hot_plate_temp']}°C")
-        return "\n".join(rows)
     except Exception:                                   # noqa: BLE001
         return ""
+    out: list[str] = []
+    # 1. Bang XUAT preset an toan (nhiet/tran chay/flow/ban) + LY DO tung dong
+    out.append("[A] SỐ AN TOÀN THEO CUỘN (hub xuất preset bằng đúng bảng này):")
+    for k, v in analyzer.FIL_EXPORT.items():
+        s = v["safe"]
+        out.append(f"- {k}: {s['nozzle_temperature']}°C · trần chảy "
+                   f"{s['filament_max_volumetric_speed']} mm³/s · flow "
+                   f"{s['filament_flow_ratio']} · bàn {s['hot_plate_temp']}°C"
+                   f"{' · ' + v['why'] if v.get('why') else ''}")
+    # 2. Thu vien CANH BAO tung loai nhua (kẹt/ẩm/vênh/kéo sợi) — kien thuc van hanh
+    out.append("\n[B] ĐẶC TÍNH & RỦI RO TỪNG LOẠI NHỰA (tư vấn sự cố dựa vào đây):")
+    for k, v in analyzer.FILAMENT_REF.items():
+        out.append(f"- {k} ({v['temp']}, flow {v['flow']}): {v['note']}")
+    # 3. Luat VAT CAO — doc tu tall_rules() (nguon duy nhat), theo tung che do
+    out.append("\n[C] VẬT CAO ≥120mm (chống lệch trục — bed-slinger A1):")
+    for mode in ("fast", "balanced", "quality"):
+        rs = analyzer.tall_rules(130, mode)
+        out.append(f"- Chế độ {mode}: " +
+                   "; ".join(f"{r['en'].split('▸')[-1].strip()} {r['base']}→{r['val']}"
+                             for r in rs if r["val"] != r["base"]))
+    if analyzer.tall_rules(130, "balanced"):
+        out.append(f"  Lý do: {analyzer.tall_rules(130, 'balanced')[0]['why']}")
+    # 4. VI TRI tung option trong Bambu Studio — de chi user bam o dau
+    out.append("\n[D] VỊ TRÍ OPTION TRONG BAMBU STUDIO (chỉ đúng đường cho user):")
+    for key, (tab, sec, en) in analyzer.BS_LOC.items():
+        out.append(f"- {key} = {tab} ▸ {sec} ▸ {en}")
+    # 5. Nguong hinh hoc + bridge flow theo nhua (tu hang so that trong analyzer)
+    out.append(f"\n[E] NGƯỠNG HÌNH HỌC: bridge ≤{analyzer.BRIDGE_MM:g}mm là bắc cầu "
+               f"được (không cần support); thành <{analyzer.WALL_HARD_MM}mm KHÔNG in "
+               f"đặc được, <{analyzer.WALL_SOFT_MM}mm là mỏng (nên ≥1.5mm nếu chịu "
+               f"lực); vật ≥{analyzer.TALL_MM}mm = vật cao.")
+    # 6. SU CO -> CACH SUA (bang nguon-duy-nhat trong analyzer). Thieu muc nay AI
+    #    tra loi sai: hoi 'mat tren lam tam' no khuyen chinh ban (test that 2026-07-17).
+    out.append("\n[G] SỰ CỐ → SỬA THEO THỨ TỰ (đã kiểm chứng — bám đúng thứ tự này):")
+    for sym, steps in analyzer.TROUBLESHOOT.items():
+        out.append(f"* {sym}:")
+        out += [f"  {i}. {s}" for i, s in enumerate(steps, 1)]
+    # 7. Ma loi HMS -> nghia tieng Viet (tu bang da xac minh trong bambu_web)
+    try:
+        import bambu_web
+        out.append("\n[F] MÃ LỖI HMS ĐÃ XÁC MINH:")
+        for code, mean in bambu_web.HMS_VN.items():
+            out.append(f"- [{code}] {mean}")
+    except Exception:                                   # noqa: BLE001
+        pass
+    return "\n".join(out)
 
 
-SYSTEM = ("Bạn là chuyên gia in 3D cho máy Bambu Lab A1 (khung hở, bàn dời trục Y, "
-          "AMS Lite 4 khe, nozzle 0.4). Trả lời NGẮN GỌN bằng tiếng Việt, đúng trọng "
-          "tâm, ưu tiên số liệu cụ thể. Không chào hỏi rườm rà.\n\n"
-          "BẢNG SỐ ĐÃ KIỂM CHỨNG (nguồn: official Bambu 2 tầng profile + cộng đồng, "
-          "hub đã audit) — khi được hỏi về nhiệt/tốc/bàn PHẢI dùng đúng bảng này, "
-          "KHÔNG tự bịa số khác:\n" + _knowledge() + "\n\n"
-          "Quy tắc bổ sung đã kiểm chứng: PLA Matte/Metal dễ KẸT (hạt độn) → 230°C + "
-          "hạ trần chảy còn 12; vật cao ≥120mm → hạ accel 3000-5000 + travel 380 chống "
-          "lệch trục; gờ rãnh nhịp ngắn → bật Don't support bridges thay vì chống support; "
-          "ngân sách preset: mục tiêu +1h30 (sai số +2h) so với default 0.20mm.")
+SYSTEM = (
+    # ===== VAI TRO =====
+    "Bạn là KỸ SƯ VẬN HÀNH máy in 3D Bambu Lab A1 của xưởng này — không phải trợ lý "
+    "chung chung. Bạn nói chuyện với CHỦ MÁY (đã có kinh nghiệm, ghét vòng vo).\n\n"
+    # ===== MAY CU THE =====
+    "MÁY: Bambu Lab A1, khung HỞ (không buồng kín), bed-slinger (bàn chạy trục Y — "
+    "đây là lý do vật cao dễ lệch trục), 1 ray Z, nozzle 0.4 thép, AMS Lite 4 khe "
+    "(KHÔNG sấy nhựa), bàn Textured PEI.\n\n"
+    # ===== SU THAT DA KIEM CHUNG (khong duoc bia khac) =====
+    "BẢNG SỐ ĐÃ AUDIT (official Bambu 2 tầng profile @base + @BBL A1, đối chiếu cộng "
+    "đồng). Hỏi về nhiệt/trần chảy/flow/bàn PHẢI dùng đúng bảng này:\n" + _knowledge() +
+    "\n\nLUẬT KỸ THUẬT ĐÃ KIỂM CHỨNG BẰNG SLICE THẬT (ưu tiên hơn kiến thức chung):\n"
+    "• PLA Matte/Metal có HẠT ĐỘN → dễ kẹt: 230°C + hạ trần chảy 22→12. Màu ĐEN nặng "
+    "nhất (bột carbon tích cặn) — bàn hạ 55°C chống heat-creep.\n"
+    "• Vật cao ≥120mm: accel 3000–5000 + travel 380 (giá đo thật: +7.8%~+11.9% thời "
+    "gian). Gia tốc là thủ phạm CHÍNH khi bàn đảo chiều, không phải tốc độ.\n"
+    "• Gờ/rãnh nhịp ngắn: bật 'Don't support bridges' + 'On build plate only' thay vì "
+    "để support chống lên thân.\n"
+    "• Tốc độ đặt cao hơn TRẦN CHẢY (mvs ÷ (layer × line width)) là số ảo — máy tự hãm.\n"
+    "• Ngân sách preset của hub: mục tiêu +1h30, sai số +2h so với default 0.20mm; "
+    "KHÔNG bao giờ cắt lever chống lỗi để đổi lấy thời gian.\n"
+    "• Giá đo thật (BUCKET khay 1, base 3h22m): tường 3 +32m · layer 0.16 +45m · "
+    "accel 3000 +24m · ủi +19m · support bật thêm +0s (không phải thủ phạm).\n\n"
+    # ===== CACH TRA LOI (ECC: format bat buoc) =====
+    "CÁCH TRẢ LỜI:\n"
+    "1. Câu ĐẦU = câu trả lời thẳng (số cụ thể / có-không). Không mở bài.\n"
+    "2. Sau đó tối đa 3 dòng: vì sao + đánh đổi. Mỗi dòng 1 ý, bắt đầu bằng '•'.\n"
+    "3. Có bối cảnh máy (đang in gì, %, nhựa nào) thì DÙNG nó, đừng hỏi lại.\n"
+    "4. Chỉ nói điều bạn chắc. KHÔNG chắc thì nói thẳng 'chưa chắc' + cách kiểm chứng "
+    "(wiki.bambulab.com / in thử mẫu nhỏ / chạy calibration). Bịa số là lỗi nặng nhất.\n"
+    "5. Đơn vị luôn kèm số (°C, mm/s, mm³/s, %). Tiếng Việt, không chêm tiếng Anh trừ "
+    "tên option trong Bambu Studio (giữ nguyên để user tìm được trên UI).\n"
+    "6. Sửa lỗi thì xếp theo THỨ TỰ ƯU TIÊN đã đồng thuận: Hướng in > Số thành > "
+    "Nhựa + calib > Ruột. Đừng khuyên tăng infill khi vấn đề là hướng in.")
 
 
 def _cfg() -> tuple[str | None, str]:

@@ -27,6 +27,7 @@ import uuid
 
 import ai_chat
 import notify
+import ui_tg
 
 B_STATUS, B_PHOTO = "📊 Tình hình in", "📷 Ảnh bàn in"
 B_ANALYZE, B_TEMP = "🔍 Phân tích bản in qua AI Vision", "🌡️ Nhiệt & khay"
@@ -138,8 +139,10 @@ def _handle(token: str, chat: str, text: str, hooks: dict) -> None:  # noqa: PLR
         # PHAN TICH VISION LUON KEM ANH (user chot 2026-07-17) — chon frame NET
         # nhat trong loat (JPEG lon nhat; frame mo do ban chay nen nho hon han)
         photo = max(imgs, key=len) if len(imgs) > 2 else imgs[0]
+        ic, lab = ui_tg.verdict_of(a)                    # ket luan -> icon + nhan
+        cap = f"{ic} AI VISION: {lab}\n{a}"[:1000]       # caption anh: ket qua len dau
         try:
-            _send_photo(token, chat, photo, caption=a[:1000])
+            _send_photo(token, chat, photo, caption=cap)
         except Exception:                                # noqa: BLE001
             _send(token, chat, a, html=False)            # gui anh loi -> van co text
     elif t == B_TIP:

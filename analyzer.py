@@ -768,6 +768,79 @@ def _advise(r: dict) -> None:
 
 
 
+# BANG SU CO -> CACH SUA (NGUON DUY NHAT). Truoc day cac meo nay nam RAI RAC trong
+# make_preset duoi dang r["tips"] -> AI hoi dap khong thay, tra loi sai ("mat tren
+# lam tam" -> AI khuyen chinh ban, trong khi that ra la line width + flow calib).
+# Gio ai_chat._knowledge() doc thang bang nay; make_preset/tips cung nen tro ve day.
+# Moi dong: trieu chung -> thu tu sua DA KIEM CHUNG (nguon ghi trong ngoac).
+TROUBLESHOOT = {
+    "Mặt trên lấm tấm / lỗ li ti / vân thưa": [
+        "Quality ▸ Line width ▸ Top surface = 0.25mm (nozzle 0.4) — fix số 1",
+        "Strength ▸ Top/bottom shells ▸ Top surface pattern = Monotonic line",
+        "Quality ▸ Wall generator = Arachne (nhét được góc nhọn)",
+        "Speed ▸ Top surface ≤150 mm/s",
+        "Top shell layers ≥5 (hub tính theo độ dày 1.0mm)",
+        "GỐC RỄ: chạy Calibration ▸ Flow Dynamics (PA) + Flow Rate cho ĐÚNG cuộn — "
+        "preset chỉ giảm, calib mới hết hẳn (forum Bambu, thread 14.7k view)",
+        "Cuối cùng mới tính Ironing = Top surfaces (đánh đổi +19 phút đo thật)",
+    ],
+    "Kéo sợi / xù lông / mặt rỗ li ti": [
+        "PHÂN BIỆT trước: sợi MẢNH như tơ + nghe lách tách = ẨM; sợi DÀY + mặt bóng "
+        "nhẫy + blob góc = NHIỆT CAO",
+        "Thử: đùn 100mm giữa không khí — sợi có bọt/lởm chởm = ẩm",
+        "ẨM (hay gặp nhất, AMS Lite KHÔNG sấy): sấy 50-55°C/8h rồi cất kèm hút ẩm",
+        "NHIỆT: hạ dần 5-10°C từ số chuẩn (PLA Lite 220→210-215)",
+        "Tăng retraction + quạt 100% (PLA thích tối đa)",
+    ],
+    "Overhang rủ / xệ": [
+        "Bật Speed ▸ Slow down for overhangs + overhang speed 0/50/30/10/10 (mặc định "
+        "Bambu, wiki xác nhận) — đây là lý do chế độ Nhanh vẫn giữ overhang đẹp",
+        "Quạt 100% + hạ nhiệt 5-10°C",
+        "Bridge flow theo nhựa: PLA 1.5 / PETG 1.05 / ABS-ASA giữ 1.0 (wiki Bambu)",
+        "Hẫng >45° diện tích lớn: XOAY mặt hẫng lên trên > thêm support (ưu tiên "
+        "hướng in trước)",
+        "Lưu ý: Arachne MẤT 'smooth overhang transition' (chỉ có ở Classic) — cần mặt "
+        "hẫng mượt hơn thin-wall thì đổi Wall generator = Classic",
+    ],
+    "Vênh / bong mép (warping)": [
+        "PLA/PETG trên PEI nhám: rửa bàn (dầu tay là thủ phạm #1), brim outer_only 5mm",
+        "ABS/ASA trên A1 khung HỞ: BẮT BUỘC draft_shield + skirt 2 vòng + brim rộng "
+        "(ô draft_shield Bambu ẨN khỏi UI — chỉ set được qua preset JSON)",
+        "Đáy bo cong/vát (bám bàn <80% footprint): brim 5mm neo mép + úp mặt phẳng "
+        "nhất xuống bàn",
+        "Tỉ lệ lật (cao ÷ cạnh đáy) >3: brim 8mm bắt buộc",
+        "Lớp đầu bám kém: TĂNG initial_layer_print_height 0.24 (không phải hạ tốc — "
+        "50 mm/s là số Bambu tune cho A1)",
+    ],
+    "Kẹt nhựa / thiếu đùn (mã 1200-8007)": [
+        "Matte/Metal/CF/màu ĐEN là nhóm nguy cơ cao (hạt độn + bột carbon tích cặn)",
+        "Số an toàn: 230°C + HẠ trần chảy 22→12 mm³/s (giảm ~½ là fix hiệu quả nhất)",
+        "COLD PULL ≥1 lần/tháng: nóng 260°C → hạ ~90°C → rút mạnh kéo cặn ra",
+        "Đang kẹt cứng: nâng 280-300°C hoá lỏng cục kẹt rồi rút (r/BambuLab)",
+        "Sấy cuộn + kiểm silicone sock còn ôm nozzle + đừng chạy Ludicrous",
+    ],
+    "Lệch trục / nghiêng ~2/3 chiều cao": [
+        "A1 là bed-slinger (bàn chạy Y) — GIA TỐC là thủ phạm chính, không phải tốc độ",
+        "Vật ≥120mm: default_acceleration 6000→4000 (Cân bằng) hoặc 3000 (Đẹp)",
+        "outer_wall_acceleration →3000 · travel_speed 700→380",
+        "Giá đo thật: accel 4000 = +7.8% thời gian, accel 3000 = +11.9% — rẻ hơn 1 lần in hỏng",
+        "Nếu chảy xệ chứ không phải NGHIÊNG cả khối → là tích nhiệt/overhang, xem mục khác",
+    ],
+    "Brim khó gỡ / để lại via": [
+        "Tăng Others ▸ Bed adhension ▸ Brim-object gap 0.2-0.4mm (mặc định 0.1)",
+        "Chỉ vài GÓC vênh: dùng Painted ▸ Brim Ears — neo đúng chỗ, khỏi brim cả vòng",
+        "Brim hở dù để gap 0: do Elephant foot compensation đang bật",
+    ],
+    "Support xấu / khó bóc / sẹo mặt": [
+        "Bật Support ▸ Advanced ▸ Don't support bridges (gờ rãnh nhịp ngắn bắc cầu được)",
+        "Bật On build plate only (cấm cột tựa lên thân)",
+        "Chỉ định từng chỗ: Support painting ▸ Block support",
+        "Có nhựa đối ứng (PLA↔PETG): interface = nhựa đó + Top/Bottom Z = 0 + spacing 0 "
+        "→ mặt dưới bóng như mặt trên (2 nhựa không dính nhau về hoá học)",
+        "CÙNG vật liệu: PHẢI giữ Z distance 0.2mm — để 0 là dính chết vào model",
+    ],
+}
+
 BRIDGE_MM = 10.0    # span tran <= 10mm -> bac cau khong can support (Hydra Research design rules)
 WALL_HARD_MM = 0.8  # 2 duong nozzle 0.4 — duoi muc nay thanh KHONG in dac duoc (Wikifactory)
 WALL_SOFT_MM = 1.2  # 2 perimeter khuyen nghi (LayerX); 1.5mm neu chiu luc (3D Demand)
