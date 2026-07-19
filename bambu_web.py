@@ -2709,7 +2709,14 @@ function renderE2E(r){
       +'<td>'+d.weight_g+' g</td><td>'+d.layers+'</td></tr>';
   }
   h+='</table>';
-  if(anyErr) h+='<div class="iss" style="margin-top:8px">⚠ Có chế độ slice lỗi ở trên. Nếu lỗi báo <b>Bambu Studio đang mở</b> → ĐÓNG hẳn Bambu Studio (giao diện) rồi bấm <b>So sánh lại 3 chế độ</b>. Hub và Studio dùng chung 1 file chương trình, chạy song song sẽ lỗi.</div>';
+  if(anyErr){
+    const guiErr=MS.some(k=>{const d=(r.modes||{})[k]||{}; return d.error&&/Bambu Studio.*MỞ|đang MỞ/i.test(d.error);});
+    h+='<div class="iss" style="margin-top:8px">⚠ Có chế độ slice lỗi ở trên. '
+      +(guiErr
+        ?'Lỗi báo <b>Bambu Studio đang mở</b> → ĐÓNG hẳn Bambu Studio (giao diện) rồi bấm <b>So sánh lại 3 chế độ</b>. Hub và Studio dùng chung 1 file chương trình.'
+        :'Đọc dòng đỏ để biết lý do (thường do cấu hình file). Nếu file slice bình thường trong Bambu Studio mà đây vẫn lỗi, gửi tên file để kiểm tra.')
+      +'</div>';
+  }
   h+='</div>';
   for(const k of MS){
     const d=(r.modes||{})[k]; if(!d||d.error) continue;

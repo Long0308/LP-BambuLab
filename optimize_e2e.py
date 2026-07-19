@@ -161,6 +161,27 @@ def _hm(s: int | None) -> str:
     return f"{s // 3600}h {(s % 3600) // 60:02d}m"
 
 
+# Cac key SUPPORT phu thuoc lan nhau + rieng theo file: interface da vat lieu
+# (support_interface_filament tro toi 1 cuon cu the), tree, Z=0 thao de. File DA bat
+# support (enable_support=1) thi GIU config support cua file — dung de mode preset ghi
+# de sinh to hop khong slice duoc: file nhieu mau (tabletipad, prime tower + interface
+# filament 3) -> -51/-101 (bug user 2026-07-19, xac minh: revert 6 key nay -> slice OK).
+# File CHUA co support (enable_support=0) thi van cho analyzer them support binh thuong.
+_SUPPORT_FILE_KEYS = (
+    "support_type", "support_style", "support_interface_filament",
+    "support_top_z_distance", "support_bottom_z_distance",
+    "support_interface_spacing", "support_interface_pattern",
+    "support_on_build_plate_only", "support_threshold_angle",
+    "independent_support_layer_height", "enable_support",
+)
+
+
+def _file_has_support(cfg: dict) -> bool:
+    es = cfg.get("enable_support")
+    es = es[0] if isinstance(es, list) and es else es
+    return str(es) in ("1", "True", "true")
+
+
 def apply_preset(src: str, dst: str, preset: dict, drop_vlh: bool = True,
                  extra_cfg: dict | None = None) -> None:
     """Ghi preset vao project_settings NHUNG trong .3mf + go Variable Layer Height.
@@ -173,6 +194,10 @@ def apply_preset(src: str, dst: str, preset: dict, drop_vlh: bool = True,
     """
     with zipfile.ZipFile(src) as zin:        # with: khong leak handle khi json/KeyError
         cfg = json.loads(zin.read(CFG).decode("utf-8", "ignore"))
+        preset = dict(preset)                # khong sua ban goc nguoi goi
+        if _file_has_support(cfg):           # GIU support cua file -> khong ghi de gay -51/-101
+            for k in _SUPPORT_FILE_KEYS:
+                preset.pop(k, None)
         for k, v in preset.items():
             if k not in SAFE_KEYS:
                 continue
@@ -187,6 +212,38 @@ def apply_preset(src: str, dst: str, preset: dict, drop_vlh: bool = True,
                 cfg[k] = [v[0] if isinstance(v, list) else v] * len(old)
             else:
                 cfg[k] = v if isinstance(v, list) else [v]
+        # RANG BUOC VAT LY: layer_height phai NHO HON moi line_width (CLI -51 neu >=;
+        # 0.28==0.28 van fail). File tabletipad de top_surface_line_width 0.25 (hop le o
+        # layer 0.20) nhung mode Nhanh day layer len 0.28 -> vuot -> -51 (bug user
+        # 2026-07-19). CAP layer ve duoi line width NHO NHAT — giu line width tinh cua
+        # file (mat tren dep) va NHANH hon la bump line width to (bump lam tut toc theo
+        # tran mvs: fast 0.28+lw0.42 = 9450s > quality). Mode min (0.16) khong cham toi.
+        try:
+            _lh = float(cfg.get("layer_height"))
+        except (TypeError, ValueError):
+            _lh = None
+        if _lh:
+            _lws = []
+            for _lwk in ("line_width", "inner_wall_line_width", "outer_wall_line_width",
+                         "top_surface_line_width", "sparse_infill_line_width",
+                         "internal_solid_infill_line_width"):
+                _v = cfg.get(_lwk)
+                try:
+                    if _v not in (None, ""):
+                        _lws.append(float(_v))
+                except (TypeError, ValueError):
+                    pass
+            _minlw = min(_lws) if _lws else None
+            if _minlw and _lh >= _minlw - 0.005:      # vuot/sat line width -> cap xuong
+                _cap = round(_minlw - 0.01, 2)
+                if _cap >= 0.08:                      # khong duoi kha nang may
+                    cfg["layer_height"] = f"{_cap:g}"
+                    _ilh = cfg.get("initial_layer_print_height")
+                    try:
+                        if _ilh not in (None, "") and float(_ilh) > _cap:
+                            cfg["initial_layer_print_height"] = f"{_cap:g}"
+                    except (TypeError, ValueError):
+                        pass
         with zipfile.ZipFile(dst, "w", zipfile.ZIP_DEFLATED) as zout:
             for it in zin.infolist():
                 if drop_vlh and it.filename.lower() == VLH:
