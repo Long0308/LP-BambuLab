@@ -2132,32 +2132,38 @@ def support_strategy(model_type: str, ams: list | None = None) -> list:
     if pslot:                                    # KHAC vat lieu — chi khi co doi ung THAT
         out.append({
             "id": "diff", "label": f"Interface {partner} — mặt đẹp nhất (khác vật liệu)",
-            "keys": {"enable_support": "1", "support_interface_filament": str(pslot),
+            # ĐẾ support = model (support_filament 0), CHỈ INTERFACE = partner, 1 lop la du
+            # (user 2026-07-19: PLA in, 1 lop top PETG la go sach). Z=0 vi khong dinh hoa hoc.
+            "keys": {"enable_support": "1", "support_filament": "0",
+                     "support_interface_filament": str(pslot),
+                     "support_interface_top_layers": "1", "support_interface_bottom_layers": "0",
                      "support_top_z_distance": "0", "support_bottom_z_distance": "0",
                      "support_interface_spacing": "0", "support_interface_pattern": "concentric"},
-            "why": (f"{fam} và {partner} KHÔNG dính hoá học (Bambu wiki) → interface {partner} ép khít "
-                    f"Z=0 vẫn BÓC SẠCH, mặt dưới nhẵn như mặt trên. Chỉ INTERFACE là {partner} (đế vẫn "
-                    f"{fam}) → ít đổi nozzle. Nhớ FLUSH nhiều khi đổi sang model (cộng đồng: PLA→PETG "
-                    f"~650, PETG→PLA ~250) — thiếu thì lớp dính interface yếu, gãy."
+            "why": (f"{fam} và {partner} KHÔNG dính hoá học (Bambu wiki) → chỉ cần 1 LỚP interface {partner} "
+                    f"ép khít Z=0 vẫn BÓC SẠCH, mặt dưới nhẵn như mặt trên. ĐẾ support vẫn {fam} (rẻ, "
+                    f"ít đổi nozzle). Nhớ FLUSH nhiều khi đổi sang model (cộng đồng: PLA→PETG ~650, "
+                    f"PETG→PLA ~250) — thiếu thì lớp interface yếu, gãy."
                     + (" ⚠ Bambu chính thức chỉ test PLA Basic+PETG (KHÔNG Matte/Silk/CF); Matte cộng "
                        "đồng vẫn dùng được — cân nhắc." if is_matte else "")),
             "recommend": True})
     out.append({                                 # CUNG vat lieu — uu tien MAT DEP
         "id": "same_smooth", "label": f"Cùng {fam or 'nhựa'} — ưu tiên mặt đẹp (gỡ hơi chặt)",
         "keys": {"enable_support": "1", "support_interface_filament": str(sslot),
+                 "support_interface_top_layers": "2",
                  "support_top_z_distance": "0.15", "support_bottom_z_distance": "0.15",
                  "support_interface_spacing": "0", "support_interface_pattern": "concentric"},
-        "why": ("Cùng nhựa DÍNH nhau nên luôn có đánh đổi. Z 0.15 + interface đặc (spacing 0) + "
+        "why": ("Cùng nhựa DÍNH nhau nên luôn có đánh đổi. Z 0.15 + interface đặc (spacing 0) + 2 lớp "
                 "concentric → mặt tiếp xúc PHẲNG nhất, đổi lại gỡ hơi chặt (kìm/vặn nhẹ). Bật quạt "
                 "interface 100% giúp tách dễ hơn."),
         "recommend": not pslot})
     out.append({                                 # CUNG vat lieu — uu tien DE GO
         "id": "same_easy", "label": f"Cùng {fam or 'nhựa'} — ưu tiên dễ gỡ (mặt hơi rỗ)",
         "keys": {"enable_support": "1", "support_interface_filament": str(sslot),
+                 "support_interface_top_layers": "1",
                  "support_top_z_distance": "0.25", "support_bottom_z_distance": "0.2",
                  "support_interface_spacing": "0.3", "support_interface_pattern": "rectilinear_interlaced"},
-        "why": ("Z 0.25 (khe rộng) + interface thưa (spacing 0.3) + rectilinear → support RỜI hẳn, "
-                "gỡ tay dễ, đổi lại mặt hẫng hơi rỗ. Cộng đồng: tăng Top Z 0.2→0.3 là cách dễ gỡ "
+        "why": ("Z 0.25 (khe rộng) + interface thưa (spacing 0.3) + 1 lớp rectilinear → support RỜI "
+                "hẳn, gỡ tay dễ, đổi lại mặt hẫng hơi rỗ. Cộng đồng: tăng Top Z 0.2→0.3 là cách dễ gỡ "
                 "nhất. Hợp mặt khuất / cần tháo nhanh."),
         "recommend": False})
     return out

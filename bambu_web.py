@@ -437,9 +437,9 @@ def _resolve_fil(src_path, sel, plate=None):
 
 
 def _apply_overrides(preset: dict, ov: dict) -> None:
-    """Ap chinh sua NGUOI DUNG truoc khi in (#4 2026-07-19): layer/toc do/support/brim.
-    Chi ghi field user THAT SU doi (khac rong) -> giu quyet dinh analyzer cho phan con
-    lai. Cac key deu nam trong SAFE_KEYS nen apply_preset ghi duoc."""
+    """Ap chinh sua NGUOI DUNG truoc khi in — panel kieu Bambu Prepare (2026-07-19):
+    Layer / Bed adhesion / Support. Chi ghi field user THAT SU doi (khac rong) -> giu
+    quyet dinh analyzer cho phan con lai. Cac key deu trong SAFE_KEYS nen apply_preset ghi."""
     if not ov:
         return
     def _num(x):
@@ -447,22 +447,59 @@ def _apply_overrides(preset: dict, ov: dict) -> None:
             return float(x)
         except (TypeError, ValueError):
             return None
-    v = _num(ov.get("outer"))
-    if v:
-        preset["outer_wall_speed"] = [str(int(v))]
-    if ov.get("support") in ("0", "1"):
-        preset["enable_support"] = ov["support"]      # config dung chuoi '0'/'1'
-    a = _num(ov.get("sup_angle"))
-    if a:
-        preset["support_threshold_angle"] = str(int(a))
+    # ---- Layer ----
+    lh = _num(ov.get("layer"))
+    if lh:
+        preset["layer_height"] = str(lh)
+    il = _num(ov.get("init_layer"))
+    if il:
+        preset["initial_layer_print_height"] = str(il)
+    # ---- Bed adhesion (brim) — KHONG dung brim_object_gap (ghi la CLI crash) ----
     if ov.get("brim"):
         preset["brim_type"] = ov["brim"]              # no_brim/outer_only/outer_and_inner/auto_brim
     bw = _num(ov.get("brim_w"))
     if bw is not None:
         preset["brim_width"] = str(bw)
-    lh = _num(ov.get("layer"))
-    if lh:
-        preset["layer_height"] = str(lh)
+    sk = _num(ov.get("skirt"))
+    if sk is not None:
+        preset["skirt_loops"] = str(int(sk))
+    # ---- Speed ----
+    v = _num(ov.get("outer"))
+    if v:
+        preset["outer_wall_speed"] = [str(int(v))]
+    # ---- Support ----
+    if ov.get("support") in ("0", "1"):
+        preset["enable_support"] = ov["support"]      # config dung chuoi '0'/'1'
+    if ov.get("sup_type"):
+        preset["support_type"] = ov["sup_type"]       # tree(auto)/normal(auto)
+    if ov.get("sup_style"):
+        preset["support_style"] = ov["sup_style"]     # default/tree_hybrid/tree_strong/snug/grid
+    a = _num(ov.get("sup_angle"))
+    if a:
+        preset["support_threshold_angle"] = str(int(a))
+    if ov.get("sup_onplate") in ("0", "1"):
+        preset["support_on_build_plate_only"] = ov["sup_onplate"]
+    zt = _num(ov.get("sup_ztop"))
+    if zt is not None:
+        preset["support_top_z_distance"] = f"{zt:g}"
+    zb = _num(ov.get("sup_zbot"))
+    if zb is not None:
+        preset["support_bottom_z_distance"] = f"{zb:g}"
+    isp = _num(ov.get("sup_ispacing"))
+    if isp is not None:
+        preset["support_interface_spacing"] = f"{isp:g}"
+    if ov.get("sup_ipattern"):
+        preset["support_interface_pattern"] = ov["sup_ipattern"]
+    itl = _num(ov.get("sup_itop"))
+    if itl is not None:
+        preset["support_interface_top_layers"] = str(int(itl))
+    ibl = _num(ov.get("sup_ibot"))
+    if ibl is not None:
+        preset["support_interface_bottom_layers"] = str(int(ibl))
+    if ov.get("sup_ifil"):                            # nhua interface (khac vat lieu)
+        preset["support_interface_filament"] = str(ov["sup_ifil"])
+    if ov.get("sup_basefil") not in (None, ""):       # nhua DE support (0 = theo model)
+        preset["support_filament"] = str(ov["sup_basefil"])
 
 
 def _run_analyze(name, src_path, plate=None, sel=None):
@@ -619,8 +656,8 @@ def _slice_and_push(name, src_path, mode=None, push=True, plate=0, sel=None, ove
                 shutil.copyfile(res, keep)
             with UPJOB_LOCK:
                 LAST_SLICED.update(path=keep, name=out_name)
-                UPJOB.update(state="done", name=out_name, download=out_name,
-                             msg=f"Đã slice xong: {out_name} — bấm Tải về để mở/in trong Bambu Studio/Handy")
+                UPJOB.update(state="done", name=out_name, download=out_name, stats=stats,
+                             msg=f"Đã slice xong: {out_name} — xem thời gian/nhựa rồi Đẩy xuống máy")
             return
         with UPJOB_LOCK:
             UPJOB.update(state="pushing", msg="Slice xong — đang chuyển xuống máy in…", stats=stats)
@@ -2283,40 +2320,60 @@ async function dlFilFix(){
   }catch(e){toast("Lỗi tải preset: "+e);}
 }
 function esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;");}
-/* #4: panel "Xem lai + chinh truoc khi in" — style o nhap + 1 hang nhan/control */
+/* PANEL kieu Bambu Prepare (2026-07-19) — muc + hang nhan-trai/o-phai + o so */
 const IST='style="background:#0f172a;color:#e2e8f0;border:1px solid rgba(255,255,255,.15);border-radius:8px;padding:6px 8px;font-size:13px"';
-function revRow(k,c){ return '<div style="display:flex;align-items:center;gap:8px;margin:6px 0;flex-wrap:wrap">'
-  +'<span class="mut" style="min-width:140px;font-size:13px">'+k+'</span><span>'+c+'</span></div>'; }
+function bSec(t){ return '<div style="font-weight:700;font-size:13.5px;margin:15px 0 4px;padding-bottom:5px;border-bottom:1px solid rgba(255,255,255,.12)">'+t+'</div>'; }
+function bRow(k,c){ return '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05)">'
+  +'<span class="mut" style="font-size:13px">'+k+'</span><span style="text-align:right;white-space:nowrap">'+c+'</span></div>'; }
+function nIn(id,mn,mx,st){ return '<input id="'+id+'" type="number" min="'+mn+'" max="'+mx+'" step="'+st+'" onchange="this.dataset.touched=1" '+IST+' style="width:78px;text-align:right">'; }
+function revRow(k,c){ return bRow(k,c); }   /* tuong thich cu */
 function _v1(x){ return Array.isArray(x)?x[0]:x; }
 function fillReview(){
-  const p=window.__preset||{}, g=id=>document.getElementById(id);
-  if(g("ov_outer")) g("ov_outer").value=_v1(p.outer_wall_speed)||"";
-  if(g("ov_sup_angle")) g("ov_sup_angle").value=_v1(p.support_threshold_angle)||30;
+  const p=window.__preset||{}, g=id=>document.getElementById(id), sv=(id,v)=>{const e=g(id);if(e&&v!=null&&v!=="")e.value=v;};
+  sv("ov_outer",_v1(p.outer_wall_speed)); sv("ov_init_layer",_v1(p.initial_layer_print_height));
+  sv("ov_brim_w",_v1(p.brim_width)); sv("ov_skirt",_v1(p.skirt_loops));
+  sv("ov_sup_angle",_v1(p.support_threshold_angle)||30);
+  sv("ov_sup_ztop",_v1(p.support_top_z_distance)); sv("ov_sup_zbot",_v1(p.support_bottom_z_distance));
+  sv("ov_sup_ispacing",_v1(p.support_interface_spacing)); sv("ov_sup_itop",_v1(p.support_interface_top_layers));
+  const setSel=(id,v)=>{const e=g(id);if(e&&v)e.value=v;};
+  setSel("ov_brim",_v1(p.brim_type)); setSel("ov_sup_type",_v1(p.support_type));
+  setSel("ov_sup_style",_v1(p.support_style)); setSel("ov_sup_ipattern",_v1(p.support_interface_pattern));
   const es=_v1(p.enable_support); if(g("ov_support")) g("ov_support").checked=(es===true||es==="1"||es===1);
-  if(g("ov_brim_w")) g("ov_brim_w").value=_v1(p.brim_width)||5;
+  const op=_v1(p.support_on_build_plate_only); if(g("ov_sup_onplate")) g("ov_sup_onplate").checked=(op==="1"||op===1||op===true);
   const fs=window.__filSelInfo||{}, s=g("revsum");
-  if(s){ s.innerHTML='Hiện tại: layer <b>'+esc(_v1(p.layer_height)||"?")+'mm</b> · tường <b>'+esc(_v1(p.wall_loops)||"?")+'</b>'
+  if(s){ s.innerHTML='Đang đặt: layer <b>'+esc(_v1(p.layer_height)||"?")+'mm</b> · tường <b>'+esc(_v1(p.wall_loops)||"?")+'</b>'
     +(fs.mvs?(' · trần chảy <b>'+esc(fs.mvs)+' mm³/s</b>'):'')+(fs.temp?(' · nhiệt <b>'+esc(fs.temp)+'°C</b>'):'')
-    +' — sửa ô nào thì áp ô đó, để trống = giữ theo phân tích.'; }
+    +' — sửa ô nào thì áp ô đó.'; }
 }
-/* Chon cach lam support -> cap nhat giai thich + luu de gui khi slice */
+function onSmode(){ const s=document.getElementById("revsum"); if(s) s.innerHTML='Đổi chế độ → bấm <b>Slice lại</b> để cập nhật số. Các ô bạn đã sửa vẫn giữ.'; }
+/* Chon cach lam support -> NAP thang vao cac o Support cua panel (1 nguon), danh dau touched */
 function onSupStrat(){
-  const v=(document.getElementById("supstrat")||{}).value||"";
+  const v=(document.getElementById("supstrat")||{}).value||"", g=id=>document.getElementById(id);
   window.__supStrat=v;
   const s=(window.__supStrats||[]).find(x=>x.id===v);
   const el=document.getElementById("supstratwhy");
   if(el) el.textContent = s ? s.why : "Giữ nguyên cấu hình support trong file.";
+  if(!s) return;
+  const k=s.keys||{}, put=(id,val)=>{const e=g(id);if(e&&val!=null){e.value=val;e.dataset.touched=1;}};
+  if(g("ov_support")){g("ov_support").checked=true;g("ov_support").dataset.touched=1;}
+  put("ov_sup_ztop",k.support_top_z_distance); put("ov_sup_zbot",k.support_bottom_z_distance);
+  put("ov_sup_ispacing",k.support_interface_spacing); put("ov_sup_itop",k.support_interface_top_layers);
+  put("ov_sup_ipattern",k.support_interface_pattern);
+  window.__supFil=k.support_interface_filament||""; window.__supBase=k.support_filament||"";  /* interface/base filament slot */
 }
 function ovQS(){
   const g=id=>document.getElementById(id), t=id=>{const e=g(id);return e&&e.dataset&&e.dataset.touched;};
+  const S=(id,key)=>{ if(t(id)&&g(id).value!=="") return "&"+key+"="+encodeURIComponent(g(id).value); return ""; };
+  const C=(id,key)=>{ return t(id) ? "&"+key+"="+(g(id).checked?"1":"0") : ""; };
   let q="";
-  if(window.__supStrat) q+="&sup_strat="+encodeURIComponent(window.__supStrat);   // cach lam support da chon
-  if(t("ov_layer")&&g("ov_layer").value) q+="&ov_layer="+encodeURIComponent(g("ov_layer").value);
-  if(t("ov_outer")&&g("ov_outer").value) q+="&ov_outer="+encodeURIComponent(g("ov_outer").value);
-  if(t("ov_support")) q+="&ov_support="+(g("ov_support").checked?"1":"0");
-  if(t("ov_sup_angle")&&g("ov_sup_angle").value) q+="&ov_sup_angle="+encodeURIComponent(g("ov_sup_angle").value);
-  if(t("ov_brim")&&g("ov_brim").value) q+="&ov_brim="+encodeURIComponent(g("ov_brim").value);
-  if(t("ov_brim_w")&&g("ov_brim_w").value!=="") q+="&ov_brim_w="+encodeURIComponent(g("ov_brim_w").value);
+  q+=S("ov_layer","ov_layer")+S("ov_init_layer","ov_init_layer")+S("ov_outer","ov_outer");
+  q+=S("ov_brim","ov_brim")+S("ov_brim_w","ov_brim_w")+S("ov_skirt","ov_skirt");
+  q+=C("ov_support","ov_support")+S("ov_sup_type","ov_sup_type")+S("ov_sup_style","ov_sup_style");
+  q+=S("ov_sup_angle","ov_sup_angle")+C("ov_sup_onplate","ov_sup_onplate");
+  q+=S("ov_sup_ztop","ov_sup_ztop")+S("ov_sup_zbot","ov_sup_zbot")+S("ov_sup_itop","ov_sup_itop");
+  q+=S("ov_sup_ispacing","ov_sup_ispacing")+S("ov_sup_ipattern","ov_sup_ipattern");
+  if(window.__supFil) q+="&ov_sup_ifil="+encodeURIComponent(window.__supFil);
+  if(window.__supBase!==undefined&&window.__supBase!=="") q+="&ov_sup_basefil="+encodeURIComponent(window.__supBase);
   return q;
 }
 function reset(msg){
@@ -2662,46 +2719,52 @@ function pnamePreview(){
 }
   h+='<button class="btn go" id="e2e" onclick="optimize()">So sánh 3 chế độ — slice thật 4 lần (~15s)</button>'
    +'<div id="e2eout"></div>'
-   +'<div class="card" style="margin-top:10px"><h3 style="margin-top:0">Slice + đẩy xuống máy in</h3>'
-   +'<select id="smode" style="width:100%;padding:10px;border-radius:10px;margin-bottom:9px;'
-   +'background:#0f172a;color:#e2e8f0;border:1px solid rgba(255,255,255,.15);font-size:14px">'
-   +'<option value="balanced" selected>Cân bằng — 0.20mm (khuyên dùng)</option>'
-   +'<option value="fast">Nhanh — 0.28mm</option>'
-   +'<option value="quality">Đẹp — 0.16mm</option>'
-   +'<option value="">Giữ nguyên config trong file (không áp preset)</option>'
-   +'</select>'
-   /* #4 (2026-07-19): XEM LAI + CHINH truoc khi in — layer(qua che do)/toc do/support/
-      brim; MAU doi o o "Nhua dang dung" phia tren. Sua o nao ap o do, de trong = giu
-      theo phan tich. */
-   +'<div class="card" style="margin:0 0 10px;background:#0c111a;border:1px solid var(--line)">'
-   +'<div style="font-weight:700;margin-bottom:6px">✏️ Xem lại + chỉnh trước khi in '
-   +'<span class="mut" style="font-size:12px">· màu đổi ở ô “Nhựa đang dùng” phía trên</span></div>'
-   +'<div id="revsum" class="mut" style="font-size:12px;margin-bottom:10px"></div>'
-   +revRow("Layer height", '<select id="ov_layer" onchange="this.dataset.touched=1" '+IST+'>'
-       +'<option value="">Theo chế độ ở trên</option>'
-       +'<option>0.28</option><option>0.24</option><option>0.20</option><option>0.16</option><option>0.12</option></select>')
-   +revRow("Tốc độ mặt ngoài", '<input id="ov_outer" type="number" min="20" max="500" '
-       +'onchange="this.dataset.touched=1" '+IST+' style="width:90px">&nbsp;mm/s '
-       +'<span class="mut" style="font-size:11px">— cao quá máy tự hãm theo trần chảy</span>')
-   +revRow("Support (đỡ)", '<label style="cursor:pointer"><input id="ov_support" type="checkbox" '
-       +'onchange="this.dataset.touched=1"> Bật</label>&nbsp;·&nbsp;góc '
-       +'<input id="ov_sup_angle" type="number" min="0" max="90" onchange="this.dataset.touched=1" '+IST+' style="width:64px"> °')
-   +revRow("Brim (viền bám bàn)", '<select id="ov_brim" onchange="this.dataset.touched=1" '+IST+'>'
-       +'<option value="">Theo phân tích</option><option value="no_brim">Không</option>'
-       +'<option value="outer_only">Ngoài</option><option value="outer_and_inner">Quanh</option>'
-       +'<option value="auto_brim">Tự động</option></select>&nbsp;·&nbsp;rộng '
-       +'<input id="ov_brim_w" type="number" min="0" max="20" step="0.5" onchange="this.dataset.touched=1" '+IST+' style="width:64px"> mm')
+   +'<div class="card" style="margin-top:10px"><h3 style="margin-top:0">🧩 Chuẩn bị in (Prepare) '
+   +'<span class="mut" style="font-size:12px">· chỉnh thông số kiểu Bambu → Slice lại → Đẩy xuống máy</span></h3>'
+   +bRow("Chế độ (Process)", '<select id="smode" onchange="onSmode()" '+IST+' style="min-width:210px">'
+       +'<option value="balanced" selected>Cân bằng — 0.20mm (khuyên dùng)</option>'
+       +'<option value="fast">Nhanh — 0.28mm</option>'
+       +'<option value="quality">Đẹp — 0.16mm</option>'
+       +'<option value="">Giữ nguyên config trong file</option></select>')
+   /* PANEL kieu Bambu Prepare (2026-07-19): 3 muc Quality/Bed adhesion/Support, moi dong
+      nhan trai — o phai + don vi (nhu Studio). Mau doi o "Nhua dang dung" phia tren. */
+   +bSec("📐 Quality — Layer height")
+   +bRow("Layer height", '<select id="ov_layer" onchange="this.dataset.touched=1" '+IST+'>'
+       +'<option value="">Theo chế độ</option>'
+       +'<option>0.28</option><option>0.24</option><option>0.20</option><option>0.16</option><option>0.12</option></select> mm')
+   +bRow("Initial layer height", nIn("ov_init_layer",0.06,0.35,0.02)+' mm')
+   +bRow("Tốc độ mặt ngoài (outer wall)", nIn("ov_outer",20,500,1)+' mm/s <span class="mut" style="font-size:11px">— cao quá máy tự hãm</span>')
+   +bSec("🛬 Others — Bed adhesion (Brim)")
+   +bRow("Brim type", '<select id="ov_brim" onchange="this.dataset.touched=1" '+IST+'>'
+       +'<option value="">Theo phân tích</option><option value="no_brim">no_brim (không)</option>'
+       +'<option value="outer_only">outer_only (ngoài)</option><option value="outer_and_inner">outer_and_inner (quanh)</option>'
+       +'<option value="auto_brim">Auto</option></select>')
+   +bRow("Brim width", nIn("ov_brim_w",0,20,0.5)+' mm')
+   +bRow("Skirt loops", nIn("ov_skirt",0,5,1))
+   +bSec("⛰ Support")
+   +bRow("Enable support", '<label style="cursor:pointer"><input id="ov_support" type="checkbox" onchange="this.dataset.touched=1"> bật</label>')
+   +bRow("Type", '<select id="ov_sup_type" onchange="this.dataset.touched=1" '+IST+'>'
+       +'<option value="">—</option><option value="normal(auto)">normal(auto)</option><option value="tree(auto)">tree(auto)</option></select>')
+   +bRow("Style", '<select id="ov_sup_style" onchange="this.dataset.touched=1" '+IST+'>'
+       +'<option value="">—</option><option value="default">Default</option><option value="snug">Snug</option>'
+       +'<option value="tree_hybrid">Tree Hybrid</option><option value="tree_strong">Tree Strong</option><option value="tree_slim">Tree Slim</option></select>')
+   +bRow("Threshold angle", nIn("ov_sup_angle",0,90,1)+' °')
+   +bRow("On build plate only", '<label style="cursor:pointer"><input id="ov_sup_onplate" type="checkbox" onchange="this.dataset.touched=1"> chỉ từ mặt bàn</label>')
+   +bRow("Top Z distance", nIn("ov_sup_ztop",0,1,0.01)+' mm <span class="mut" style="font-size:11px">— 0 = khác vật liệu; ≥0.15 cùng loại</span>')
+   +bRow("Bottom Z distance", nIn("ov_sup_zbot",0,1,0.01)+' mm')
+   +bRow("Top interface layers", nIn("ov_sup_itop",0,5,1)+' <span class="mut" style="font-size:11px">layers</span>')
+   +bRow("Top interface spacing", nIn("ov_sup_ispacing",0,2,0.05)+' mm')
+   +bRow("Interface pattern", '<select id="ov_sup_ipattern" onchange="this.dataset.touched=1" '+IST+'>'
+       +'<option value="">—</option><option value="concentric">Concentric</option>'
+       +'<option value="rectilinear">Rectilinear</option><option value="rectilinear_interlaced">Rectilinear Interlaced</option></select>')
+   +'<div id="revsum" class="mut" style="font-size:12px;margin:10px 0 4px"></div>'
+   +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">'
+   +'<button class="btn go" style="margin-top:0;flex:1;min-width:200px" onclick="sliceReview()">🔪 Slice lại — cập nhật thời gian & nhựa</button>'
    +'</div>'
-   +'<div style="display:flex;gap:8px;flex-wrap:wrap">'
-   +'<button class="btn go" style="margin-top:0;flex:1;min-width:180px" onclick="slice(false)">Slice + đẩy xuống máy in</button>'
-   +'<button class="btn" style="margin-top:0;flex:1;min-width:180px;background:linear-gradient(160deg,#a78bfa,#7c3aed)" onclick="slice(true)">Slice để TẢI VỀ (.gcode.3mf)</button>'
-   +'</div>'
-   +'<div id="dlbox" style="margin-top:8px"></div>'
-   +'<div class="mut" style="margin-top:7px;line-height:1.6">Cả hai dùng cấu hình máy A1 thật + khay AMS. <b>File .gcode.3mf đã slice sẵn (chứa G-code)</b>:<br>'
-   +'• <b>In thẳng KHÔNG slice lại</b>: mở bằng <b>Bambu Handy</b> (điện thoại) hoặc copy vào thẻ SD/gửi LAN — máy chạy G-code có sẵn.<br>'
-   +'• Mở trong <b>Bambu Studio (desktop)</b>: Studio nạp lại thành project để CHỈNH SỬA nên nút "Slice plate" sáng lại — đây là bản chất của Studio (không dùng G-code ngoài làm bản in cuối). Cấu hình đã nhúng nên bấm Slice lại ra <b>y hệt</b>, chỉ mất thời gian slice. Muốn khỏi slice lại thì in qua Handy/thẻ SD.</div></div>';
+   +'<div id="sliceresult" style="margin-top:9px"></div>'
+   +'<div class="mut" style="margin-top:7px;line-height:1.6">Chỉnh xong bấm <b>Slice lại</b> để xem thời gian/nhựa MỚI (dùng cấu hình máy A1 thật + khay AMS), rồi mới <b>Đẩy xuống máy in</b>. Số này khớp với Bambu Studio.</div></div>';
   document.getElementById("out").innerHTML=h;
-  fillReview();                     // #4: nap gia tri mac dinh vao panel chinh sua
+  fillReview();                     // nap gia tri mac dinh vao panel chinh sua (kieu Bambu)
 }
 function optimize(){
   if(!FILE){ toast("Chọn lại file"); return; }
@@ -2796,29 +2859,43 @@ function dl(){
   a.click(); URL.revokeObjectURL(a.href);
   toast("Đã tải: "+full+" — Import xong nhớ CHỌN preset ở dropdown Process");
 }
-async function slice(download){
+/* Bước 1: SLICE LẠI với thông số đã chỉnh (giữ file, KHÔNG đẩy) -> hiện thời gian/nhựa mới */
+async function sliceReview(){
   if(!FILE){ toast("Chọn lại file"); return; }
   const m=(document.getElementById("smode")||{value:""}).value;
-  const db=document.getElementById("dlbox"); if(db) db.innerHTML="";
+  const box=document.getElementById("sliceresult");
+  if(box) box.innerHTML='<div class="mut">⏳ Đang slice lại (dùng cấu hình A1 thật)… có thể mất ~15-40s.</div>';
   const xhr=new XMLHttpRequest();
-  xhr.open("POST","/api/upload?name="+encodeURIComponent(FILE.name)+(m?"&mode="+m:"")+(download?"&download=1":"")
+  xhr.open("POST","/api/upload?name="+encodeURIComponent(FILE.name)+(m?"&mode="+m:"")+"&download=1"
     +(window.__platesN>1?("&plate="+(window.__plate||1)):"")+filQS()+ovQS());
   xhr.onload=()=>{ let j={}; try{j=JSON.parse(xhr.responseText);}catch(e){}
-    if(j.ok&&j.queued){ toast(download?"Đang slice để tải về…":"Đang slice trên máy tính…"); poll(); }
-    else if(j.ok){ toast("Đã đẩy xuống máy: "+j.name); }
-    else toast("Lỗi: "+(j.msg||xhr.status)); };
-  xhr.onerror=()=>toast("Mất kết nối");
-  toast("Đang gửi file…"); xhr.send(FILE);
+    if(j.ok&&j.queued){ pollReview(); } else { if(box) box.innerHTML='<div class="iss">Lỗi: '+esc(j.msg||xhr.status)+'</div>'; } };
+  xhr.onerror=()=>{ if(box) box.innerHTML='<div class="iss">Mất kết nối</div>'; };
+  xhr.send(FILE);
 }
-async function poll(){
+async function pollReview(){
+  const box=document.getElementById("sliceresult");
   try{ const j=await (await fetch("/api/upstatus",{cache:"no-store"})).json();
-    if(j.state==="slicing"||j.state==="pushing"){ toast(j.msg||"Đang xử lý…"); setTimeout(poll,3000); return; }
-    if(j.state==="done"){ const s=j.stats||{}; toast("✔ "+j.msg);
-      const db=document.getElementById("dlbox");
-      if(j.download&&db){ db.innerHTML='<a class="btn" style="display:block;text-align:center;text-decoration:none;background:linear-gradient(160deg,#22c55e,#16a34a)" href="/api/sliced-download">⬇ Tải '+j.download+' — mở Bambu Studio/Handy để in</a>'; }
+    if(j.state==="slicing"||j.state==="pushing"){ if(box) box.innerHTML='<div class="mut">⏳ '+esc(j.msg||"Đang xử lý…")+'</div>'; setTimeout(pollReview,2500); return; }
+    if(j.state==="done"){ const s=j.stats||{};
+      const t=esc(s.time||"?"), w=(s.weight_g!=null?s.weight_g:"?"), L=(s.layers!=null?s.layers:"?");
+      if(box) box.innerHTML='<div class="tip" style="font-size:14px">✔ Slice xong — <b>⏱ '+t+'</b> · <b>🎨 '+w+' g</b> · <b>🧱 '+L+' lớp</b></div>'
+        +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">'
+        +'<button class="btn go" style="margin-top:0;flex:1;min-width:180px" onclick="pushLast()">🖨 Đẩy xuống máy in</button>'
+        +'<a class="btn" style="margin-top:0;flex:1;min-width:150px;text-align:center;text-decoration:none;background:linear-gradient(160deg,#a78bfa,#7c3aed)" href="/api/sliced-download">⬇ Tải .gcode.3mf</a>'
+        +'</div><div class="mut" style="font-size:11.5px;margin-top:6px">Số này là kết quả slice THẬT với thông số bạn đã chỉnh — khớp Bambu Studio. Sửa tiếp thì bấm Slice lại.</div>';
     }
-    else if(j.state==="error") toast("Lỗi: "+j.msg);
-  }catch(e){ setTimeout(poll,4000); }
+    else if(j.state==="error"){ if(box) box.innerHTML='<div class="iss">Lỗi slice: '+esc(j.msg)+'</div>'; }
+  }catch(e){ setTimeout(pollReview,4000); }
+}
+/* Bước 2: ĐẨY file .gcode.3mf vừa slice xuống máy in (không slice lại) */
+async function pushLast(){
+  const box=document.getElementById("sliceresult");
+  toast("Đang đẩy xuống máy in…");
+  try{ const j=await (await fetch("/api/push-last",{method:"POST"})).json();
+    if(j.ok){ toast("✔ Đã đẩy xuống máy: "+(j.name||"")); if(box) box.innerHTML+='<div class="tip" style="margin-top:6px">✔ Đã gửi <b>'+esc(j.name||"")+'</b> xuống máy in — mở Bambu Handy/màn hình máy để bấm In.</div>'; }
+    else toast("Lỗi đẩy: "+(j.msg||"?"));
+  }catch(e){ toast("Mất kết nối khi đẩy"); }
 }
 </script></body></html>"""
 
@@ -3186,7 +3263,10 @@ class H(BaseHTTPRequestHandler):
         sel = {"slot": _slot, "fil": unquote(q.get("fil", [""])[0]).strip(),
                "color": unquote(q.get("color", [""])[0]).strip()}
         overrides = {k: unquote(q.get("ov_" + k, [""])[0]).strip() for k in
-                     ("layer", "outer", "support", "sup_angle", "brim", "brim_w")}
+                     ("layer", "init_layer", "outer", "brim", "brim_w", "skirt",
+                      "support", "sup_type", "sup_style", "sup_angle", "sup_onplate",
+                      "sup_ztop", "sup_zbot", "sup_itop", "sup_ibot", "sup_ispacing",
+                      "sup_ipattern", "sup_ifil", "sup_basefil")}
         overrides = {k: v for k, v in overrides.items() if v != ""}
         _ss = unquote(q.get("sup_strat", [""])[0]).strip()   # cach lam support user chon
         if _ss:
@@ -3355,6 +3435,30 @@ class H(BaseHTTPRequestHandler):
             return
         elif self.path.startswith("/api/upload"):
             self._do_upload()
+            return
+        elif self.path.startswith("/api/push-last"):
+            # Day file .gcode.3mf slice GAN NHAT xuong may in (buoc 2: da Slice lai xong)
+            with UPJOB_LOCK:
+                fp, fn = LAST_SLICED.get("path"), LAST_SLICED.get("name")
+            if not fp or not os.path.isfile(fp):
+                self._send(409, json.dumps({"ok": False, "msg":
+                    "Chưa có file slice — bấm Slice lại trước"}, ensure_ascii=False),
+                    "application/json; charset=utf-8")
+                return
+            try:
+                with open(fp, "rb") as f:
+                    data = f.read()
+                with THUMB_LOCK:                       # dung chung khoa FTP
+                    ok, msg = filament_ftp.upload_file(IP, CODE, data, fn)
+            except OSError as e:
+                ok, msg = False, str(e)
+            if ok:
+                FILES_CACHE["ts"] = 0                  # lam moi danh sach file may
+                self._send(200, json.dumps({"ok": True, "name": fn}, ensure_ascii=False),
+                           "application/json; charset=utf-8")
+            else:
+                self._send(502, json.dumps({"ok": False, "msg": f"FTP lỗi: {msg}"},
+                           ensure_ascii=False), "application/json; charset=utf-8")
             return
         elif self.path == "/api/printer-config":
             body = self._read_json()
