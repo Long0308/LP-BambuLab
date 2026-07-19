@@ -1252,7 +1252,7 @@ def _guide_reason(key: str, val: str, r: dict, lh: float = 0.2) -> str:
     R = {
         "layer_height": lambda: f"{val}mm → ~{int(h/float(val))} lớp" if h and float(val) else f"{val}mm theo chế độ",
         "initial_layer_print_height": lambda: f"lớp đầu dày {val}mm: đáy nhỏ/tỉ lệ lật cao → bám chắc hơn",
-        "top_surface_line_width": lambda: f"hẹp {val} (mặc định {round(nz*1.05,2)}) → nhét kín khe, hết lấm tấm/vân thưa mặt trên",
+        "top_surface_line_width": lambda: f"{val}mm (= vòi×1.05, chuẩn Bambu) → đủ rộng bắc qua khe ruột, không lộ vân chéo mặt trên",
         "seam_position": lambda: (f"model dạng hộp (phẳng {flat}%, {fa.get('n_dirs')} hướng) → dồn mối nối ra sau"
                                   if val == "back" else f"mặt cong (phẳng {flat}%) → rải đều + scarf"),
         "seam_slope_type": lambda: "vát mối nối trên mặt cong" if val == "all" else "không vát (model góc cạnh)",
@@ -1695,23 +1695,21 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced",
     #       2. monotonic line (da bat) + Arachne (da bat: bien thien do rong nhet goc nhon)
     #       3. cham lai o mat tren (da co: top_surface_speed <= 150)
     #       4. hieu chinh Flow + PA cho tung cuon (KHONG phai key preset — phai calib that)
+    # 5b) MAT TREN LO VAN INFILL (telegraphing/±45°) — AUDIT ca chay that + tra forum/reddit
+    #     2026-07-19: default line width vòi 0.4 = 0.42 CHO CA mặt trên (Bambu/OrcaSlicer).
+    #     TRUOC day ha 0.25 (nozzle×0.62) theo 1 thread "pinhole" — SAI/NGUY HIEM: duong mat
+    #     tren MANH 0.25 KHONG bac noi qua khe infill -> VONG xuong luoi -> lo van cheo (chinh
+    #     la 'dau' user thay). Gio dung CHUAN 0.42 (nozzle×1.05): duong du rong bac kin mat
+    #     tren. Fix telegraphing that = duong chuan + infill du dac + monotonic + (tuy chon)
+    #     ironing — KHONG phai ha duong mat tren.
     nz = fl.get("nozzle") or 0.4
-    narrow = round(nz * 0.62, 2)           # ~0.25 cho nozzle 0.4 (forum: 0.25/0.4)
-    # RANG BUOC: duong in KHONG duoc HEP hon chieu cao lop (bead vuong) — neu khong
-    # Bambu bao "incorrect slicing parameters" (return_code -51). O che do Nhanh
-    # (layer 0.28) 0.25 < 0.28 -> vo hieu; giu mac dinh. Chi hep khi van >= layer.
-    if narrow >= lh:
-        tslw = narrow
-        p["top_surface_line_width"] = str(tslw)
-        why.append(f"Mặt trên đường in HẸP {tslw}mm (mặc định {round(nz*1.05,2)}mm): fix lấm tấm / "
-                   f"lỗ li ti / vân thưa — đường mảnh nhét kín khe ở khúc queo và đầu mút, kết hợp "
-                   f"monotonic line + Arachne (đã bật). Nguồn: đồng thuận forum Bambu (thread top "
-                   f"surface tiny holes). Root cause thật là chưa hiệu chỉnh Flow/PA — xem tip.")
-    else:
-        why.append(f"Mặt trên giữ đường in mặc định (~{round(nz*1.05,2)}mm): chế độ này layer {lh}mm "
-                   f"CAO hơn mức hẹp {narrow}mm, không thu hẹp được (đường in phải ≥ chiều cao lớp, "
-                   f"nếu không Bambu báo lỗi tham số). Mặt trên mịn hơn thì dùng chế độ Cân bằng/Đẹp "
-                   f"(layer ≤0.20mm) để hẹp đường về {narrow}mm.")
+    std_lw = round(nz * 1.05, 2)           # 0.42 cho vòi 0.4 — chuan, luon > layer (an toan -51)
+    p["top_surface_line_width"] = str(std_lw)
+    why.append(f"Mặt trên đường in CHUẨN {std_lw}mm (= vòi×1.05, mặc định Bambu/Orca cho vòi 0.4): "
+               f"đường đủ RỘNG để BẮC qua khe ruột → mặt trên đặc phẳng, KHÔNG lộ vân chéo ±45° "
+               f"(infill telegraphing). Trước hạ 0.25 là SAI — đường mảnh VÕNG xuống lưới ruột, "
+               f"chính là 'dấu' trên mặt. Kèm ruột đủ đặc + monotonic + Arachne (đã bật). Muốn "
+               f"mặt PHẲNG GƯƠNG: bật Ironing (Quality ▸ Ironing = Top surfaces).")
     if emit_tips:      # chi emit o lan EXPORT chinh — make_preset goi 4 lan (export+3 mode)
         r["tips"].append(
             "🔧 Mặt trên còn lấm tấm sau khi in? Nguyên nhân GỐC thường là dòng chảy chưa chuẩn — "
