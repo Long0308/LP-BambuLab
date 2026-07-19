@@ -2077,6 +2077,54 @@ def ams_advice(ams: list, colors: list | None = None) -> list:
     return out
 
 
+def support_strategy(model_type: str, ams: list | None = None) -> list:
+    """Cac CACH LAM SUPPORT theo VAT LIEU — user CHON (2026-07-19). Nghien cuu: Bambu wiki
+    (PLA/PETG mutual support: khac nhua khong dinh -> Z=0 boc sach, chi INTERFACE la nhua
+    khac, PETG do mvs 10) + dien dan (forum.bambulab settings-for-support-interface:
+    Z=0/spacing=0/1 lop/concentric + FLUSH nhieu keo khong yeu lop; reddit: tang Top Z
+    0.2->0.3 de go nhat). 2 nhom: KHAC vat lieu (mat dep nhat) va CUNG vat lieu (thoa hiep
+    mat-vs-de-go). Cai hop vat lieu dang co len dau (recommend). Keys deu trong SAFE_KEYS."""
+    ams = [str(t).upper() for t in (ams or [])]
+    fam = re.split(r"[-\s]+", (model_type or "").upper())[0]
+    is_matte = "MATTE" in (model_type or "").upper()
+    partner = {"PLA": "PETG", "PETG": "PLA"}.get(fam)
+    pslot = next((i + 1 for i, t in enumerate(ams[:4]) if partner and t.startswith(partner)), 0)
+    sslot = next((i + 1 for i, t in enumerate(ams[:4]) if t.startswith(fam)), 1)
+    out = []
+    if pslot:                                    # KHAC vat lieu — chi khi co doi ung THAT
+        out.append({
+            "id": "diff", "label": f"Interface {partner} — mặt đẹp nhất (khác vật liệu)",
+            "keys": {"enable_support": "1", "support_interface_filament": str(pslot),
+                     "support_top_z_distance": "0", "support_bottom_z_distance": "0",
+                     "support_interface_spacing": "0", "support_interface_pattern": "concentric"},
+            "why": (f"{fam} và {partner} KHÔNG dính hoá học (Bambu wiki) → interface {partner} ép khít "
+                    f"Z=0 vẫn BÓC SẠCH, mặt dưới nhẵn như mặt trên. Chỉ INTERFACE là {partner} (đế vẫn "
+                    f"{fam}) → ít đổi nozzle. Nhớ FLUSH nhiều khi đổi sang model (cộng đồng: PLA→PETG "
+                    f"~650, PETG→PLA ~250) — thiếu thì lớp dính interface yếu, gãy."
+                    + (" ⚠ Bambu chính thức chỉ test PLA Basic+PETG (KHÔNG Matte/Silk/CF); Matte cộng "
+                       "đồng vẫn dùng được — cân nhắc." if is_matte else "")),
+            "recommend": True})
+    out.append({                                 # CUNG vat lieu — uu tien MAT DEP
+        "id": "same_smooth", "label": f"Cùng {fam or 'nhựa'} — ưu tiên mặt đẹp (gỡ hơi chặt)",
+        "keys": {"enable_support": "1", "support_interface_filament": str(sslot),
+                 "support_top_z_distance": "0.15", "support_bottom_z_distance": "0.15",
+                 "support_interface_spacing": "0", "support_interface_pattern": "concentric"},
+        "why": ("Cùng nhựa DÍNH nhau nên luôn có đánh đổi. Z 0.15 + interface đặc (spacing 0) + "
+                "concentric → mặt tiếp xúc PHẲNG nhất, đổi lại gỡ hơi chặt (kìm/vặn nhẹ). Bật quạt "
+                "interface 100% giúp tách dễ hơn."),
+        "recommend": not pslot})
+    out.append({                                 # CUNG vat lieu — uu tien DE GO
+        "id": "same_easy", "label": f"Cùng {fam or 'nhựa'} — ưu tiên dễ gỡ (mặt hơi rỗ)",
+        "keys": {"enable_support": "1", "support_interface_filament": str(sslot),
+                 "support_top_z_distance": "0.25", "support_bottom_z_distance": "0.2",
+                 "support_interface_spacing": "0.3", "support_interface_pattern": "rectilinear_interlaced"},
+        "why": ("Z 0.25 (khe rộng) + interface thưa (spacing 0.3) + rectilinear → support RỜI hẳn, "
+                "gỡ tay dễ, đổi lại mặt hẫng hơi rỗ. Cộng đồng: tăng Top Z 0.2→0.3 là cách dễ gỡ "
+                "nhất. Hợp mặt khuất / cần tháo nhanh."),
+        "recommend": False})
+    return out
+
+
 def _apply_fil_sel(r: dict, fil_sel: str | None, color_sel: str | None) -> None:
     """Nhua NGUOI DUNG chon (Q1 2026-07-19) DAN DAT process: ep tran mvs = so chong
     ket cua CHINH cuon do (khong theo khai bao trong file — file co the la nhua khac),
@@ -2188,6 +2236,10 @@ def analyze(path: str, mode: str = "balanced", ams: list | None = None,
     for _it in r.get("ams_advice") or []:
         _it["on_plate"] = any(_hex_close(_it.get("color"), u) for u in _used)
     r["filament_check"] = filament_check(r)
+    # Cach lam SUPPORT theo vat lieu (user chon) — nhua model = cuon chon > khay dang chon
+    _mfam = (r.get("fil_sel") or {}).get("key") or r.get("plate_filament_type") or \
+            ((r.get("config") or {}).get("filament_type") or [""])[0]
+    r["support_strategies"] = support_strategy(_mfam, r.get("ams"))
     import os as _os
     nm = _os.path.splitext(_os.path.basename(path))[0][:20]
     r["export"] = make_preset(r, nm, mode)

@@ -590,8 +590,18 @@ def _slice_and_push(name, src_path, mode=None, push=True, plate=0, sel=None, ove
                                       fil_sel=fil_sel, color_sel=color_sel)
                 preset = dict(an["presets"][mode]["preset"])
             _apply_overrides(preset, overrides or {})
+            # Cach lam SUPPORT user chon (2026-07-19) -> ghi de ke ca khi giu support file
+            force_cfg = None
+            _ss = (overrides or {}).get("sup_strat")
+            if _ss:
+                _mfam = fil_sel or ((_ams_tray_types() or [""]) + [""])[0]
+                _strat = next((s for s in analyzer.support_strategy(_mfam, _ams_tray_types())
+                               if s["id"] == _ss), None)
+                if _strat:
+                    force_cfg = _strat["keys"]
             tuned = src_path + f".{mode or 'edit'}.3mf"
-            optimize_e2e.apply_preset(src_path, tuned, preset, extra_cfg=extra_cfg)
+            optimize_e2e.apply_preset(src_path, tuned, preset,
+                                      extra_cfg=extra_cfg, force_cfg=force_cfg)
             src_path = tuned
         with UPJOB_LOCK:
             UPJOB.update(state="slicing", name=name, msg="Đang slice trên máy tính…", stats=None)
@@ -2289,9 +2299,18 @@ function fillReview(){
     +(fs.mvs?(' · trần chảy <b>'+esc(fs.mvs)+' mm³/s</b>'):'')+(fs.temp?(' · nhiệt <b>'+esc(fs.temp)+'°C</b>'):'')
     +' — sửa ô nào thì áp ô đó, để trống = giữ theo phân tích.'; }
 }
+/* Chon cach lam support -> cap nhat giai thich + luu de gui khi slice */
+function onSupStrat(){
+  const v=(document.getElementById("supstrat")||{}).value||"";
+  window.__supStrat=v;
+  const s=(window.__supStrats||[]).find(x=>x.id===v);
+  const el=document.getElementById("supstratwhy");
+  if(el) el.textContent = s ? s.why : "Giữ nguyên cấu hình support trong file.";
+}
 function ovQS(){
   const g=id=>document.getElementById(id), t=id=>{const e=g(id);return e&&e.dataset&&e.dataset.touched;};
   let q="";
+  if(window.__supStrat) q+="&sup_strat="+encodeURIComponent(window.__supStrat);   // cach lam support da chon
   if(t("ov_layer")&&g("ov_layer").value) q+="&ov_layer="+encodeURIComponent(g("ov_layer").value);
   if(t("ov_outer")&&g("ov_outer").value) q+="&ov_outer="+encodeURIComponent(g("ov_outer").value);
   if(t("ov_support")) q+="&ov_support="+(g("ov_support").checked?"1":"0");
@@ -2500,6 +2519,23 @@ function render(j){
       for(const it of (fc.issues||[])) h+='<div class="iss" style="margin-top:7px">⚠ '+esc(it)+'</div>';
       if(!warn) h+='<div class="tip" style="margin-top:7px">File đã đặt đúng số an toàn cho cuộn này — cứ in.</div>';
       h+='<button class="btn" style="margin-top:9px" onclick="dlFilFix()">⬇ Tải preset nhựa ĐÃ SỬA (số an toàn) — import tab Filament</button>';
+      h+='</div>';
+    }
+  }
+  /* ===== CACH LAM SUPPORT theo vat lieu (user hoi 2026-07-19) — CHON option. Nguon:
+     Bambu wiki PLA/PETG mutual support + forum.bambulab. Mac dinh GIU support cua file
+     (an toan cho file nhieu mau); chon 1 cach thi ap khi slice. ===== */
+  { const ss=j.support_strategies||[];
+    if(ss.length){
+      window.__supStrats=ss; window.__supStrat="";
+      const rec=ss.find(s=>s.recommend)||ss[0];
+      h+='<div class="card"><h3 style="margin-top:0">🩹 Cách làm support <span class="mut" style="font-size:12px">· theo vật liệu — chọn cách hợp nhất, dễ gỡ + mặt đẹp</span></h3>';
+      h+='<select id="supstrat" onchange="onSupStrat()" '+IST+' style="width:100%;padding:11px">';
+      h+='<option value="" selected>Giữ support của file (mặc định)</option>';
+      for(const s of ss) h+='<option value="'+esc(s.id)+'">'+esc(s.label)+(s.recommend?' ★ đề xuất':'')+'</option>';
+      h+='</select>';
+      h+='<div id="supstratwhy" class="mut" style="margin-top:9px;font-size:12.5px;line-height:1.55">Chọn 1 cách ở trên để xem giải thích + áp khi Slice. Đề xuất theo khay hiện tại: <b>'+esc(rec.label)+'</b>.</div>';
+      h+='<div class="mut" style="font-size:11.5px;margin-top:6px">Áp khi bấm <b>Slice + đẩy xuống</b>/<b>Slice tải về</b>. Nguồn: Bambu wiki (PLA↔PETG không dính → Z=0 bóc sạch) + forum.bambulab (cùng nhựa: đánh đổi mặt-vs-gỡ).</div>';
       h+='</div>';
     }
   }
@@ -3152,6 +3188,9 @@ class H(BaseHTTPRequestHandler):
         overrides = {k: unquote(q.get("ov_" + k, [""])[0]).strip() for k in
                      ("layer", "outer", "support", "sup_angle", "brim", "brim_w")}
         overrides = {k: v for k, v in overrides.items() if v != ""}
+        _ss = unquote(q.get("sup_strat", [""])[0]).strip()   # cach lam support user chon
+        if _ss:
+            overrides["sup_strat"] = _ss
         threading.Thread(target=_slice_and_push,
                          args=(name, src, mode, push, plate, sel, overrides),
                          daemon=True).start()

@@ -183,7 +183,7 @@ def _file_has_support(cfg: dict) -> bool:
 
 
 def apply_preset(src: str, dst: str, preset: dict, drop_vlh: bool = True,
-                 extra_cfg: dict | None = None) -> None:
+                 extra_cfg: dict | None = None, force_cfg: dict | None = None) -> None:
     """Ghi preset vao project_settings NHUNG trong .3mf + go Variable Layer Height.
 
     Phai sua config nhung, KHONG dung --load-settings: CLI doi 3 file config FULL
@@ -191,19 +191,28 @@ def apply_preset(src: str, dst: str, preset: dict, drop_vlh: bool = True,
 
     extra_cfg: cac key config GHI TRUC TIEP ngoai SAFE_KEYS (vd filament_colour cho
     mau — #4 2026-07-19), moi gia tri la list dung schema Bambu.
+    force_cfg: key GHI DE KE CA khi dang GIU support cua file (user CHU DONG chon cach
+    lam support — 2026-07-19); thang cả logic preserve.
     """
     with zipfile.ZipFile(src) as zin:        # with: khong leak handle khi json/KeyError
         cfg = json.loads(zin.read(CFG).decode("utf-8", "ignore"))
         preset = dict(preset)                # khong sua ban goc nguoi goi
+        _force = force_cfg or {}
         if _file_has_support(cfg):           # GIU support cua file -> khong ghi de gay -51/-101
             for k in _SUPPORT_FILE_KEYS:
-                preset.pop(k, None)
+                if k not in _force:          # tru khi user CHU DONG chon cach support khac
+                    preset.pop(k, None)
         for k, v in preset.items():
             if k not in SAFE_KEYS:
                 continue
             old = cfg.get(k)
             if isinstance(old, list) and not isinstance(v, list):
                 v = [v] * max(len(old), 1)   # list rong (config la) -> van set 1 phan tu
+            cfg[k] = v
+        for k, v in _force.items():          # user chon cach support -> ghi de (thang preserve)
+            old = cfg.get(k)
+            if isinstance(old, list) and not isinstance(v, list):
+                v = [v] * max(len(old), 1)
             cfg[k] = v
         for k, v in (extra_cfg or {}).items():
             old = cfg.get(k)
