@@ -161,11 +161,15 @@ def _hm(s: int | None) -> str:
     return f"{s // 3600}h {(s % 3600) // 60:02d}m"
 
 
-def apply_preset(src: str, dst: str, preset: dict, drop_vlh: bool = True) -> None:
+def apply_preset(src: str, dst: str, preset: dict, drop_vlh: bool = True,
+                 extra_cfg: dict | None = None) -> None:
     """Ghi preset vao project_settings NHUNG trong .3mf + go Variable Layer Height.
 
     Phai sua config nhung, KHONG dung --load-settings: CLI doi 3 file config FULL
     tach roi, sai la segfault (BambuStudio issue #9968).
+
+    extra_cfg: cac key config GHI TRUC TIEP ngoai SAFE_KEYS (vd filament_colour cho
+    mau — #4 2026-07-19), moi gia tri la list dung schema Bambu.
     """
     with zipfile.ZipFile(src) as zin:        # with: khong leak handle khi json/KeyError
         cfg = json.loads(zin.read(CFG).decode("utf-8", "ignore"))
@@ -176,6 +180,13 @@ def apply_preset(src: str, dst: str, preset: dict, drop_vlh: bool = True) -> Non
             if isinstance(old, list) and not isinstance(v, list):
                 v = [v] * max(len(old), 1)   # list rong (config la) -> van set 1 phan tu
             cfg[k] = v
+        for k, v in (extra_cfg or {}).items():
+            old = cfg.get(k)
+            # mau/gia tri per-filament: giu DU so cuon (file da mau) — set het cung mau
+            if isinstance(old, list) and old:
+                cfg[k] = [v[0] if isinstance(v, list) else v] * len(old)
+            else:
+                cfg[k] = v if isinstance(v, list) else [v]
         with zipfile.ZipFile(dst, "w", zipfile.ZIP_DEFLATED) as zout:
             for it in zin.infolist():
                 if drop_vlh and it.filename.lower() == VLH:
@@ -187,10 +198,13 @@ def apply_preset(src: str, dst: str, preset: dict, drop_vlh: bool = True) -> Non
 
 
 def run_modes(src: str, workdir: str, modes=("fast", "balanced", "quality"),
-              plate: int = 1) -> dict:
+              plate: int = 1, fil_sel: str | None = None,
+              color_sel: str | None = None) -> dict:
     """Slice BASELINE + tung che do -> bang so sanh bang SO THAT (khong doan).
 
     plate: khay de slice so sanh (file nhieu khay chon duoc khay — user 2026-07-16).
+    fil_sel/color_sel: nhua NGUOI DUNG chon -> so sanh 3 che do dung CUNG nhua voi
+    phan tich process (tran mvs/nhiet theo cuon do — #3 2026-07-19).
     Che do nao VUOT NGAN SACH (+1h30 so voi default, do bang total_predication =
     so GUI) thi tu CAT theo trim_ladder + slice lai den khi lot — moi buoc cat ghi
     ro da cat gi va tiet kiem BAO NHIEU do that.
@@ -212,9 +226,10 @@ def run_modes(src: str, workdir: str, modes=("fast", "balanced", "quality"),
         return {"error": res}
     rep["baseline"] = {**st, "secs": st.get("total_secs") or _secs(st.get("time"))}
 
-    an = analyzer.analyze(base, plate=plate)
+    an = analyzer.analyze(base, plate=plate, fil_sel=fil_sel, color_sel=color_sel)
     rep["analysis"] = {k: an.get(k) for k in
                        ("mesh", "flow", "variable_layer", "issues", "rotations")}
+    rep["fil_sel"] = an.get("fil_sel")     # nhua dan dat so sanh -> UI hien ro
 
     b = rep["baseline"]
     tgt = (b["secs"] + BUDGET_S) if b.get("secs") else None        # muc tieu +1h30

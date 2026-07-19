@@ -86,6 +86,49 @@ def plates_3mf(z: zipfile.ZipFile) -> list:
     return sorted(out, key=lambda p: p["id"])
 
 
+def _plate_primary(ms: str, object_ids: list, cols: list, types: list):
+    """(mau, loai) filament CHINH khay dung: extruder NHIEU NHAT cua object/part khay
+    (model_settings) -> filament_colour/type[idx-1]. Nhieu vat den + it vat cam thi
+    ra DEN. (None, None) neu khong doc duoc. (bug user 2026-07-19: mau phai theo khay)."""
+    if not ms or not object_ids:
+        return None, None
+    exs = []
+    for oid in object_ids:
+        om = re.search(r'<object id="' + re.escape(str(oid)) + r'".*?</object>', ms, re.S)
+        if om:
+            exs += [int(x) for x in re.findall(r'key="extruder"\s+value="(\d+)"', om.group(0))]
+    if not exs:
+        return None, None
+    from collections import Counter
+    idx = Counter(exs).most_common(1)[0][0]        # extruder dung nhieu nhat tren khay
+    col = cols[idx - 1] if 1 <= idx <= len(cols) else None
+    typ = types[idx - 1] if 1 <= idx <= len(types) else None
+    return col, typ
+
+
+def plate_fil(path: str, plate: int | None) -> tuple:
+    """(mau, loai) filament CHINH khay `plate` trong .3mf — de MAC DINH chon dung khe
+    AMS theo KHAY. (None, None) neu khong doc duoc / khong phai .3mf nhieu khay."""
+    try:
+        with zipfile.ZipFile(path) as z:
+            cfg = json.loads(z.read("Metadata/project_settings.config").decode("utf-8", "ignore"))
+            ms = z.read("Metadata/model_settings.config").decode("utf-8", "ignore")
+    except (OSError, ValueError, KeyError, zipfile.BadZipFile):
+        return None, None
+    cols = cfg.get("filament_colour") or []
+    types = cfg.get("filament_type") or []
+    blk = None
+    for b in re.findall(r"<plate>.*?</plate>", ms, re.S):
+        m = re.search(r'plater_id"\s+value="(\d+)"', b)
+        if m and int(m.group(1)) == (plate or 1):
+            blk = b
+            break
+    if blk is None:
+        return None, None
+    oids = re.findall(r'object_id"\s+value="(\d+)"', blk)
+    return _plate_primary(ms, oids, cols, types)
+
+
 def load_3mf_tris(z: zipfile.ZipFile, names: list, notes: list | None = None,
                   only_objects: list | None = None) -> list:
     """Doc mesh trong .3mf va ap transform xoay/di chuyen cua Bambu Studio.
@@ -536,7 +579,8 @@ def analyze_3mf(path: str, color: str | None = None, plate: int | None = None) -
             "sparse_infill_density", "sparse_infill_pattern", "enable_support", "support_type",
             "seam_position", "seam_slope_type", "outer_wall_speed", "inner_wall_speed",
             "sparse_infill_speed", "top_shell_layers", "bottom_shell_layers",
-            "filament_type")}   # filament_type: de tu phat hien cap PLA/PETG cho interface
+            "filament_type",     # filament_type: de tu phat hien cap PLA/PETG cho interface
+            "filament_colour")}  # mau khai bao trong file -> khop khe AMS that (default #2/#3)
 
         # KHAY: file .3mf co the co nhieu khay -> phai tach, gop lai la ra so RAC
         plates = plates_3mf(z)
@@ -555,6 +599,19 @@ def analyze_3mf(path: str, color: str | None = None, plate: int | None = None) -
                     f". Đang phân tích khay {cur['id']} ({cur['name']}) — mỗi khay in riêng 1 lần, "
                     "chọn tab khay khác để xem số của khay đó.")
 
+        # MAU + NHUA THEO KHAY dang chon (khay 2 toan vat den -> mau/anh xoay/default
+        # deu la den, KHONG phai filament #1 toan file — bug user 2026-07-19). Doc
+        # extruder tung object/part cua khay tu model_settings -> filament_colour/type.
+        try:
+            _ms = z.read("Metadata/model_settings.config").decode("utf-8", "ignore")
+        except (KeyError, OSError):
+            _ms = ""
+        p_col, p_type = _plate_primary(_ms, cur["objects"] if cur else [],
+                                       cfg.get("filament_colour") or [],
+                                       cfg.get("filament_type") or [])
+        res["plate_color"] = p_col
+        res["plate_filament_type"] = p_type
+
         # mesh — doc qua load_3mf_tris de AP TRANSFORM xoay cua Bambu Studio
         tris = load_3mf_tris(z, names, notes=res["tips"],
                              only_objects=(cur["objects"] if cur else None))
@@ -566,7 +623,8 @@ def analyze_3mf(path: str, color: str | None = None, plate: int | None = None) -
                 res["thin"] = thin_walls(tris)
             if len(tris) <= ROT_MAX_TRIS:
                 res["rotations"] = try_rotations(tris)
-                res["rot_preview"] = rot_preview(tris, res["rotations"], color)
+                # anh xoay TO mau THEO KHAY (den cho khay 2), khong phai mau file/AMS #1
+                res["rot_preview"] = rot_preview(tris, res["rotations"], p_col or color)
             else:
                 res["tips"].append(f"Mesh {len(tris):,} tam giác vượt ngưỡng {ROT_MAX_TRIS:,} — bỏ quét xoay để không treo server.")
 
@@ -1259,10 +1317,11 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced",
     # inherits khop theo layer height (base preset that cua A1), khong cung 1 gia tri
     base = {0.28: "0.28mm Extra Draft", 0.24: "0.24mm Draft", 0.20: "0.20mm Standard",
             0.16: "0.16mm Optimal", 0.12: "0.12mm Fine"}.get(lh, "0.20mm Standard")
-    # ten nhua: khay AMS THAT (slot 1) > khai bao trong file > mac dinh PLA
+    # ten nhua: NGUOI DUNG chon (fil_sel) > khay AMS that (slot 1) > khai bao file > PLA
+    _sel = r.get("fil_sel") or {}
     _ams0 = (r.get("ams") or [None])[0]
     _cft = ((r.get("config") or {}).get("filament_type") or [None])[0]
-    pname = preset_name(mode, lh, filament=_ams0 or _cft or "PLA")
+    pname = preset_name(mode, lh, filament=_sel.get("key") or _ams0 or _cft or "PLA")
     p = {
         "from": "User",
         "inherits": f"{base} @BBL A1",
@@ -1304,14 +1363,18 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced",
         why.append(f"Tốc độ ≤{safe} mm/s: ở layer {lh}mm, nhựa {mvs} mm³/s chỉ cho tối đa "
                    f"{vmax} mm/s. Đặt cao hơn là số ảo — máy tự hãm."
                    + (f" Thành ngoài {outer} để mặt mịn." if M["outer"] else
-                      " Thành ngoài cũng chạy hết tốc (ưu tiên nhanh)."))
+                      " Thành ngoài cũng chạy hết tốc (ưu tiên nhanh).")
+                   + (f" Trần chảy {int(mvs)} mm³/s lấy theo cuộn BẠN CHỌN ({_sel['key']}) — "
+                      f"số chống kẹt của chính cuộn đó, không theo khai báo trong file."
+                      if _sel.get("key") and _sel.get("mvs") else ""))
 
     # Nhua than in — dung cho threshold support (3), interface (3b), brim/draft (4)
     ft = [str(t).upper() for t in ((r.get("config") or {}).get("filament_type") or [])]
-    body = ft[0] if ft else ""
+    # nhua CHON (fil_sel) uu tien: warping/brim tinh theo cuon THAT se in, khong theo file.
+    body = _sel.get("key") or (ft[0] if ft else "")
     # filament_type Bambu KHONG co space, dung DAU GACH: ABS-GF, ASA-CF, PLA-CF...
-    # -> tach theo "-" de bat ca dong soi gia cuong (de venh nhat tren A1 khung ho).
-    fam = body.split("-")[0] if body else ""
+    # bang FIL_EXPORT dung KHOANG TRANG (PLA MATTE) -> tach ca "-" lan " " de bat ho nhua.
+    fam = re.split(r"[-\s]+", body)[0] if body else ""
     warpy = fam in ("ABS", "ASA")
     # BRIM-PRONE (wiki Bambu auto-brim): nhua ung suat nhiet cao can brim RONG hon —
     # ABS/ASA/PC/PA + moi loai soi gia cuong CF/GF (PLA-CF, PET-CF, PA-CF...). TPU thi
@@ -1991,17 +2054,59 @@ def ams_advice(ams: list, colors: list | None = None) -> list:
     return out
 
 
+def _apply_fil_sel(r: dict, fil_sel: str | None, color_sel: str | None) -> None:
+    """Nhua NGUOI DUNG chon (Q1 2026-07-19) DAN DAT process: ep tran mvs = so chong
+    ket cua CHINH cuon do (khong theo khai bao trong file — file co the la nhua khac),
+    va luu lai de dat ten preset + mau. Khong chon / khong co trong bang -> giu nguyen."""
+    if not fil_sel:
+        return
+    hit = _fil_export(fil_sel)
+    if not hit:
+        return
+    key, ex = hit
+    safe = ex["safe"]
+    try:
+        mvs = float(safe.get("filament_max_volumetric_speed") or 0) or None
+    except (TypeError, ValueError):
+        mvs = None
+    r["fil_sel"] = {"key": key, "input": fil_sel, "color": (color_sel or "").strip(),
+                    "mvs": mvs, "temp": safe.get("nozzle_temperature"),
+                    "flow": safe.get("filament_flow_ratio"), "bed": safe.get("hot_plate_temp"),
+                    "verified": ex["verified"], "inherits": ex["inherits"], "why": ex["why"]}
+    if not mvs:
+        return
+    fl = r.get("flow")
+    if fl and fl.get("layer_height") and fl.get("line_width"):
+        fl = dict(fl)
+        fl["mvs"] = mvs
+        fl["v_max"] = round(mvs / (fl["layer_height"] * fl["line_width"]))
+        fl["mvs_from_sel"] = True
+        r["flow"] = fl
+    else:                                    # file thieu flow -> dung nozzle THAT + layer nominal
+        nz, lw = _nozzle_lw(r.get("config") or {})
+        try:
+            lh = float((r.get("config") or {}).get("layer_height") or 0.2)
+        except (TypeError, ValueError):
+            lh = 0.2
+        if lw and lh:
+            r["flow"] = {"mvs": mvs, "nozzle": nz, "line_width": lw, "layer_height": lh,
+                         "v_max": round(mvs / (lh * lw)), "over_ceiling": {}, "mvs_from_sel": True}
+
+
 def analyze(path: str, mode: str = "balanced", ams: list | None = None,
             color: str | None = None, ams_colors: list | None = None,
-            plate: int | None = None) -> dict:
+            plate: int | None = None, fil_sel: str | None = None,
+            color_sel: str | None = None) -> dict:
     """ams: loai nhua THAT trong khay AMS (tu MQTT, vd ['PLA LITE','PETG BASIC']).
     ams_colors: hex mau tung khay (cung thu tu) de bat mau DEN -> canh bao clog.
     plate: so KHAY trong .3mf (None = khay 1). File nhieu khay phai tach tung khay.
-    None/[] = khong sync duoc may -> chi suy theo khai bao trong file."""
+    None/[] = khong sync duoc may -> chi suy theo khai bao trong file.
+    fil_sel/color_sel: nhua + mau NGUOI DUNG chon -> dan dat process (mvs/nhiet/ten/mau)."""
     r = (analyze_stl(path, color) if path.lower().endswith(".stl")
          else analyze_3mf(path, color, plate))
     r["ams"] = [str(t).upper() for t in (ams or []) if t]
     r["ams_advice"] = ams_advice(r["ams"], ams_colors)
+    _apply_fil_sel(r, fil_sel, color_sel)
     import os as _os
     nm = _os.path.splitext(_os.path.basename(path))[0][:20]
     r["export"] = make_preset(r, nm, mode)

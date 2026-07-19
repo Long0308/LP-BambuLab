@@ -101,6 +101,23 @@ def _kill_tree(pid: int) -> None:
                    capture_output=True, check=False)
 
 
+def _gui_running() -> bool:
+    """Bambu Studio GUI dang mo? CLI dung CHUNG exe voi GUI -> mo GUI luc slice hay
+    lam CLI conflict/treo/crash (return_code=None). Detect de bao user DONG Studio."""
+    try:
+        out = subprocess.run(
+            ["tasklist", "/FI", "IMAGENAME eq bambu-studio.exe", "/NH"],
+            capture_output=True, text=True, timeout=10, check=False).stdout or ""
+        return "bambu-studio.exe" in out.lower()
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+# Goi y chung khi slice loi return_code=None (nguyen nhan #1 la GUI dang mo).
+GUI_HINT = ("Bambu Studio (giao diện) đang MỞ — CLI dùng chung file exe với giao diện "
+            "nên slice hay lỗi. ĐÓNG hẳn Bambu Studio rồi bấm lại.")
+
+
 def slice_3mf(src: str, workdir: str, timeout: int = 1800,
               plate: int = 0, retries: int = 2) -> tuple[bool, str, dict]:
     """Slice `src` -> (ok, duong_dan_gcode3mf_hoac_loi, stats).
@@ -131,6 +148,14 @@ def slice_3mf(src: str, workdir: str, timeout: int = 1800,
                 os.remove(p)
             except OSError:
                 pass
+        def _read_result():
+            """Doc result.json -> dict, hoac None neu chua ghi xong / JSON do dang."""
+            try:
+                with open(res_path, encoding="utf-8") as f:
+                    return json.load(f)
+            except (OSError, ValueError):
+                return None
+
         try:
             with CLI_LOCK, open(os.path.join(workdir, "cli.log"), "w") as logf:
                 proc = subprocess.Popen(
@@ -140,8 +165,18 @@ def slice_3mf(src: str, workdir: str, timeout: int = 1800,
                 t0 = time.time()
                 while proc.poll() is None:
                     if os.path.isfile(res_path) and os.path.isfile(out_path):
-                        time.sleep(3)          # cho CLI ghi not/flush file
-                        if proc.poll() is None:  # van treo du xong viec -> quirk 1
+                        # CLI hay TREO O BUOC THOAT du da ghi xong. TRUOC day sleep(3)
+                        # roi kill ngay -> co luc result.json con do dang -> doc ra
+                        # return_code=None GIA (bug that: mode 'quality' fail 2026-07-19).
+                        # Nay cho result.json PARSE duoc (co return_code) roi moi kill.
+                        for _ in range(12):
+                            if proc.poll() is not None:
+                                break
+                            rr = _read_result()
+                            if rr and rr.get("return_code") is not None:
+                                break
+                            time.sleep(1)
+                        if proc.poll() is None:  # van treo du da ghi xong -> quirk 1
                             _kill_tree(proc.pid)
                         break
                     if time.time() - t0 > timeout:
@@ -151,13 +186,15 @@ def slice_3mf(src: str, workdir: str, timeout: int = 1800,
         except OSError as e:
             return False, f"Khong chay duoc CLI: {e}", {}
 
-        rc, err = None, ""
-        try:
-            with open(res_path, encoding="utf-8") as f:
-                r = json.load(f)
-            rc, err = r.get("return_code"), r.get("error_string") or ""
-        except (OSError, ValueError):
-            pass
+        # result.json co the con dang flush sau khi process thoat/bi kill -> doc lai
+        # vai lan truoc khi ket luan loi (chong return_code=None gia do doc som).
+        r = None
+        for _ in range(6):
+            r = _read_result()
+            if r is not None:
+                break
+            time.sleep(1)
+        rc, err = (r.get("return_code"), r.get("error_string") or "") if r else (None, "")
         if rc == 0 and os.path.isfile(out_path):
             st = stats_from_gcode3mf(out_path, plate=plate or 1)
             # total_predication = so GUI hien thi (gom flush/moi) — dung de doi chieu
@@ -167,7 +204,12 @@ def slice_3mf(src: str, workdir: str, timeout: int = 1800,
                 st["total_secs"] = int(sp["total_predication"])
             return True, out_path, st
         err_last = f"return_code={rc}: {err}"     # quirk 2: crash ngau nhien -> retry
-    return False, f"Slice loi ({err_last})", {}
+        if _try < max(1, retries) - 1:
+            time.sleep(5)                          # cho exe ranh truoc khi thu lai
+    msg = f"Slice lỗi ({err_last})"
+    if _gui_running():                             # nguyen nhan #1: GUI dang mo
+        msg += " — " + GUI_HINT
+    return False, msg, {}
 
 
 if __name__ == "__main__":

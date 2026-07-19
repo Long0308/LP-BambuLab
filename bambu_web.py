@@ -381,21 +381,108 @@ def _ams_tray_colors():
     return out
 
 
-def _run_analyze(name, src_path, plate=None):
+def _peek_file_fil(src_path):
+    """Doc NHANH filament_type + filament_colour khai bao trong .3mf (khong phan tich
+    full mesh) -> de mac dinh chon khe AMS khop nhat. Tra (types, colours)."""
+    try:
+        import zipfile
+        with zipfile.ZipFile(src_path) as z:
+            for n in z.namelist():
+                if n.lower().endswith("project_settings.config"):
+                    cfg = json.loads(z.read(n).decode("utf-8", "ignore"))
+                    return (cfg.get("filament_type") or [], cfg.get("filament_colour") or [])
+    except (OSError, ValueError, KeyError):
+        pass
+    return [], []
+
+
+def _hex_dist(a, b):
+    """Khoang cach mau RGB (Euclid) — de tim khe AMS gan mau file nhat. Sai -> vo cung."""
+    def rgb(h):
+        h = (h or "").lstrip("#")[:6]
+        try:
+            return int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+        except (ValueError, IndexError):
+            return None
+    ra, rb = rgb(a), rgb(b)
+    if not ra or not rb:
+        return 1e9
+    return sum((x - y) ** 2 for x, y in zip(ra, rb)) ** 0.5
+
+
+def _resolve_fil(src_path, sel, plate=None):
+    """Nhua NGUOI DUNG chon (Q1 2026-07-19) -> (fil_sel, color_sel, pick_value).
+
+    Uu tien: khe AMS cu the (slot:N) > nhua generic (fil=KEY) > MAC DINH tu AMS that
+    khop MAU THEO KHAY dang chon (khay 2 toan vat den -> khe den, KHONG phai filament
+    #1 toan file — bug user 2026-07-19), khong khop thi khe 1. Khong sync AMS + khong
+    chon -> (None, None, None): giu hanh vi cu (process theo khai bao trong file).
+    """
+    fils = _ams_filament_presets()
+    sel = sel or {}
+    if sel.get("slot"):
+        t = next((x for x in fils if x["slot"] == sel["slot"]), None)
+        if t:
+            return t["sub"], t["color"], f"slot:{t['slot']}"
+    if sel.get("fil"):
+        return sel["fil"], (sel.get("color") or ""), sel["fil"]
+    if fils:
+        pcol, _ = analyzer.plate_fil(src_path, plate)   # mau CHINH cua KHAY dang chon
+        if not pcol:                                     # fallback: filament dau file
+            _, fcols = _peek_file_fil(src_path)
+            pcol = (fcols or [None])[0]
+        best = min(fils, key=lambda t: _hex_dist(pcol, t.get("color"))) if pcol else fils[0]
+        return best["sub"], best["color"], f"slot:{best['slot']}"
+    return None, None, None
+
+
+def _apply_overrides(preset: dict, ov: dict) -> None:
+    """Ap chinh sua NGUOI DUNG truoc khi in (#4 2026-07-19): layer/toc do/support/brim.
+    Chi ghi field user THAT SU doi (khac rong) -> giu quyet dinh analyzer cho phan con
+    lai. Cac key deu nam trong SAFE_KEYS nen apply_preset ghi duoc."""
+    if not ov:
+        return
+    def _num(x):
+        try:
+            return float(x)
+        except (TypeError, ValueError):
+            return None
+    v = _num(ov.get("outer"))
+    if v:
+        preset["outer_wall_speed"] = [str(int(v))]
+    if ov.get("support") in ("0", "1"):
+        preset["enable_support"] = ov["support"]      # config dung chuoi '0'/'1'
+    a = _num(ov.get("sup_angle"))
+    if a:
+        preset["support_threshold_angle"] = str(int(a))
+    if ov.get("brim"):
+        preset["brim_type"] = ov["brim"]              # no_brim/outer_only/outer_and_inner/auto_brim
+    bw = _num(ov.get("brim_w"))
+    if bw is not None:
+        preset["brim_width"] = str(bw)
+    lh = _num(ov.get("layer"))
+    if lh:
+        preset["layer_height"] = str(lh)
+
+
+def _run_analyze(name, src_path, plate=None, sel=None):
     """Phan tich chay NEN — file lon (300k+ tam giac) mat 30-60s, khong the
     giu request HTTP mo lau vay (Tailscale/trinh duyet cat -> tuong treo).
 
-    plate: khay muon phan tich (file nhieu khay — tab khay goi lai voi so nay)."""
+    plate: khay muon phan tich (file nhieu khay — tab khay goi lai voi so nay).
+    sel: nhua NGUOI DUNG chon {slot|fil|color} -> DAN DAT process (#2/#3 2026-07-19)."""
     try:
         _fils = _ams_filament_presets()                  # preset filament tu AMS that
+        fil_sel, color_sel, pick = _resolve_fil(src_path, sel, plate)
         res = analyzer.analyze(src_path, ams=_ams_tray_types(),
                                color=_ams_first_color(), ams_colors=_ams_tray_colors(),
-                               plate=plate)
+                               plate=plate, fil_sel=fil_sel, color_sel=color_sel)
         res["ok"] = True
         res["name"] = name
         res["ams_filaments"] = _fils
         # Combo box nhua (T3): danh sach key xuat duoc preset an toan
         res["fil_options"] = list(analyzer.FIL_EXPORT.keys())
+        res["fil_pick"] = pick                           # value de UI preselect dropdown nhua
         # Tab khay (T2): Bambu Studio da render san Metadata/plate_N.png trong .3mf
         # -> boc ra dia (file goc bi xoa sau phan tich), UI lay qua /api/plateimg.
         try:
@@ -435,16 +522,18 @@ def _run_analyze(name, src_path, plate=None):
             pass
 
 
-def _run_optimize(name, src_path, plate=None):
+def _run_optimize(name, src_path, plate=None, sel=None):
     """Slice BASELINE + 3 che do -> bao cao so sanh bang SO THAT. Khong dung may in.
 
-    plate: khay dang chon tren tab (file nhieu khay) — bao cao tinh dung khay do."""
+    plate: khay dang chon tren tab (file nhieu khay) — bao cao tinh dung khay do.
+    sel: nhua NGUOI DUNG chon -> so sanh dung cung nhua voi phan tich (#3 2026-07-19)."""
     try:
         with OPTJOB_LOCK:
             OPTJOB.update(state="running", name=name,
                           msg="Slice baseline + 3 chế độ (4 lần slice)…", report=None)
+        fil_sel, color_sel, _ = _resolve_fil(src_path, sel, plate)
         rep = optimize_e2e.run_modes(src_path, os.path.join(SLICE_DIR, "e2e"),
-                                     plate=plate or 1)
+                                     plate=plate or 1, fil_sel=fil_sel, color_sel=color_sel)
         with OPTJOB_LOCK:
             if rep.get("error"):
                 OPTJOB.update(state="error", msg=rep["error"])
@@ -460,13 +549,15 @@ def _run_optimize(name, src_path, plate=None):
             pass
 
 
-def _slice_and_push(name, src_path, mode=None, push=True, plate=0):
+def _slice_and_push(name, src_path, mode=None, push=True, plate=0, sel=None, overrides=None):
     """Chay nen: slice file du an (config A1 that + khay AMS) -> day .gcode.3mf
     xuong may in (push=True) HOAC giu lai cho user TAI VE (push=False).
 
     push=False: user mo file trong Bambu Studio/Handy de REVIEW roi tu bam in —
     khong tu day xuong may. Toan bo do 1 cu bam upload cua NGUOI DUNG khoi dong.
     plate>0: file nhieu khay — slice + bao so DUNG khay user dang chon tren tab.
+    sel: nhua NGUOI DUNG chon -> preset che do theo cuon do + ghi MAU (#2/#3/#4).
+    overrides: chinh sua truoc in (layer/toc do/support/brim — #4 2026-07-19).
     """
     base = re.sub(r"\.(3mf|stl)$", "", name, flags=re.I)
     out_name = base + ".gcode.3mf"
@@ -480,15 +571,27 @@ def _slice_and_push(name, src_path, mode=None, push=True, plate=0):
             wrapped = src_path + ".3mf"
             mesh_info = stl_to_3mf.wrap(src_path, wrapped)
             src_path = wrapped
-        if mode:
-            # Slice theo CHE DO user chon: ap preset suy luan vao config nhung roi slice
+        # Nhua + mau NGUOI DUNG chon (dan dat preset che do + ghi mau vao ban in).
+        fil_sel, color_sel, _ = _resolve_fil(src_path, sel, plate or None)
+        # MAU: chi ghi khi file 1 nhua (da mau -> khong dam len het thanh 1 mau).
+        _, _fcols = _peek_file_fil(src_path)
+        _single = len([c for c in (_fcols or []) if c]) <= 1
+        extra_cfg = ({"filament_colour": [color_sel], "default_filament_colour": [color_sel]}
+                     if color_sel and _single else None)
+        if mode or overrides or extra_cfg:
+            # Ap CHE DO (theo cuon chon) + chinh sua user + mau vao config nhung roi slice
             with UPJOB_LOCK:
                 UPJOB.update(state="slicing", name=name,
-                             msg=f"Đang áp cấu hình chế độ + slice…", stats=None)
+                             msg="Đang áp cấu hình + slice…", stats=None)
             import optimize_e2e
-            an = analyzer.analyze(src_path, mode, ams=_ams_tray_types())
-            tuned = src_path + f".{mode}.3mf"
-            optimize_e2e.apply_preset(src_path, tuned, an["presets"][mode]["preset"])
+            preset = {}
+            if mode:
+                an = analyzer.analyze(src_path, mode, ams=_ams_tray_types(),
+                                      fil_sel=fil_sel, color_sel=color_sel)
+                preset = dict(an["presets"][mode]["preset"])
+            _apply_overrides(preset, overrides or {})
+            tuned = src_path + f".{mode or 'edit'}.3mf"
+            optimize_e2e.apply_preset(src_path, tuned, preset, extra_cfg=extra_cfg)
             src_path = tuned
         with UPJOB_LOCK:
             UPJOB.update(state="slicing", name=name, msg="Đang slice trên máy tính…", stats=None)
@@ -2156,6 +2259,33 @@ async function dlFil(){
   }catch(e){toast("Lỗi tải preset: "+e);}
 }
 function esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;");}
+/* #4: panel "Xem lai + chinh truoc khi in" — style o nhap + 1 hang nhan/control */
+const IST='style="background:#0f172a;color:#e2e8f0;border:1px solid rgba(255,255,255,.15);border-radius:8px;padding:6px 8px;font-size:13px"';
+function revRow(k,c){ return '<div style="display:flex;align-items:center;gap:8px;margin:6px 0;flex-wrap:wrap">'
+  +'<span class="mut" style="min-width:140px;font-size:13px">'+k+'</span><span>'+c+'</span></div>'; }
+function _v1(x){ return Array.isArray(x)?x[0]:x; }
+function fillReview(){
+  const p=window.__preset||{}, g=id=>document.getElementById(id);
+  if(g("ov_outer")) g("ov_outer").value=_v1(p.outer_wall_speed)||"";
+  if(g("ov_sup_angle")) g("ov_sup_angle").value=_v1(p.support_threshold_angle)||30;
+  const es=_v1(p.enable_support); if(g("ov_support")) g("ov_support").checked=(es===true||es==="1"||es===1);
+  if(g("ov_brim_w")) g("ov_brim_w").value=_v1(p.brim_width)||5;
+  const fs=window.__filSelInfo||{}, s=g("revsum");
+  if(s){ s.innerHTML='Hiện tại: layer <b>'+esc(_v1(p.layer_height)||"?")+'mm</b> · tường <b>'+esc(_v1(p.wall_loops)||"?")+'</b>'
+    +(fs.mvs?(' · trần chảy <b>'+esc(fs.mvs)+' mm³/s</b>'):'')+(fs.temp?(' · nhiệt <b>'+esc(fs.temp)+'°C</b>'):'')
+    +' — sửa ô nào thì áp ô đó, để trống = giữ theo phân tích.'; }
+}
+function ovQS(){
+  const g=id=>document.getElementById(id), t=id=>{const e=g(id);return e&&e.dataset&&e.dataset.touched;};
+  let q="";
+  if(t("ov_layer")&&g("ov_layer").value) q+="&ov_layer="+encodeURIComponent(g("ov_layer").value);
+  if(t("ov_outer")&&g("ov_outer").value) q+="&ov_outer="+encodeURIComponent(g("ov_outer").value);
+  if(t("ov_support")) q+="&ov_support="+(g("ov_support").checked?"1":"0");
+  if(t("ov_sup_angle")&&g("ov_sup_angle").value) q+="&ov_sup_angle="+encodeURIComponent(g("ov_sup_angle").value);
+  if(t("ov_brim")&&g("ov_brim").value) q+="&ov_brim="+encodeURIComponent(g("ov_brim").value);
+  if(t("ov_brim_w")&&g("ov_brim_w").value!=="") q+="&ov_brim_w="+encodeURIComponent(g("ov_brim_w").value);
+  return q;
+}
 function reset(msg){
   const bt=document.getElementById("bt"), lb=document.getElementById("lb");
   bt.disabled=false; lb.textContent="Chọn file .3mf / .stl để phân tích";
@@ -2166,10 +2296,40 @@ function go(){
   if(!FILE) return;
   send(null);
 }
-/* Tab khay: phan tich lai theo khay N — FILE van con trong bien, gui lai kem plate= */
+/* Tab khay: phan tich lai theo khay N — FILE van con trong bien, gui lai kem plate=.
+   Doi KHAY -> RESET nhua ve mac dinh THEO KHAY do (khay 2 vat den -> tu nhay ve khe
+   den), roi user chon khac duoc (bug user 2026-07-19). */
 function rePlate(n){
   if(!FILE){toast("Chọn lại file — trình duyệt không còn giữ nội dung");return;}
+  window.__filReq={};        // xoa override -> server chon nhua mac dinh theo khay moi
   send(n);
+}
+/* Nhua dan dat process (#2/#3): query string cua nhua dang chon — dung chung cho
+   analyze/optimize/slice de MOI noi cung 1 cuon. */
+function filQS(){
+  const r=window.__filReq||{};
+  if(r.slot) return "&slot="+encodeURIComponent(r.slot);
+  if(r.fil) return "&fil="+encodeURIComponent(r.fil)+(r.color?("&color="+encodeURIComponent(r.color)):"");
+  return "";
+}
+/* Doi nhua o dropdown -> phan tich lai process theo cuon do */
+function reFil(){
+  if(!FILE){toast("Chọn lại file để đổi nhựa");return;}
+  const v=(document.getElementById("filsel")||{}).value||"";
+  const col=(document.getElementById("filcolor")||{}).value||"";
+  window.__filReq = v.indexOf("slot:")===0 ? {slot:+v.slice(5)} : {fil:v, color:col};
+  toast("Phân tích lại theo nhựa: "+v);
+  send(window.__plate);
+}
+/* Doi MAU (#4) -> giu nhua hien tai, phan tich lai voi mau moi (che do generic) */
+function reColor(){
+  if(!FILE){toast("Chọn lại file để đổi màu");return;}
+  const col=(document.getElementById("filcolor")||{}).value||"";
+  const key=window.__filKey||"";
+  if(!key){ toast("Chưa xác định được loại nhựa để gắn màu"); return; }
+  window.__filReq={fil:key, color:col};
+  toast("Đổi màu → "+col);
+  send(window.__plate);
 }
 function send(plate){
   const bt=document.getElementById("bt"), lb=document.getElementById("lb");
@@ -2177,7 +2337,7 @@ function send(plate){
   document.getElementById("out").innerHTML="";
   const mb=(FILE.size/1048576).toFixed(1);
   const xhr=new XMLHttpRequest();
-  xhr.open("POST","/api/analyze?name="+encodeURIComponent(FILE.name)+(plate?("&plate="+plate):""));
+  xhr.open("POST","/api/analyze?name="+encodeURIComponent(FILE.name)+(plate?("&plate="+plate):"")+filQS());
   xhr.upload.onprogress=e=>{
     if(!e.lengthComputable) return;
     const p=Math.round(e.loaded/e.total*100);
@@ -2269,24 +2429,40 @@ function render(j){
     h+='</div>';
   }
 
-  /* ===== COMBO NHUA (T3): chon nhua -> tai preset FILAMENT .json rieng =====
-     User chot: file .json RIENG canh file process, KHONG nhet vao 3mf. */
+  /* ===== NHUA DAN DAT PROCESS (#2/#3 2026-07-19): chon nhua+mau -> PHAN TICH LAI
+     process theo CUON DANG DUNG (tran mvs chong ket / nhiet / ten preset / mau).
+     Mac dinh tu khay AMS that (khop mau file), doi duoc. Van tai preset FILAMENT
+     .json rieng nhu cu. Selection nay dong bo ca 'So sanh 3 che do' + 'Slice+day'. */
   {
     const opts=j.fil_options||[], af=j.ams_filaments||[], seen=new Set();
+    const pick=j.fil_pick||"", fs=j.fil_sel||{};
     if(opts.length){
-      h+='<div class="card"><h3 style="margin-top:0">Preset nhựa an toàn <span class="mut" style="font-size:12px">· tab Filament — tải .json riêng, cạnh file process</span></h3>';
+      /* luu selection hien tai -> optimize()/slice() gui kem (dong bo moi noi) */
+      window.__filKey=fs.key||""; window.__filColor=(fs.color||""); window.__filSelInfo=fs;
+      window.__filReq = (pick.indexOf("slot:")===0) ? {slot:+pick.slice(5)}
+                        : (pick ? {fil:pick, color:(fs.color||"")} : {});
+      h+='<div class="card" id="filcard"><h3 style="margin-top:0">Nhựa đang dùng cho bản in <span class="mut" style="font-size:12px">· dẫn dắt cấu hình process — đổi là phân tích lại</span></h3>';
       h+='<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">';
-      h+='<select id="filsel" style="flex:1;min-width:200px;background:#0c111a;color:var(--txt);border:1px solid var(--line);border-radius:10px;padding:11px;font-size:13px">';
-      /* HIEN DU MOI KHE AMS (ke ca trung loai) — user chon theo CUON dang nap, kem
-         ma mau de phan biet (Matte den canh bao ket khac Matte trang). Chi dedupe
-         danh sach generic ben duoi so voi loai da co trong khay. */
+      h+='<select id="filsel" onchange="reFil()" style="flex:1;min-width:200px;background:#0c111a;color:var(--txt);border:1px solid var(--line);border-radius:10px;padding:11px;font-size:13px">';
+      const selv=(v)=> v===pick?' selected':'';
       for(const t of af){const k=(t.sub||"").toUpperCase(); if(!k)continue; seen.add(k);
-        /* value=slot:N -> server tu dat ten kem MAU (Matte den 230/12 khac trang) */
-        h+='<option value="slot:'+(+t.slot||0)+'">Khe '+(+t.slot||0)+' — '+esc(t.sub)+' '+esc(t.color||'')+' (AMS thật)</option>';}
-      for(const o of opts){if(!seen.has(o)){seen.add(o);h+='<option value="'+esc(o)+'">'+esc(o)+'</option>';}}
+        const v='slot:'+(+t.slot||0);
+        h+='<option value="'+v+'"'+selv(v)+'>Khe '+(+t.slot||0)+' — '+esc(t.sub)+' '+esc(t.color||'')+' (AMS thật)</option>';}
+      for(const o of opts){if(!seen.has(o)){seen.add(o);h+='<option value="'+esc(o)+'"'+selv(o)+'>'+esc(o)+'</option>';}}
       h+='</select>';
+      /* #4: doi MAU truoc khi in — prefill mau cuon dang chon */
+      const cv=((fs.color||'#000000').slice(0,7))||'#000000';
+      h+='<input type="color" id="filcolor" value="'+esc(cv)+'" onchange="reColor()" title="Đổi màu nhựa (bấm để chọn)" style="width:46px;height:46px;padding:2px;border:1px solid var(--line);border-radius:10px;background:#0c111a;cursor:pointer">';
       h+='<button class="btn" style="width:auto;padding:11px 16px" onclick="dlFil()">⬇ Tải preset nhựa</button></div>';
-      h+='<div id="filinfo" class="mut" style="margin-top:8px;font-size:12px;line-height:1.5">Số AN TOÀN theo cuộn (nhiệt / trần chảy / flow / bàn) — nguồn official + cộng đồng đã kiểm chứng. Import: Bambu Studio ▸ tab Filament ▸ ⚙ ▸ Import.</div></div>';
+      /* dong hien nhua dang DAN DAT process: ten + mau + nhiet + tran chay chong ket */
+      let drv='';
+      if(fs.key){ drv='✓ Đang dùng <b>'+esc(fs.key)+'</b>'
+        +(fs.color?(' <span style="color:'+esc(fs.color)+'">⬤</span> <code>'+esc(fs.color)+'</code>'):'')
+        +' — nhiệt <b>'+esc(fs.temp||'?')+'°C</b> · trần chảy <b>'+esc(fs.mvs||'?')+' mm³/s</b> (số chống kẹt của cuộn này). '
+        +'Tốc độ, tên preset và màu bên dưới đã tính THEO cuộn này.'; }
+      else { drv='⚠ Chưa chọn được cuộn — process đang theo KHAI BÁO trong file (có thể khác cuộn đang gắn). '
+        +'Bật máy in để sync khay AMS, hoặc chọn nhựa ở ô trên.'; }
+      h+='<div id="filinfo" class="'+(fs.key?'tip':'iss')+'" style="margin-top:9px;font-size:12.5px;line-height:1.55">'+drv+'</div></div>';
     }
   }
   if(j.issues&&j.issues.length){ h+='<div class="card"><h3 style="margin-top:0">Vấn đề phát hiện</h3>';
@@ -2420,6 +2596,28 @@ function pnamePreview(){
    +'<option value="quality">Đẹp — 0.16mm</option>'
    +'<option value="">Giữ nguyên config trong file (không áp preset)</option>'
    +'</select>'
+   /* #4 (2026-07-19): XEM LAI + CHINH truoc khi in — layer(qua che do)/toc do/support/
+      brim; MAU doi o o "Nhua dang dung" phia tren. Sua o nao ap o do, de trong = giu
+      theo phan tich. */
+   +'<div class="card" style="margin:0 0 10px;background:#0c111a;border:1px solid var(--line)">'
+   +'<div style="font-weight:700;margin-bottom:6px">✏️ Xem lại + chỉnh trước khi in '
+   +'<span class="mut" style="font-size:12px">· màu đổi ở ô “Nhựa đang dùng” phía trên</span></div>'
+   +'<div id="revsum" class="mut" style="font-size:12px;margin-bottom:10px"></div>'
+   +revRow("Layer height", '<select id="ov_layer" onchange="this.dataset.touched=1" '+IST+'>'
+       +'<option value="">Theo chế độ ở trên</option>'
+       +'<option>0.28</option><option>0.24</option><option>0.20</option><option>0.16</option><option>0.12</option></select>')
+   +revRow("Tốc độ mặt ngoài", '<input id="ov_outer" type="number" min="20" max="500" '
+       +'onchange="this.dataset.touched=1" '+IST+' style="width:90px">&nbsp;mm/s '
+       +'<span class="mut" style="font-size:11px">— cao quá máy tự hãm theo trần chảy</span>')
+   +revRow("Support (đỡ)", '<label style="cursor:pointer"><input id="ov_support" type="checkbox" '
+       +'onchange="this.dataset.touched=1"> Bật</label>&nbsp;·&nbsp;góc '
+       +'<input id="ov_sup_angle" type="number" min="0" max="90" onchange="this.dataset.touched=1" '+IST+' style="width:64px"> °')
+   +revRow("Brim (viền bám bàn)", '<select id="ov_brim" onchange="this.dataset.touched=1" '+IST+'>'
+       +'<option value="">Theo phân tích</option><option value="no_brim">Không</option>'
+       +'<option value="outer_only">Ngoài</option><option value="outer_and_inner">Quanh</option>'
+       +'<option value="auto_brim">Tự động</option></select>&nbsp;·&nbsp;rộng '
+       +'<input id="ov_brim_w" type="number" min="0" max="20" step="0.5" onchange="this.dataset.touched=1" '+IST+' style="width:64px"> mm')
+   +'</div>'
    +'<div style="display:flex;gap:8px;flex-wrap:wrap">'
    +'<button class="btn go" style="margin-top:0;flex:1;min-width:180px" onclick="slice(false)">Slice + đẩy xuống máy in</button>'
    +'<button class="btn" style="margin-top:0;flex:1;min-width:180px;background:linear-gradient(160deg,#a78bfa,#7c3aed)" onclick="slice(true)">Slice để TẢI VỀ (.gcode.3mf)</button>'
@@ -2429,13 +2627,14 @@ function pnamePreview(){
    +'• <b>In thẳng KHÔNG slice lại</b>: mở bằng <b>Bambu Handy</b> (điện thoại) hoặc copy vào thẻ SD/gửi LAN — máy chạy G-code có sẵn.<br>'
    +'• Mở trong <b>Bambu Studio (desktop)</b>: Studio nạp lại thành project để CHỈNH SỬA nên nút "Slice plate" sáng lại — đây là bản chất của Studio (không dùng G-code ngoài làm bản in cuối). Cấu hình đã nhúng nên bấm Slice lại ra <b>y hệt</b>, chỉ mất thời gian slice. Muốn khỏi slice lại thì in qua Handy/thẻ SD.</div></div>';
   document.getElementById("out").innerHTML=h;
+  fillReview();                     // #4: nap gia tri mac dinh vao panel chinh sua
 }
 function optimize(){
   if(!FILE){ toast("Chọn lại file"); return; }
   const b=document.getElementById("e2e"); b.disabled=true; b.textContent="Đang slice baseline + 3 chế độ…";
   const xhr=new XMLHttpRequest();
   xhr.open("POST","/api/optimize?name="+encodeURIComponent(FILE.name)
-    +(window.__platesN>1?("&plate="+(window.__plate||1)):""));
+    +(window.__platesN>1?("&plate="+(window.__plate||1)):"")+filQS());
   xhr.onload=()=>{ let j={}; try{j=JSON.parse(xhr.responseText);}catch(e){}
     if(j.ok&&j.queued) pollOpt(); else { b.disabled=false; toast("Lỗi: "+(j.msg||xhr.status)); } };
   xhr.onerror=()=>{ b.disabled=false; toast("Mất kết nối"); };
@@ -2457,14 +2656,23 @@ function renderE2E(r){
     +'<table><tr><th>Chế độ</th><th>Thời gian</th><th>Nhựa</th><th>Lớp</th></tr>'
     +'<tr style="background:rgba(255,255,255,.04)"><td><b>Mặc định</b><br><span class="mut">AUTO-balanced 0.20</span></td>'
     +'<td>'+esc(b.time||"?")+'</td><td>'+(b.weight_g||"?")+' g</td><td>'+(b.layers||"?")+'</td></tr>';
+  const LBL={fast:"Nhanh",balanced:"Cân bằng",quality:"Đẹp"};
+  let anyErr=false;
   for(const k of MS){
-    const d=(r.modes||{})[k]; if(!d||d.error) continue;
+    const d=(r.modes||{})[k]; if(!d) continue;
+    if(d.error){ anyErr=true;   /* KHONG giau loi nua: hien ro chinh dong do (bug #1) */
+      h+='<tr><td><b>'+esc(LBL[k]||k)+'</b></td>'
+        +'<td class="bad" colspan="3">⚠ Lỗi slice: '+esc(d.error)+'</td></tr>';
+      continue;
+    }
     const tp=d.time_pct, cls=tp>2?"good":(tp<-2?"bad":"mut");
     h+='<tr><td><b>'+esc(d.label)+'</b></td><td class="'+cls+'">'+esc(d.time)
       +'<br><span class="mut">'+(tp>0?"−"+tp:"+"+(-tp))+'%</span></td>'
       +'<td>'+d.weight_g+' g</td><td>'+d.layers+'</td></tr>';
   }
-  h+='</table></div>';
+  h+='</table>';
+  if(anyErr) h+='<div class="iss" style="margin-top:8px">⚠ Có chế độ slice lỗi ở trên. Nếu lỗi báo <b>Bambu Studio đang mở</b> → ĐÓNG hẳn Bambu Studio (giao diện) rồi bấm <b>So sánh lại 3 chế độ</b>. Hub và Studio dùng chung 1 file chương trình, chạy song song sẽ lỗi.</div>';
+  h+='</div>';
   for(const k of MS){
     const d=(r.modes||{})[k]; if(!d||d.error) continue;
     h+='<div class="card"><h3 style="margin-top:0">'+esc(d.label)+' — vì sao</h3>';
@@ -2513,7 +2721,7 @@ async function slice(download){
   const db=document.getElementById("dlbox"); if(db) db.innerHTML="";
   const xhr=new XMLHttpRequest();
   xhr.open("POST","/api/upload?name="+encodeURIComponent(FILE.name)+(m?"&mode="+m:"")+(download?"&download=1":"")
-    +(window.__platesN>1?("&plate="+(window.__plate||1)):""));
+    +(window.__platesN>1?("&plate="+(window.__plate||1)):"")+filQS()+ovQS());
   xhr.onload=()=>{ let j={}; try{j=JSON.parse(xhr.responseText);}catch(e){}
     if(j.ok&&j.queued){ toast(download?"Đang slice để tải về…":"Đang slice trên máy tính…"); poll(); }
     else if(j.ok){ toast("Đã đẩy xuống máy: "+j.name); }
@@ -2889,7 +3097,18 @@ class H(BaseHTTPRequestHandler):
             plate = int(q.get("plate", ["0"])[0])
         except ValueError:
             plate = 0
-        threading.Thread(target=_slice_and_push, args=(name, src, mode, push, plate),
+        # Nhua chon (dong bo voi analyze) + chinh sua truoc in (#2/#3/#4 2026-07-19)
+        try:
+            _slot = int(q.get("slot", ["0"])[0]) or None
+        except ValueError:
+            _slot = None
+        sel = {"slot": _slot, "fil": unquote(q.get("fil", [""])[0]).strip(),
+               "color": unquote(q.get("color", [""])[0]).strip()}
+        overrides = {k: unquote(q.get("ov_" + k, [""])[0]).strip() for k in
+                     ("layer", "outer", "support", "sup_angle", "brim", "brim_w")}
+        overrides = {k: v for k, v in overrides.items() if v != ""}
+        threading.Thread(target=_slice_and_push,
+                         args=(name, src, mode, push, plate, sel, overrides),
                          daemon=True).start()
         self._send(200, json.dumps({"ok": True, "queued": True, "name": name}),
                    "application/json; charset=utf-8")
@@ -2904,6 +3123,12 @@ class H(BaseHTTPRequestHandler):
             plate = int(q.get("plate", ["0"])[0]) or None   # tab khay goi lai voi plate=N
         except ValueError:
             plate = None
+        try:
+            _slot = int(q.get("slot", ["0"])[0]) or None     # nhua chon: khe AMS cu the
+        except ValueError:
+            _slot = None
+        sel = {"slot": _slot, "fil": unquote(q.get("fil", [""])[0]).strip(),
+               "color": unquote(q.get("color", [""])[0]).strip()}
         if not name.lower().endswith((".3mf", ".stl")):
             self._send(400, json.dumps({"ok": False, "msg": "Chỉ phân tích .3mf hoặc .stl"}),
                        "application/json; charset=utf-8")
@@ -2935,7 +3160,7 @@ class H(BaseHTTPRequestHandler):
             self._send(500, json.dumps({"ok": False, "msg": f"Ghi file lỗi: {e}"}),
                        "application/json; charset=utf-8")
             return
-        threading.Thread(target=_run_analyze, args=(name, tmp, plate), daemon=True).start()
+        threading.Thread(target=_run_analyze, args=(name, tmp, plate, sel), daemon=True).start()
         self._send(200, json.dumps({"ok": True, "queued": True}),
                    "application/json; charset=utf-8")
 
@@ -2948,6 +3173,12 @@ class H(BaseHTTPRequestHandler):
             plate = int(q.get("plate", ["0"])[0]) or None   # khay dang chon tren tab
         except ValueError:
             plate = None
+        try:
+            _slot = int(q.get("slot", ["0"])[0]) or None     # nhua chon (dong bo voi analyze)
+        except ValueError:
+            _slot = None
+        sel = {"slot": _slot, "fil": unquote(q.get("fil", [""])[0]).strip(),
+               "color": unquote(q.get("color", [""])[0]).strip()}
         if not name.lower().endswith((".3mf", ".stl")):
             self._send(400, json.dumps({"ok": False, "msg": "Chỉ nhận .3mf / .stl"}),
                        "application/json; charset=utf-8"); return
@@ -2964,7 +3195,7 @@ class H(BaseHTTPRequestHandler):
         tmp = os.path.join(SLICE_DIR, "opt_" + name)
         with open(tmp, "wb") as f:
             f.write(self.rfile.read(n))
-        threading.Thread(target=_run_optimize, args=(name, tmp, plate), daemon=True).start()
+        threading.Thread(target=_run_optimize, args=(name, tmp, plate, sel), daemon=True).start()
         self._send(200, json.dumps({"ok": True, "queued": True}),
                    "application/json; charset=utf-8")
 
