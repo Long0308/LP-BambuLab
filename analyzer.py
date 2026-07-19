@@ -86,21 +86,33 @@ def plates_3mf(z: zipfile.ZipFile) -> list:
     return sorted(out, key=lambda p: p["id"])
 
 
-def _plate_primary(ms: str, object_ids: list, cols: list, types: list):
-    """(mau, loai) filament CHINH khay dung: extruder NHIEU NHAT cua object/part khay
-    (model_settings) -> filament_colour/type[idx-1]. Nhieu vat den + it vat cam thi
-    ra DEN. (None, None) neu khong doc duoc. (bug user 2026-07-19: mau phai theo khay)."""
+def _plate_ext_list(ms: str, object_ids: list) -> list:
+    """Extruder (1-based) TUNG object/part cua khay — doc model_settings. Nhieu vat
+    den + it vat cam -> list nghieng ve extruder den. (bug user 2026-07-19)."""
     if not ms or not object_ids:
-        return None, None
+        return []
     exs = []
     for oid in object_ids:
         om = re.search(r'<object id="' + re.escape(str(oid)) + r'".*?</object>', ms, re.S)
         if om:
             exs += [int(x) for x in re.findall(r'key="extruder"\s+value="(\d+)"', om.group(0))]
+    return exs
+
+
+def _plate_primary_idx(ms: str, object_ids: list):
+    """Extruder DUNG NHIEU NHAT cua khay (idx 1-based) hoac None."""
+    exs = _plate_ext_list(ms, object_ids)
     if not exs:
-        return None, None
+        return None
     from collections import Counter
-    idx = Counter(exs).most_common(1)[0][0]        # extruder dung nhieu nhat tren khay
+    return Counter(exs).most_common(1)[0][0]
+
+
+def _plate_primary(ms: str, object_ids: list, cols: list, types: list):
+    """(mau, loai) filament CHINH khay dung theo extruder nhieu nhat. (None,None) neu ko doc duoc."""
+    idx = _plate_primary_idx(ms, object_ids)
+    if not idx:
+        return None, None
     col = cols[idx - 1] if 1 <= idx <= len(cols) else None
     typ = types[idx - 1] if 1 <= idx <= len(types) else None
     return col, typ
@@ -581,6 +593,11 @@ def analyze_3mf(path: str, color: str | None = None, plate: int | None = None) -
             "sparse_infill_speed", "top_shell_layers", "bottom_shell_layers",
             "filament_type",     # filament_type: de tu phat hien cap PLA/PETG cho interface
             "filament_colour")}  # mau khai bao trong file -> khop khe AMS that (default #2/#3)
+        # NHUA KHAI BAO trong file (per-filament list) -> so voi SO AN TOAN de canh bao
+        # neu sai (vd Matte ma de mvs 21 -> ket) — user hoi 2026-07-19.
+        res["file_fil"] = {k: cfg.get(k) for k in (
+            "filament_type", "filament_colour", "nozzle_temperature",
+            "filament_max_volumetric_speed", "filament_flow_ratio")}
 
         # KHAY: file .3mf co the co nhieu khay -> phai tach, gop lai la ra so RAC
         plates = plates_3mf(z)
@@ -606,11 +623,17 @@ def analyze_3mf(path: str, color: str | None = None, plate: int | None = None) -
             _ms = z.read("Metadata/model_settings.config").decode("utf-8", "ignore")
         except (KeyError, OSError):
             _ms = ""
-        p_col, p_type = _plate_primary(_ms, cur["objects"] if cur else [],
-                                       cfg.get("filament_colour") or [],
-                                       cfg.get("filament_type") or [])
-        res["plate_color"] = p_col
-        res["plate_filament_type"] = p_type
+        _cols = cfg.get("filament_colour") or []
+        _types = cfg.get("filament_type") or []
+        _objs = cur["objects"] if cur else []
+        _pidx = _plate_primary_idx(_ms, _objs)          # extruder chinh cua khay
+        res["plate_fil_idx"] = _pidx
+        res["plate_color"] = _cols[_pidx - 1] if _pidx and 1 <= _pidx <= len(_cols) else None
+        res["plate_filament_type"] = _types[_pidx - 1] if _pidx and 1 <= _pidx <= len(_types) else None
+        p_col = res["plate_color"]
+        # tat ca MAU khay dung (danh dau khe AMS nao thuoc khay nay)
+        res["plate_used_colors"] = sorted({_cols[i - 1] for i in set(_plate_ext_list(_ms, _objs))
+                                           if 1 <= i <= len(_cols)})
 
         # mesh — doc qua load_3mf_tris de AP TRANSFORM xoay cua Bambu Studio
         tris = load_3mf_tris(z, names, notes=res["tips"],
@@ -2093,6 +2116,59 @@ def _apply_fil_sel(r: dict, fil_sel: str | None, color_sel: str | None) -> None:
                          "v_max": round(mvs / (lh * lw)), "over_ceiling": {}, "mvs_from_sel": True}
 
 
+def _hex_close(a, b, tol=52) -> bool:
+    """2 mau gan nhau? (khop khe AMS voi mau khay dang chon). tol Euclid RGB."""
+    def rgb(h):
+        h = (h or "").lstrip("#")[:6]
+        try:
+            return int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+        except (ValueError, IndexError):
+            return None
+    ra, rb = rgb(a), rgb(b)
+    return bool(ra and rb and sum((x - y) ** 2 for x, y in zip(ra, rb)) ** 0.5 <= tol)
+
+
+def filament_check(r: dict) -> dict | None:
+    """So NHUA KHAI BAO trong file (cho khay dang chon) vs SO AN TOAN cua cuon THAT
+    (fil_sel) -> canh bao neu SAI + de UI cho tai preset nhua DA SUA (user 2026-07-19)."""
+    sel = r.get("fil_sel") or {}
+    if not sel.get("key"):
+        return None
+    ff = r.get("file_fil") or {}
+    idx = r.get("plate_fil_idx") or 1
+
+    def _at(key):
+        v = ff.get(key)
+        if isinstance(v, list) and 1 <= idx <= len(v):
+            return v[idx - 1]
+        return v[0] if isinstance(v, list) and v else None
+
+    def _f(x):
+        try:
+            return float(x)
+        except (TypeError, ValueError):
+            return None
+    f_temp, f_mvs, f_flow = _at("nozzle_temperature"), _at("filament_max_volumetric_speed"), _at("filament_flow_ratio")
+    s_temp, s_mvs, s_flow = sel.get("temp"), sel.get("mvs"), sel.get("flow")
+    issues = []
+    fm, sm = _f(f_mvs), _f(s_mvs)
+    if fm and sm and fm > sm + 0.5:
+        issues.append(f"Trần chảy: file để {f_mvs} mm³/s nhưng cuộn {sel['key']} an toàn ở {sm:g} "
+                      f"— cao hơn DỄ KẸT (nhất là Matte/đen). Bản export đã hạ về {sm:g}.")
+    ft, st = _f(f_temp), _f(s_temp)
+    if ft and st and abs(ft - st) >= 5:
+        issues.append(f"Nhiệt: file để {f_temp}°C nhưng cuộn {sel['key']} cần {s_temp}°C — "
+                      + ("thấp → chưa chảy đủ, dễ tắc." if ft < st else "cao → dễ chảy xệ/rít.")
+                      + " Bản export dùng số đúng.")
+    ffl, sfl = _f(f_flow), _f(s_flow)
+    if ffl and sfl and abs(ffl - sfl) >= 0.03:
+        issues.append(f"Flow: file {f_flow} vs an toàn {s_flow} — lệch làm thiếu/thừa đùn.")
+    return {"key": sel["key"], "color": sel.get("color"), "inherits": sel.get("inherits"),
+            "file": {"temp": f_temp, "mvs": f_mvs, "flow": f_flow},
+            "safe": {"temp": s_temp, "mvs": s_mvs, "flow": s_flow},
+            "issues": issues, "level": "warn" if issues else "ok"}
+
+
 def analyze(path: str, mode: str = "balanced", ams: list | None = None,
             color: str | None = None, ams_colors: list | None = None,
             plate: int | None = None, fil_sel: str | None = None,
@@ -2107,6 +2183,11 @@ def analyze(path: str, mode: str = "balanced", ams: list | None = None,
     r["ams"] = [str(t).upper() for t in (ams or []) if t]
     r["ams_advice"] = ams_advice(r["ams"], ams_colors)
     _apply_fil_sel(r, fil_sel, color_sel)
+    # Danh dau khe AMS thuoc KHAY dang chon (theo mau) + kiem nhua file vs an toan
+    _used = r.get("plate_used_colors") or []
+    for _it in r.get("ams_advice") or []:
+        _it["on_plate"] = any(_hex_close(_it.get("color"), u) for u in _used)
+    r["filament_check"] = filament_check(r)
     import os as _os
     nm = _os.path.splitext(_os.path.basename(path))[0][:20]
     r["export"] = make_preset(r, nm, mode)

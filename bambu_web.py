@@ -2258,6 +2258,20 @@ async function dlFil(){
     toast("Đã tải preset "+(j.key||sel.value));
   }catch(e){toast("Lỗi tải preset: "+e);}
 }
+/* Tai preset nhua DA SUA cho khay dang chon (so an toan cua cuon that + mau khay) */
+async function dlFilFix(){
+  const fc=window.__filCheck; if(!fc||!fc.key){toast("Chưa xác định được nhựa khay");return;}
+  try{
+    const j=await (await fetch("/api/filpreset?fil="+encodeURIComponent(fc.key))).json();
+    if(!j.ok){toast(j.msg||"Không sinh được preset");return;}
+    if(fc.color){ j.preset.filament_colour=[fc.color]; j.preset.default_filament_colour=[fc.color]; }
+    const blob=new Blob([JSON.stringify(j.preset,null,4)],{type:"application/json"});
+    const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+    a.download=((j.preset&&j.preset.name)||("LP-"+fc.key))+".json";
+    a.click(); URL.revokeObjectURL(a.href);
+    toast("Đã tải preset nhựa ĐÃ SỬA: "+(j.key||fc.key));
+  }catch(e){toast("Lỗi tải preset: "+e);}
+}
 function esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;");}
 /* #4: panel "Xem lai + chinh truoc khi in" — style o nhap + 1 hang nhan/control */
 const IST='style="background:#0f172a;color:#e2e8f0;border:1px solid rgba(255,255,255,.15);border-radius:8px;padding:6px 8px;font-size:13px"';
@@ -2406,13 +2420,16 @@ function render(j){
       // CANH BAO DO NGAY TUNG KHAY: nhiet chuan + rui ro (am/ket/warp/den)
       const adv=j.ams_advice||[];
       if(adv.length){
-        h+='<div style="margin-top:10px"><div class="mut" style="font-weight:700;margin-bottom:4px">🌡️ Nhiệt chuẩn + cảnh báo từng khay (đối chiếu nguồn Bambu chính thức):</div>';
+        const anyOnPlate=adv.some(a=>a.on_plate);
+        h+='<div style="margin-top:10px"><div class="mut" style="font-weight:700;margin-bottom:4px">🌡️ Nhiệt chuẩn + cảnh báo từng khay (đối chiếu nguồn Bambu chính thức)'
+          +(anyOnPlate?' — <span style="color:#22c55e">◀ khe khay đang chọn IN</span>':'')+':</div>';
         for(const a of adv){
-          const warn=a.level==="warn";
-          const bg=warn?"rgba(239,68,68,.14)":"rgba(56,189,248,.10)";
-          const bd=warn?"#ef4444":"rgba(56,189,248,.4)";
-          h+='<div style="background:'+bg+';border-left:3px solid '+bd+';border-radius:8px;padding:8px 10px;margin-bottom:6px">'
+          const warn=a.level==="warn", onp=!!a.on_plate;   /* khe khay dang chon dung */
+          const bg=warn?"rgba(239,68,68,.14)":(onp?"rgba(34,197,94,.12)":"rgba(56,189,248,.10)");
+          const bd=warn?"#ef4444":(onp?"#22c55e":"rgba(56,189,248,.4)");
+          h+='<div style="background:'+bg+';border-left:3px solid '+bd+';border-radius:8px;padding:8px 10px;margin-bottom:6px'+(onp?';box-shadow:0 0 0 1px rgba(34,197,94,.35)':'')+'">'
            +'<b>'+(warn?"🔴 ":"")+'Khe '+a.slot+': '+esc(a.name)+'</b>'
+           +(onp?' <span style="color:#22c55e;font-weight:700">◀ khay này dùng</span>':'')
            +' <span style="color:#fca5a5;font-weight:700">'+esc(a.temp||"?")+'</span>'
            +(a.flow?' <span class="mut">· flow '+a.flow+' mm³/s</span>':'')
            +'<div class="mut" style="font-size:12px;margin-top:3px;line-height:1.5">'+esc(a.note||"")+'</div></div>';
@@ -2463,6 +2480,27 @@ function render(j){
       else { drv='⚠ Chưa chọn được cuộn — process đang theo KHAI BÁO trong file (có thể khác cuộn đang gắn). '
         +'Bật máy in để sync khay AMS, hoặc chọn nhựa ở ô trên.'; }
       h+='<div id="filinfo" class="'+(fs.key?'tip':'iss')+'" style="margin-top:9px;font-size:12.5px;line-height:1.55">'+drv+'</div></div>';
+    }
+  }
+  /* ===== KIEM NHUA (user hoi 2026-07-19): so FILE khai bao vs SO AN TOAN cuon that
+     cho KHAY dang chon -> SAI thi canh bao + nut tai preset nhua DA SUA. ===== */
+  { const fc=j.filament_check;
+    if(fc&&fc.key){
+      const warn=fc.level==="warn";
+      window.__filCheck=fc;
+      h+='<div class="card" style="border:1px solid '+(warn?'rgba(239,68,68,.5)':'rgba(34,197,94,.4)')+'">'
+       +'<h3 style="margin-top:0">'+(warn?'⚠️ Nhựa khai báo trong file KHÁC số an toàn':'✅ Nhựa khai báo trong file khớp số an toàn')
+       +' <span class="mut" style="font-size:12px">· khay đang chọn · '+esc(fc.key)+'</span></h3>';
+      h+='<table style="width:100%;font-size:13px"><tr><th style="text-align:left">Thông số</th><th>File khai báo</th><th>An toàn (cuộn '+esc(fc.key)+')</th></tr>';
+      const row=(k,fv,sv,bad)=>'<tr><td class="mut">'+k+'</td><td style="text-align:center'+(bad?';color:#fca5a5;font-weight:700':'')+'">'+esc(fv==null?'—':fv)+'</td><td style="text-align:center;color:#22c55e">'+esc(sv==null?'—':sv)+'</td></tr>';
+      const f=fc.file||{},s=fc.safe||{};
+      const bmvs=(+f.mvs)>(+s.mvs)+0.5, btemp=Math.abs((+f.temp)-(+s.temp))>=5;
+      h+=row('Nhiệt (°C)',f.temp,s.temp,btemp)+row('Trần chảy mvs',f.mvs,s.mvs,bmvs)+row('Flow',f.flow,s.flow,false);
+      h+='</table>';
+      for(const it of (fc.issues||[])) h+='<div class="iss" style="margin-top:7px">⚠ '+esc(it)+'</div>';
+      if(!warn) h+='<div class="tip" style="margin-top:7px">File đã đặt đúng số an toàn cho cuộn này — cứ in.</div>';
+      h+='<button class="btn" style="margin-top:9px" onclick="dlFilFix()">⬇ Tải preset nhựa ĐÃ SỬA (số an toàn) — import tab Filament</button>';
+      h+='</div>';
     }
   }
   if(j.issues&&j.issues.length){ h+='<div class="card"><h3 style="margin-top:0">Vấn đề phát hiện</h3>';
