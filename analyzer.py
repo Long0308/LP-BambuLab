@@ -1061,7 +1061,7 @@ def thin_walls(tris: list, soft: float = WALL_SOFT_MM,
 
 
 MODES = {
-    "fast":     {"label": "Nhanh",    "layer": 0.28, "infill": "8%",  "walls": 2, "outer": None},
+    "fast":     {"label": "Nhanh",    "layer": 0.28, "infill": "10%", "walls": 2, "outer": None},
     "balanced": {"label": "Cân bằng", "layer": 0.20, "infill": "10%", "walls": 3, "outer": 150},
     "quality":  {"label": "Đẹp",      "layer": 0.16, "infill": "12%", "walls": 3, "outer": 110},
 }
@@ -1280,7 +1280,7 @@ def _guide_reason(key: str, val: str, r: dict, lh: float = 0.2) -> str:
         "sparse_infill_density": lambda: f"{val} theo chế độ (đủ đỡ mặt trên, ít nhựa)",
         "sparse_infill_pattern": lambda: ("Gyroid: đều mọi hướng, đẹp nếu lộ" if val == "gyroid"
                                           else "Adaptive Cubic: dày gần vỏ, thưa giữa → nhanh"),
-        "infill_wall_overlap": lambda: "25% chống hở giữa ruột và vỏ (wiki)",
+        "infill_wall_overlap": lambda: f"{val} (mặc định Bambu) chống hở ruột-vỏ, không phình thành mỏng",
         "outer_wall_speed": lambda: f"{val} mm/s: chậm hơn để mặt ngoài mịn",
         "inner_wall_speed": lambda: (f"{val} mm/s ≈ trần lưu lượng {fl.get('v_max')} (nhựa {fl.get('mvs')}mm³/s ở layer {lh}mm)"
                                      if fl.get('v_max') else f"{val} mm/s"),
@@ -1299,7 +1299,7 @@ def _guide_reason(key: str, val: str, r: dict, lh: float = 0.2) -> str:
         "support_style": lambda: (f"tree_strong: cao {h:.0f}mm nhánh to khỏi lắc" if val == "tree_strong"
                                   else val),
         "support_threshold_angle": lambda: f"{val}°: dốc hơn góc này tự đỡ ({'ABS/ASA nguội chậm nâng 40' if val=='40' else 'default Bambu, PrintConfig.cpp'})",
-        "support_on_build_plate_only": lambda: "chỉ chống từ bàn, không tì lên thân (khỏi seo)",
+        "support_on_build_plate_only": lambda: ("0: đỡ MỌI chỗ cần (kể cả hẫng trên thân) — mặc định Bambu, không bỏ sót" if val=="0" else "chỉ chống từ bàn (đỡ sẹo thân)"),
         "support_interface_filament": lambda: f"nhựa khe {val} làm lớp tiếp giáp (dễ bóc)",
         "support_top_z_distance": lambda: ("0: khác nhựa (PLA-PETG không dính) → khít vẫn bóc, mặt dưới bóng"
                                            if val == "0" else f"{val}mm: cùng nhựa phải chừa khe mới bóc được"),
@@ -1412,7 +1412,10 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced",
     if mvs:
         lw = fl.get("line_width") or 0.42    # suy tu nozzle THAT trong flow_ceiling
         vmax = int(mvs / (lh * lw))
-        safe = int(vmax * 0.97)
+        # AUDIT 2026-07-19: tran mvs chi chan DUOI (chong under-extrude); phai chan TREN 300
+        # mm/s (tran chuyen dong A1 bed-slinger) — file khai mvs cao (vd ABS 30) o layer mong
+        # cho ra 400+ -> ringing/VFA + LECH LOP (nhat la vat cao da ha accel). Cap 300.
+        safe = min(int(vmax * 0.97), 300)
         p["inner_wall_speed"] = [str(safe)]
         p["sparse_infill_speed"] = [str(safe)]
         p["internal_solid_infill_speed"] = [str(safe)]
@@ -1467,7 +1470,11 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced",
         #  - Model cong/chi tiet -> TREE: cham diem, tiet kiem nhua, khong seo mat.
         #  - Cang CAO nhanh tree cang lac -> model cao thi tree_strong (nhanh to).
         p["enable_support"] = "1"
-        p["support_on_build_plate_only"] = "1"
+        # AUDIT 2026-07-19: TRUOC ep "on build plate only"=1 -> mat hang nam TREN THAN model
+        # (voi cup, tay tuong, nhanh T/Y) khong duoc do -> SAP/hong feature. Ve MAC DINH Bambu
+        # 0 (do MOI cho can) — khong bo sot mat hang. Muon support chi tu ban (do seo than)
+        # thi bat "On build plate only" trong panel Prepare.
+        p["support_on_build_plate_only"] = "0"
         # DON'T SUPPORT BRIDGES (PrintConfig bridge_no_support): go dau ranh/khe la
         # NHIP NGAN bac giua 2 ma — de may bac cau (da co bridge flow + bridge speed
         # + overhang slow-down), khong chong cot vao trong ranh hep (seo xau, kho
@@ -1494,7 +1501,7 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced",
             why.append(f"BẬT support THƯỜNG (giàn giáo đều): {eff_cm2:.1f} cm² hẫng >45° cần đỡ thật ({ov}% tổng) "
                        f"trên model dạng hộp — mặt hẫng PHẲNG cần đỡ ĐỀU toàn mặt; support cây "
                        f"nhánh mọc lệch, chỗ có chỗ không → võng giữa các nhánh, và càng cao "
-                       f"càng lắc. Chỉ chống từ mặt bàn (không tì lên thân).")
+                       f"càng lắc. Support đỡ mọi mặt hẫng cần (mặc định Bambu — không bỏ sót hẫng trên thân).")
         else:
             p["support_type"] = "tree(auto)"
             p["support_style"] = "tree_strong" if h_sup > 150 else "tree_hybrid"
@@ -1502,7 +1509,7 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced",
                        f"cong/chi tiết — tree chạm điểm, ít sẹo mặt, tiết kiệm nhựa. "
                        + (f"Model cao {h_sup:.0f}mm → dùng tree_strong (nhánh to, khỏi lắc). "
                           if h_sup > 150 else "")
-                       + "Chỉ chống từ mặt bàn (không tì lên thân).")
+                       + "Support đỡ mọi mặt hẫng cần (mặc định Bambu — không bỏ sót hẫng trên thân).")
 
     # 3b) SUPPORT INTERFACE — cai san LUON, ke ca khi support dang TAT: cac o nay chi
     #     co tac dung khi support bat, nen de san gia tri dung de user bat support tay
@@ -1520,19 +1527,20 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced",
     ams = r.get("ams") or []
     ams_has_partner = bool(partner) and any(a.startswith(partner) for a in ams)
     pre = "" if sup_on else " (cài sẵn — đang TẮT support, bật tay trong Studio là ăn ngay)"
-    if slot:
+    # AUDIT 2026-07-19 (CRITICAL): Z distance = 0 CHI an toan khi interface la nhua KHAC
+    # (PLA-PETG khong dinh hoa hoc). TRUOC day ghi Z=0 chi vi FILE khai bao partner o slot,
+    # KHONG kiem khay THAT -> neu khay nap CUNG vat lieu (hoac file khai sai), Z=0 HAN chet
+    # support vao than -> go la VO san pham (reprint). Gio CHI ghi Z=0 khi AMS THAT xac nhan
+    # co partner (ams_has_partner). File khai partner ma AMS chua xac nhan -> ve fallback
+    # cung vat lieu Z=0.2 (an toan). User co the ep Z=0 qua the "Cach lam support" khi may on.
+    if slot and ams_has_partner:
         p["support_interface_filament"] = str(slot)
         p["support_top_z_distance"] = "0"
         p["support_bottom_z_distance"] = "0"
         p["support_interface_spacing"] = "0"
         p["support_interface_pattern"] = "rectilinear_interlaced"
         p["independent_support_layer_height"] = "0"
-        ams_chk = (f" ✓ Đã đối chiếu AMS: khay máy ĐANG nạp {partner} thật." if ams_has_partner
-                   else (f" ⚠️ AMS hiện KHÔNG nạp {partner} (khay thật: "
-                         f"{', '.join(ams) or '?'}) — nạp {partner} vào khay trước khi in, "
-                         f"không là máy đứng chờ nhựa." if ams else
-                         " (Chưa sync được khay AMS — kiểm tra máy có nạp "
-                         f"{partner} thật trước khi in.)"))
+        ams_chk = f" ✓ Đã đối chiếu khay AMS THẬT: đang nạp {partner} — Z=0 an toàn, bóc rời."
         why.append(f"TỰ ÁP mẹo gỡ support đẹp{pre}: file có {partner} ở slot {slot} trong khi "
                    f"thân in {body} — 2 nhựa này không dính nhau nên interface {partner} ép khít "
                    f"Z distance = 0 vẫn bóc rời, mặt dưới bóng như mặt trên. Đã set: "
@@ -1731,11 +1739,16 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced",
     #            CO NGOT + lam mat (A1 khung ho), KHONG phai do flow -> tang cooling/giam
     #            toc thay vi tang flow. (Luu y: thang Prusa 0.8 != thang Bambu 1.0.)
     #   Khac/STL khong ro: gia dinh PLA 1.5 + note.
-    BFLOW = {"PLA":  ("1.5",  "wiki Bambu 1.4–1.7 + maker xác nhận (thang Bambu, default 1.0)"),
+    # AUDIT 2026-07-19: bridge_flow la 1 KEY DUY NHAT trong Bambu, ap CHO CA bridge ngoai
+    # (overhang) LAN bridge trong (lop dac dau tien phu tren infill thua). PLA 1.5 (dinh
+    # thang 1.4-1.7) LA QUA CAO cho bridge TRONG -> over-extrude -> got noi -> TELEGRAPH len
+    # mat tren (dung l+i be mat tool nay sinh ra de chong). Ve MAC DINH Bambu 1.0 (an toan
+    # ca 2 loai). Muon bridge ngoai day hon thi chinh tay tung ca, dung bake 1.5.
+    BFLOW = {"PLA":  ("1.0",  "mặc định Bambu (an toàn cả bridge ngoài + bridge trong); 1.5 over-extrude lớp đặc trên infill → telegraph mặt trên"),
              "PETG": ("1.05", "FB maker: PETG vón cục khi flow cao → chỉ nhích trên default 1.0, TEST 1.0–1.1"),
              "ABS":  ("1.0",  "GIỮ mặc định: ABS bridge kém do co ngót/làm mát chứ không phải flow (Prusa còn giảm); sửa bằng tăng quạt + giảm tốc, TEST"),
              "ASA":  ("1.0",  "GIỮ mặc định: ASA bridge kém do co ngót/làm mát chứ không phải flow; sửa bằng tăng quạt + giảm tốc, TEST")}
-    bflow, bnote = BFLOW.get(fam, ("1.5", "giả định PLA (file không khai báo nhựa) — TEST nếu nhựa khác"))
+    bflow, bnote = BFLOW.get(fam, ("1.0", "mặc định Bambu (file không khai báo nhựa) — TEST nếu cần bridge ngoài dày hơn"))
     bspeed = "25" if fam in ("", "PLA", "PETG") else "20"   # nhua co ngot: cham hon chut cho kip nguoi
     p["bridge_flow"] = bflow
     p["bridge_speed"] = [bspeed]
@@ -1889,7 +1902,7 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced",
         p["ironing_type"] = "no ironing"
 
     # 10) INFILL/WALL OVERLAP — wiki: 25% chong ho chan long giua ruot va vo
-    p["infill_wall_overlap"] = "25%"
+    p["infill_wall_overlap"] = "15%"     # AUDIT: 25% (dinh thang) phinh vo/lon size thanh mong; 15% = mac dinh Bambu
     p["seam_gap"] = "10%"                        # wiki: 0-15% khi PA tune tot
 
     # 11) LOP DAU — giu 50 mm/s (so Bambu tune cho A1: PEI nham + input shaping);
@@ -1902,12 +1915,17 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced",
                    f"{ratio:.1f} — lớp dày hơn nuốt độ vênh bàn + bead bè rộng hơn → bám chắc "
                    f"hơn mà KHÔNG chậm đi. Tốc độ giữ 50 mm/s chuẩn A1.")
     else:
-        # Set TUONG MINH = layer height chinh (khong de base preset ke thua quyet dinh)
-        # -> JSON xuat ra khop dung voi cau why, khong lech base "0.28 Extra Draft"...
-        p["initial_layer_print_height"] = f"{lh:g}"
-        why.append(f"Lớp đầu giữ 50 mm/s / {lh:g}mm (chuẩn A1): đáy {bed} cm² bám thoải mái trên "
-                   f"bàn PEI nhám. 25 mm/s là số cũ cho máy bàn kính — chỉ chậm thêm chứ "
-                   f"không bám thêm.")
+        # AUDIT 2026-07-19: SAN lop dau >= 0.20mm (Bambu ship 0.20 cho MOI profile ke ca
+        # "0.16 Optimal" — lop dau day nuot do venh ban + bead rong hon = BAM chac hon).
+        # Truoc day = lh (0.16 o Dep) -> mong hon san Bambu -> de bong goc/venh. Khong bao
+        # gio de lop dau < 0.20 tren A1.
+        ilh = max(0.20, lh)
+        p["initial_layer_print_height"] = f"{ilh:g}"
+        why.append(f"Lớp đầu 50 mm/s / {ilh:g}mm (Bambu sàn 0.20 cho MỌI profile): đáy {bed} cm² "
+                   f"bám ổn trên PEI nhám. "
+                   + (f"Chế độ Đẹp layer {lh:g}mm nhưng lớp đầu GIỮ 0.20 (dày hơn = nuốt vênh + "
+                      f"bám chắc, không hạ 0.16 như trước — chống bong góc)." if lh < 0.20 else
+                      "25 mm/s là số cũ cho bàn kính — chỉ chậm chứ không bám thêm."))
 
     # 12) VAT CAO -> TU GIAM GIA TOC + TOC DI CHUYEN.
     #     Doc tu tall_rules() = NGUON DUY NHAT (preset + tip + guide deu lay tu day).
