@@ -1596,12 +1596,21 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced",
     #    Yeu to VAT LIEU (Simplify3D/Xometry): ABS/ASA co ngot manh -> venh mep du day
     #    rong, van can brim. PLA/PETG tren PEI nham thi theo hinh hoc thuan tuy.
     if rounded_base and bed >= 8:
+        # Brim RONG theo % cham ban: cang it cham (khung mong/canh tay dai) cang can rong.
+        # 26% cham + brim 5mm VAN cong venh (user in tabletipad khay 1 2026-07-19).
+        bw = "10" if bed_frac < 0.3 else ("8" if bed_frac < 0.5 else "5")
+        thin_frame = bed_frac < 0.5
         p["brim_type"] = "outer_only"
-        p["brim_width"] = "5"
-        why.append(f"Brim 5mm (đáy BO CONG/VÁT): chỉ {int(bed_frac*100)}% footprint chạm bàn "
-                   f"({bed} cm² / {foot:.0f} cm²) — mép ngoài đáy cong hớt lên, lớp 1-2 ở mép "
-                   f"là dải mỏng in hờ → xù mép, bong, kéo sợi. Brim neo mép cong xuống bàn "f"(giá đo thật: +1.9% thời gian, +1.9% nhựa — quá rẻ so với hỏng lớp đầu). "
-                   f"Triệt để hơn: úp mặt đáy phẳng nhất xuống bàn khi sắp xếp.")
+        p["brim_width"] = bw
+        why.append(f"Brim {bw}mm (đáy BO CONG/VÁT — chỉ {int(bed_frac*100)}% footprint chạm bàn: "
+                   f"{bed} cm²/{foot:.0f} cm²): mép đáy cong hớt lên, lớp 1-2 ở mép in hờ → xù, bong, "
+                   f"cong vênh."
+                   + (f" ⚠ ĐÁY CHẠM RẤT ÍT (khung mỏng / cánh tay dài) → 5mm không đủ, đã nâng {bw}mm. "
+                      "Cánh tay dài mỏng vẫn dễ cuốn dù có brim — BẮT BUỘC: (1) LAU BÀN bằng cồn (dầu "
+                      "tay là thủ phạm vênh #1); (2) Painted ▸ Brim Ears sơn TAI ở ĐẦU cánh tay; "
+                      "(3) bàn 65°C." if thin_frame
+                      else " Brim neo mép xuống bàn (giá đo +1.9% thời gian/nhựa). Triệt để: úp mặt "
+                      "phẳng nhất xuống bàn."))
     elif bed >= 20 and ratio <= 3 and not brim_prone:
         p["brim_type"] = "no_brim"
         p["brim_width"] = "0"
@@ -1655,8 +1664,22 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced",
                    "trước mỗi lần in — vẽ thêm skirt là tốn thời gian vô ích. (PLA/PETG không "
                    "cần draft shield chắn gió.)")
 
+    # BE MAT vong theo luoi infill (telegraphing): vat MONG nhieu mat phang + infill THUA
+    # -> mat tren VONG xuong luoi (user in tabletipad khay 1 2026-07-19, vet cheo ±45°).
+    # Nang infill do mat tren + tang cung; CHI vat mong (khoi doi gio vat day dac).
+    _fr = (r.get("faces") or {}).get("flat_ratio", 0)
+    try:
+        _inf = float(str(p.get("sparse_infill_density", "0")).rstrip("%"))
+    except ValueError:
+        _inf = 0
+    if h_mm and h_mm < 40 and _fr >= 0.5 and 0 < _inf < 15:
+        p["sparse_infill_density"] = "15%"
+        why.append(f"Ruột {int(_inf)}%→15% (vật MỎNG {h_mm:.0f}mm · {int(_fr*100)}% mặt phẳng): infill "
+                   f"quá thưa → mặt trên VÕNG xuống lưới (vệt chéo ±45°). 15% đỡ mặt trên chắc hơn + "
+                   f"cứng hơn, gần như không đội thời gian trên vật mỏng.")
+
     # 5) TOP/BOTTOM SHELL — tinh theo quy tac do day (wiki OrcaSlicer), khong cung "4/3"
-    infill_pct = float(re.sub(r"[^\d.]", "", M["infill"]) or 10)
+    infill_pct = float(re.sub(r"[^\d.]", "", str(p.get("sparse_infill_density") or M["infill"])) or 10)
     tsl, tsl_why = top_shell_layers(lh, infill_pct, 1.0)
     bsl = max(3, math.ceil(0.8 / lh))
     p["top_shell_layers"] = str(tsl)
