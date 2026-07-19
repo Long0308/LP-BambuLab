@@ -1952,7 +1952,7 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced",
 # nozzle temp + max_vol tra tu preset official bambulab/BambuStudio (GitHub); note tu
 # wiki Bambu (clog/heat-creep/drying) + cong dong (r/BambuLab, forum BL). level: warn=do.
 FILAMENT_REF = {
-    "PLA LITE":  {"temp": "220°C (A1)", "flow": 16, "level": "info",
+    "PLA LITE":  {"temp": "220°C (A1)", "flow": 21, "level": "info",
                   "note": "Dòng rẻ, HÚT ẨM rất nhanh (khay AMS Lite không sấy) → kéo sợi/xù thì SẤY 50-55°C/8h. Official A1: 220°C ('Bambu PLA Lite @BBL A1' OVERRIDE bản @base 210 — user đối chiếu 2026-07-16); overhang rủ/kéo sợi thì HẠ dần 210-215."},
     "PLA MATTE": {"temp": "230°C (an toàn)", "flow": 12, "level": "warn",
                   "note": "HẠT ĐỘN mài mòn + tích cặn như nhựa CF → DỄ KẸT. SỐ AN TOÀN cộng đồng A1: nhiệt 230°C (KHÔNG để 220 stock / không mượn profile Lite; ca cứng đầu tăng dần ≤255), HẠ max volumetric ~12 mm³/s (stock ~22 — giảm nửa là chống kẹt hiệu quả nhất), flow ratio 0.98-0.99, bàn 55°C, SẤY trước (cuộn Matte ra lò đã ẩm ~15g). COLD PULL ≥1 lần/tháng (nóng 260°C, hạ ~90°C rồi rút mạnh kéo cặn). Kẹt cứng: nâng 280-300°C hoá lỏng cục kẹt rồi rút."},
@@ -1983,11 +1983,12 @@ FILAMENT_REF = {
 #   bed lay tu bang khuyen nghi wiki heat-creep (PLA 45-60 / PETG 60-80 / ABS-ASA 90-100 / TPU 35-45)
 FIL_EXPORT = {
     "PLA LITE":  {"inherits": "Bambu PLA Lite @BBL A1", "verified": True,   # ✓ template
-                  "safe": {"nozzle_temperature": "220", "filament_max_volumetric_speed": "16",
+                  "safe": {"nozzle_temperature": "220", "filament_max_volumetric_speed": "21",
                            "filament_flow_ratio": "0.98", "hot_plate_temp": "65"},
-                  "why": "220°C + ban 65 = OFFICIAL A1 ('Bambu PLA Lite @BBL A1' override ban @base 210/—; "
-                         "phien truoc chi tra @base nen ghi sai 210 — user bat loi 2026-07-16). "
-                         "mvs 16 + flow 0.98 ke thua tu @base."},
+                  "why": "220°C + bàn 65 = OFFICIAL A1. mvs 21 = STOCK Bambu PLA (tra MCP: forum/reddit/"
+                         "wiki xác nhận PLA Bambu = 21 mm³/s + inner wall 300). TRUOC hạ 16 'thận trọng' "
+                         "-> MÁY ĐÙN CHẬM ~24% (user bắt lỗi 2026-07-19). PLA Lite là PLA thường → 21 an "
+                         "toàn; chỉ MATTE/đen mới cần hạ 12 (bột độn/carbon dễ kẹt)."},
     "PLA MATTE": {"inherits": "Bambu PLA Matte @BBL A1", "verified": True,  # ✓ template
                   "safe": {"nozzle_temperature": "230", "filament_max_volumetric_speed": "12",
                            "filament_flow_ratio": "0.98", "hot_plate_temp": "55"},
