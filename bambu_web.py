@@ -930,6 +930,14 @@ def on_message(c, u, msg):
             MILE.update(file=gf, err=0,
                         sent={m for m in (30, 50, 75) if pct0 >= m},
                         vchecked={v for v in VISION_CHECK_PCTS if pct0 >= v})
+        # BAT DAU IN 1 file -> bao Telegram (user chot 2026-07-19). Chi khi VUA CHUYEN vao
+        # RUNNING tu trang thai KHONG-in (idle/xong/loi/chuan bi) o % thap: khong phai hub
+        # restart giua chung (prev=None), khong phai resume tu PAUSE, khong spam moi update.
+        if (prev in ("IDLE", "FINISH", "FAILED", "PREPARE", "SLICING", "PREPARING")
+                and gc == "RUNNING" and gf and pct0 < 8):
+            notify.send("🖨 <b>BẮT ĐẦU IN</b>",
+                        ui_tg.status_card(snap, True, weight=_job_weight(),
+                                          hub=notify.hub_url()))
         if gc == "RUNNING":
             try:
                 pct = int(snap.get("mc_percent") or 0)
