@@ -1118,18 +1118,55 @@ def tall_summary(h_mm: float, mode: str = "balanced") -> str:
                      for r in tall_rules(h_mm, mode) if r["val"] != r["base"])
 
 
-def preset_name(mode: str, lh: float, filament: str = "") -> str:
-    """Ten preset chuan: LP-<nhua>-<che do>-<lop>mm.
+def color_name(hexcol: str) -> str:
+    """'#000000' -> 'Black' — ten mau ngan cho TEN PRESET (mau quyet dinh bo so: Matte
+    den 230/12 khac trang). Bang mau co ban gan dung theo RGB. Rong -> ''."""
+    h = (hexcol or "").lstrip("#")[:6]
+    try:
+        rv, gv, bv = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    except (ValueError, IndexError):
+        return ""
+    mx, mn = max(rv, gv, bv), min(rv, gv, bv)
+    if mx < 60:
+        return "Black"
+    if mn > 200:
+        return "White"
+    if mx - mn < 30:
+        return "Gray"
+    if rv >= gv and rv >= bv:
+        if bv < 100 and gv > 170:
+            return "Yellow"
+        if bv < 100 and gv > 60:
+            return "Orange"
+        return "Pink" if bv > 140 else "Red"
+    if gv >= rv and gv >= bv:
+        return "Cyan" if bv > 160 else "Green"
+    return "Purple" if rv > 120 else "Blue"
 
-    Vd: LP-PLA-Lite-Fast-0.28mm. Co TEN NHUA de user biet preset danh cho cuon nao
-    (PLA Lite/Matte/Silk khac nhau). KHONG kem ten file model theo yeu cau.
+
+def bambu_base_name(lh: float) -> str:
+    """Ten process preset GOC cua Bambu theo layer height — DUNG y het Studio hien
+    (vd '0.20mm Standard @BBL A1'). Dung cho nhan baseline + inherits (user 2026-07-19)."""
+    base = {0.28: "0.28mm Extra Draft", 0.24: "0.24mm Draft", 0.20: "0.20mm Standard",
+            0.16: "0.16mm Optimal", 0.12: "0.12mm Fine"}.get(round(float(lh or 0.2), 2),
+                                                             "0.20mm Standard")
+    return f"{base} @BBL A1"
+
+
+def preset_name(mode: str, lh: float, filament: str = "", color: str = "") -> str:
+    """Ten preset chuan: LP-<nhua>-<mau>-<che do>-<lop>mm.
+
+    Vd: LP-PLA-Matte-Black-Balanced-0.2mm. Co TEN NHUA + MAU de user biet preset danh
+    cho cuon nao (PLA Matte den 230/12 khac trang — user 2026-07-19). KHONG kem ten file
+    model o day (user go them qua o ghi chu).
     """
     tag = QUALITY_TAG.get(mode, mode.capitalize())
     # ten nhua -> gon, GIU acronym viet hoa: "PLA LITE" -> "PLA-Lite", "PETG BASIC" -> "PETG-Basic"
     acr = {"PLA", "PETG", "ABS", "ASA", "TPU", "PVA", "PC", "PA", "PET", "HIPS", "PCTG", "PP", "CF", "GF"}
     words = [w for w in re.split(r"[^A-Za-z0-9]+", filament or "PLA") if w]
     fil = "-".join(w.upper() if w.upper() in acr else w.capitalize() for w in words)[:24] or "PLA"
-    return f"LP-{fil}-{tag}-{lh:g}mm"
+    col = color_name(color)
+    return f"LP-{fil}" + (f"-{col}" if col else "") + f"-{tag}-{lh:g}mm"
 
 
 # Vi tri MOI khoa preset trong giao dien Bambu Studio: (tab, section, nhan tieng Anh).
@@ -1337,17 +1374,18 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced",
     lh = M["layer"]
     why = []
 
-    # inherits khop theo layer height (base preset that cua A1), khong cung 1 gia tri
-    base = {0.28: "0.28mm Extra Draft", 0.24: "0.24mm Draft", 0.20: "0.20mm Standard",
-            0.16: "0.16mm Optimal", 0.12: "0.12mm Fine"}.get(lh, "0.20mm Standard")
-    # ten nhua: NGUOI DUNG chon (fil_sel) > khay AMS that (slot 1) > khai bao file > PLA
+    # inherits khop theo layer height (base preset that cua A1 — dung ten Bambu goc)
+    inh = bambu_base_name(lh)
+    # ten nhua: NGUOI DUNG chon (fil_sel) > khay AMS that (slot 1) > khai bao file > PLA;
+    # KEM MAU (fil_sel.color) -> LP-PLA-Matte-Black-... (user 2026-07-19).
     _sel = r.get("fil_sel") or {}
     _ams0 = (r.get("ams") or [None])[0]
     _cft = ((r.get("config") or {}).get("filament_type") or [None])[0]
-    pname = preset_name(mode, lh, filament=_sel.get("key") or _ams0 or _cft or "PLA")
+    pname = preset_name(mode, lh, filament=_sel.get("key") or _ams0 or _cft or "PLA",
+                        color=_sel.get("color") or "")
     p = {
         "from": "User",
-        "inherits": f"{base} @BBL A1",
+        "inherits": inh,
         "name": pname,
         "print_settings_id": pname,
         # 2 field extruder giong het hub HTML (processPresetJSON) — thieu thi Bambu

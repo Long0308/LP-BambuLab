@@ -290,7 +290,17 @@ def run_modes(src: str, workdir: str, modes=("fast", "balanced", "quality"),
     ok, res, st = slicer_cli.slice_3mf(base, os.path.join(workdir, "b0"), plate=plate)
     if not ok:
         return {"error": res}
-    rep["baseline"] = {**st, "secs": st.get("total_secs") or _secs(st.get("time"))}
+    # Nhan baseline = ten process GOC Bambu theo layer height cua file (dung y het Studio
+    # hien, vd '0.20mm Standard @BBL A1') — khong phai 'AUTO-balanced' (user 2026-07-19).
+    try:
+        import zipfile as _zf
+        with _zf.ZipFile(base) as _z:
+            _cfg = json.loads(_z.read(CFG).decode("utf-8", "ignore"))
+        _blh = float((_cfg.get("layer_height") or 0.2))
+    except (OSError, ValueError, KeyError):
+        _blh = 0.2
+    rep["baseline"] = {**st, "secs": st.get("total_secs") or _secs(st.get("time")),
+                       "preset_name": analyzer.bambu_base_name(_blh)}
 
     an = analyzer.analyze(base, plate=plate, fil_sel=fil_sel, color_sel=color_sel)
     rep["analysis"] = {k: an.get(k) for k in

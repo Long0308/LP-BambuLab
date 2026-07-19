@@ -2728,7 +2728,7 @@ function renderE2E(r){
   const b=r.baseline||{}; const MS=["fast","balanced","quality"];
   let h='<div class="card"><h3 style="margin-top:0">So sánh — mỗi dòng là 1 lần slice THẬT</h3>'
     +'<table><tr><th>Chế độ</th><th>Thời gian</th><th>Nhựa</th><th>Lớp</th></tr>'
-    +'<tr style="background:rgba(255,255,255,.04)"><td><b>Mặc định</b><br><span class="mut">AUTO-balanced 0.20</span></td>'
+    +'<tr style="background:rgba(255,255,255,.04)"><td><b>Mặc định</b><br><span class="mut">'+esc(b.preset_name||"0.20mm Standard @BBL A1")+'</span></td>'
     +'<td>'+esc(b.time||"?")+'</td><td>'+(b.weight_g||"?")+' g</td><td>'+(b.layers||"?")+'</td></tr>';
   const LBL={fast:"Nhanh",balanced:"Cân bằng",quality:"Đẹp"};
   let anyErr=false;
