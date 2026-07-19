@@ -1993,13 +1993,21 @@ FIL_EXPORT = {
                          "ban 65 theo official A1."},
     "PETG BASIC":{"inherits": "Bambu PETG Basic @BBL A1", "verified": True,  # ✓ template
                   "safe": {"nozzle_temperature": "245", "filament_max_volumetric_speed": "13",
-                           "filament_flow_ratio": "0.94", "hot_plate_temp": "70"},
-                  "why": "Lay NGUYEN so that trong template may nay (13 / 0.94 / ban 70)."},
+                           "filament_flow_ratio": "0.94", "hot_plate_temp": "70",
+                           # RETRACTION (video PETG SETTINGS nhan manh + cong dong A1): PETG
+                           # KEO SOI manh -> tang len 1.2mm + HA toc rut 30mm/s (cham hon PLA
+                           # de soi dut gon, khong vuot); den/xam lo soi ro nhat.
+                           "filament_retraction_length": "1.2", "filament_retraction_speed": "30"},
+                  "why": "Bambu PETG Basic (13 / 0.94 / ban 70) + RETRACTION 1.2mm@30mm/s chong keo "
+                         "soi (cong dong A1 + video). Den/xam: giu KHO (PETG hut am -> soi), ban 70 "
+                         "textured PEI DINH RAT CHAT -> boi keo lam CHONG DINH (de go), dung len 80."},
     "PETG":      {"inherits": "Bambu PETG HF @BBL A1", "verified": True,     # ✓ audit 2 tang
                   "safe": {"nozzle_temperature": "240", "filament_max_volumetric_speed": "18",
-                           "filament_flow_ratio": "0.94", "hot_plate_temp": "70"},
-                  "why": "Official A1: 240 / mvs 18 / flow 0.94 / ban 70 (audit 2 tang — so cu 245/21/0.95 "
-                         "la tang @base, dinh dung bug 2 tang nhu PLA Lite)."},
+                           "filament_flow_ratio": "0.94", "hot_plate_temp": "70",
+                           "filament_retraction_length": "1.2", "filament_retraction_speed": "30"},
+                  "why": "Bambu PETG HF (240 / mvs 18 / 0.94 / ban 70, audit 2 tang) + RETRACTION "
+                         "1.2mm@30mm/s chong keo soi. Cuon HOT ngoai (vd omega PETG 265-279°C, min260/"
+                         "max285) chay nong hon -> chi nang nhiet neu ĐUNG cuon do, mac dinh giu Bambu."},
     "ABS":       {"inherits": "Bambu ABS @BBL A1", "verified": True,         # ✓ audit 2 tang
                   "safe": {"nozzle_temperature": "270", "filament_max_volumetric_speed": "16",
                            "filament_flow_ratio": "0.95", "hot_plate_temp": "100"},

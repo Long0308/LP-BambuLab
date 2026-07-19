@@ -2338,6 +2338,7 @@ function fillReview(){
   const setSel=(id,v)=>{const e=g(id);if(e&&v)e.value=v;};
   setSel("ov_brim",_v1(p.brim_type)); setSel("ov_sup_type",_v1(p.support_type));
   setSel("ov_sup_style",_v1(p.support_style)); setSel("ov_sup_ipattern",_v1(p.support_interface_pattern));
+  setSel("ov_sup_ifil",_v1(p.support_interface_filament)); setSel("ov_sup_basefil",_v1(p.support_filament));
   const es=_v1(p.enable_support); if(g("ov_support")) g("ov_support").checked=(es===true||es==="1"||es===1);
   const op=_v1(p.support_on_build_plate_only); if(g("ov_sup_onplate")) g("ov_sup_onplate").checked=(op==="1"||op===1||op===true);
   const fs=window.__filSelInfo||{}, s=g("revsum");
@@ -2359,7 +2360,7 @@ function onSupStrat(){
   put("ov_sup_ztop",k.support_top_z_distance); put("ov_sup_zbot",k.support_bottom_z_distance);
   put("ov_sup_ispacing",k.support_interface_spacing); put("ov_sup_itop",k.support_interface_top_layers);
   put("ov_sup_ipattern",k.support_interface_pattern);
-  window.__supFil=k.support_interface_filament||""; window.__supBase=k.support_filament||"";  /* interface/base filament slot */
+  put("ov_sup_ifil",k.support_interface_filament); put("ov_sup_basefil",k.support_filament);  /* nap dropdown nhua support */
 }
 function ovQS(){
   const g=id=>document.getElementById(id), t=id=>{const e=g(id);return e&&e.dataset&&e.dataset.touched;};
@@ -2372,8 +2373,7 @@ function ovQS(){
   q+=S("ov_sup_angle","ov_sup_angle")+C("ov_sup_onplate","ov_sup_onplate");
   q+=S("ov_sup_ztop","ov_sup_ztop")+S("ov_sup_zbot","ov_sup_zbot")+S("ov_sup_itop","ov_sup_itop");
   q+=S("ov_sup_ispacing","ov_sup_ispacing")+S("ov_sup_ipattern","ov_sup_ipattern");
-  if(window.__supFil) q+="&ov_sup_ifil="+encodeURIComponent(window.__supFil);
-  if(window.__supBase!==undefined&&window.__supBase!=="") q+="&ov_sup_basefil="+encodeURIComponent(window.__supBase);
+  q+=S("ov_sup_ifil","ov_sup_ifil")+S("ov_sup_basefil","ov_sup_basefil");   // nhua support chon tu AMS
   return q;
 }
 function reset(msg){
@@ -2748,6 +2748,15 @@ function pnamePreview(){
    +bRow("Style", '<select id="ov_sup_style" onchange="this.dataset.touched=1" '+IST+'>'
        +'<option value="">—</option><option value="default">Default</option><option value="snug">Snug</option>'
        +'<option value="tree_hybrid">Tree Hybrid</option><option value="tree_strong">Tree Strong</option><option value="tree_slim">Tree Slim</option></select>')
+   /* Nhua lam support — CHON tu khay AMS THAT (user 2026-07-19): de (base) + mat tiep
+      xuc (interface). PLA in -> interface = PETG (khac vat lieu) go sach; de van PLA. */
+   +(function(){ const af=j.ams_filaments||[];
+       let b='<option value="0">Default (theo model)</option>', f='<option value="">— (giữ theo phân tích)</option>';
+       for(const t of af){ const o='<option value="'+(+t.slot||0)+'">Khe '+(+t.slot||0)+' — '+esc(t.sub)+' '+esc(t.color||'')+'</option>'; b+=o; f+=o; }
+       return bRow('Support/raft base (đế)', '<select id="ov_sup_basefil" onchange="this.dataset.touched=1" '+IST+'>'+b+'</select>')
+            + bRow('Support/raft interface (mặt tiếp xúc)', '<select id="ov_sup_ifil" onchange="this.dataset.touched=1" '+IST+'>'+f+'</select>'
+                +' <span class="mut" style="font-size:11px">★ khác vật liệu = gỡ sạch</span>');
+     })()
    +bRow("Threshold angle", nIn("ov_sup_angle",0,90,1)+' °')
    +bRow("On build plate only", '<label style="cursor:pointer"><input id="ov_sup_onplate" type="checkbox" onchange="this.dataset.touched=1"> chỉ từ mặt bàn</label>')
    +bRow("Top Z distance", nIn("ov_sup_ztop",0,1,0.01)+' mm <span class="mut" style="font-size:11px">— 0 = khác vật liệu; ≥0.15 cùng loại</span>')
