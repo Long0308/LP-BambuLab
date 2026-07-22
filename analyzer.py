@@ -1892,14 +1892,28 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced",
                    f"thường. CHỊU LỰC NẶNG (bản lề, giá đỡ tải): tự nâng Sparse infill density lên "
                    f"15–25% trong tab Strength; Bambu tự biến vùng ruột <15mm² thành đặc sẵn.")
 
-    # 9) IRONING — chi khi co mat phang tren LON va uu tien dep
+    # 9) IRONING — cach DUY NHAT xoa het van duong dun tren mat tren (user 2026-07-20:
+    #    'loi van' du line width/infill da chuan — van dun la ban chat FDM, phai UI moi het).
+    #    So cong dong (MakerWorld ironing calibration + reddit PLA/PETG): flow 20-35% (31-33%
+    #    voi Bambu), speed 30-70, spacing 0.1 'optimal'. MAC DINH BAMBU flow 10% LA QUA THAP
+    #    — chinh wiki Bambu minh hoa 'ironing flow too small -> mat khong min'.
     top_flat = fa.get("top_flat_pct", 0)
     if mode == "quality" and top_flat >= 8:
         p["ironing_type"] = "top"
-        why.append(f"Bật ủi (ironing) mặt trên: có {fa.get('top_flat_cm2')} cm² mặt phẳng hướng lên "
-                   f"({top_flat}%) → ủi cho phẳng bóng. Tốn thêm ít thời gian, chỉ bật ở chế độ Đẹp.")
+        p["ironing_flow"] = "25%"          # 10% mac dinh qua thap -> van khong min
+        p["ironing_spacing"] = "0.1"       # MakerWorld: 0.1 optimal (mac dinh 0.15)
+        p["ironing_speed"] = "30"          # cham = min hon (cong dong 30-70)
+        why.append(f"Bật ỦI (ironing) mặt trên: có {fa.get('top_flat_cm2')} cm² mặt phẳng hướng lên "
+                   f"({top_flat}%) → ủi phẳng bóng, XOÁ vân đường đùn. Flow 25% + spacing 0.1 + "
+                   f"speed 30 (số cộng đồng MakerWorld/reddit — mặc định Bambu flow 10% quá thấp, "
+                   f"ủi không mịn). Tốn thêm ~19 phút (đo thật) nên chỉ bật ở chế độ Đẹp.")
     else:
         p["ironing_type"] = "no ironing"
+        if top_flat >= 8:
+            why.append(f"KHÔNG ủi mặt trên ở chế độ này ({fa.get('top_flat_cm2')} cm² phẳng hướng lên): "
+                       f"ủi tốn ~19 phút (đo thật) nên chỉ bật ở chế độ ĐẸP. Mặt trên vì thế vẫn thấy "
+                       f"VÂN đường đùn — đó là bản chất FDM, không phải lỗi. Muốn mất vân: chọn chế độ "
+                       f"Đẹp, hoặc bật ô 'Ủi mặt trên' trong bảng Chuẩn bị in.")
 
     # 10) INFILL/WALL OVERLAP — wiki: 25% chong ho chan long giua ruot va vo
     p["infill_wall_overlap"] = "15%"     # AUDIT: 25% (dinh thang) phinh vo/lon size thanh mong; 15% = mac dinh Bambu

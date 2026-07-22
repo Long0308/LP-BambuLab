@@ -44,7 +44,8 @@ SAFE_KEYS = (
     "seam_position", "seam_slope_type", "seam_gap", "brim_type", "brim_width",
     "skirt_loops",   # brim_object_gap CO TINH BO KHOI SAFE_KEYS: ghi key nay lam CLI crash
     "draft_shield", "enable_arc_fitting", "resolution",
-    "ironing_type", "infill_wall_overlap", "initial_layer_speed",
+    "ironing_type", "ironing_flow", "ironing_spacing", "ironing_speed",
+    "infill_wall_overlap", "initial_layer_speed",
     "initial_layer_print_height", "top_surface_pattern", "top_shell_thickness",
     "top_surface_line_width", "bridge_flow", "bridge_speed",
     "enable_overhang_speed", "overhang_1_4_speed", "overhang_2_4_speed",

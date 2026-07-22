@@ -200,6 +200,23 @@ def _handle(token: str, chat: str, text: str, hooks: dict) -> None:  # noqa: PLR
         _send(token, chat, a, html=False)
 
 
+def _handle_safe(token: str, chat: str, text: str, hooks: dict) -> None:
+    """Boc _handle. BUG THAT (user 2026-07-20 'bot im ru'): _handle chay o thread rieng
+    KHONG bat loi — bat ky exception nao (hook status/temps, ai_chat, mang) la thread CHET
+    IM, user gui tin khong he co hoi am, cung khong co log de biet duong sua. Gio: ghi log
+    + BAO LOI ra Telegram de con biet la bot con song va hong o dau."""
+    try:
+        _handle(token, chat, text, hooks)
+    except Exception as e:                                   # noqa: BLE001
+        notify._log(f"[bot] loi xu ly {text[:40]!r}: {type(e).__name__}: {str(e)[:200]}")  # noqa: SLF001
+        try:
+            _send(token, chat,
+                  f"⚠️ Bot lỗi khi xử lý tin này: {type(e).__name__}: {str(e)[:180]}\n"
+                  "Đã ghi vào notify.log. Thử lại, hoặc bấm nút bên dưới.", html=False)
+        except Exception:                                    # noqa: BLE001
+            pass
+
+
 def _register_commands(token: str) -> None:
     """Dang ky menu lenh '/' cua Telegram (hien goi y khi go /) — tu lanh moi lan chay."""
     try:
@@ -235,10 +252,12 @@ def loop(hooks: dict) -> None:
                 chat = str((m.get("chat") or {}).get("id") or "")
                 if chat != str(me):
                     continue                    # nguoi la — im lang tuyet doi
-                threading.Thread(target=_handle,
+                threading.Thread(target=_handle_safe,
                                  args=(token, chat, m.get("text") or "", hooks),
                                  daemon=True).start()
-        except Exception:                       # noqa: BLE001 — mang VN chap chon
+        except Exception as e:                  # noqa: BLE001 — mang VN chap chon
+            # TRUOC day nuot im -> khong biet bot dang loi gi. Gio GHI LOG (van ngu 5s).
+            notify._log(f"[bot] getUpdates loi: {type(e).__name__}: {str(e)[:160]}")  # noqa: SLF001
             time.sleep(5)
 
 
