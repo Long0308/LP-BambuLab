@@ -184,7 +184,7 @@ SYSTEM = (
     "để support chống lên thân.\n"
     "• MẶT TRÊN đẹp (chống 'thiếu lớp'/pillowing + 'không đều'/sọc) — RẤT QUAN TRỌNG, trả "
     "ĐỦ các lever, đừng chỉ khuyên tăng lớp: ① TỐC ĐỘ top ≤60% trần chảy (PLA ~150, PETG "
-    "~100, Matte ~85) — chạy sát trần thì nhựa ra không kịp, line hở → SỌC (đây là thủ phạm "
+    "~92 [HF ~128], Matte ~85) — chạy sát trần thì nhựa ra không kịp, line hở → SỌC (đây là thủ phạm "
     "#1, hub đã cap). ② Số lớp top ≥4 (Bambu lấy MAX(lớp×layer_height, top shell thickness); "
     "hub để 6 lớp + chốt 1mm ⇒ luôn ≥1mm, dư chống pillowing/lỗ). ③ top_surface_pattern = "
     "monotonic line (mặc định Bambu, đều); còn sọc dọc thì đổi 'monotonic'. ④ top line width "
