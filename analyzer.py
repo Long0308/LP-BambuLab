@@ -2329,6 +2329,8 @@ def filament_preset(name: str, custom: str = "") -> dict | None:
     # lop dau dung cung nhiet/ban -> khong bi under-melt ngay lop 1 (nguyen nhan ket som)
     p["nozzle_temperature_initial_layer"] = [safe["nozzle_temperature"]]
     p["hot_plate_temp_initial_layer"] = [safe["hot_plate_temp"]]
+    p["textured_plate_temp"] = [safe["hot_plate_temp"]]
+    p["textured_plate_temp_initial_layer"] = [safe["hot_plate_temp"]]
     return {"key": key, "preset": p, "why": ex["why"], "verified": ex["verified"],
             "inherits": ex["inherits"], "safe": safe}
 
