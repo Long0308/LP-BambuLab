@@ -1008,6 +1008,14 @@ TROUBLESHOOT = {
         "IN QUÁ NHANH = đặt tốc vượt TRẦN CHẢY (mvs ÷ (layer×line width)) → số ẢO, máy tự hãm; "
         "nhựa ra không kịp thì line hở → sọc/bong lớp. Giữ ≤ trần chảy (PLA ~150, PETG ~100, Matte ~85)",
     ],
+    "PETG kéo sợi / mạng nhện / lưới Voronoi (nhiều lỗ)": [
+        "SẤY PETG 65°C/6-8h — ẩm là thủ phạm #1 gây xì bọt khí đẩy nhựa phì liên tục thành mạng nhện",
+        "Bật Quality ▸ Reduce crossing wall → đầu phun men theo thành, không nhảy travel cắt ngang hàng trăm lỗ rỗng (chống kéo tơ + mòn nhựa)",
+        "HẠ TỐC ĐỘ & TRẦN CHẢY: cuộn thường/Eco trần 12–13 mm³/s (Tinmorry Eco 12 mm³/s), tốc độ tường/ruột ≤149 mm/s (không chạy 200–253 mm/s)",
+        "Filament ▸ Setting Overrides ▸ Z hop when retract = 0.4mm (Spiral/Auto lift) → nhấc mũi khi nhảy lỗ, không vướng tơ sợi cào thành cục blob",
+        "Retraction 1.2mm @ 30mm/s cho PETG (chậm hơn PLA để đứt dứt khoát)",
+        "Tránh filament grinding: mô hình hàng nghìn lỗ giật retract liên tục dễ nhai nát sợi nhựa dẻo ở bánh răng extruder gây tắc vòi",
+    ],
     "PETG lớp đầu bông / tróc (in cao hoặc nhỏ)": [
         "SẤY PETG 65°C/6-8h — ẨM là thủ phạm #1 gây bông/sủi bọt (AMS Lite KHÔNG sấy); giữ khô cả khi in (forum Bambu)",
         "BRIM 5mm; góc nhọn thêm Brim Ears (mouse ears) — fix ĐÃ XÁC NHẬN cho ca tróc GIỮA CHỪNG ở vật đáy nhỏ/cao (forum Bambu t/76986)",
@@ -1318,6 +1326,7 @@ BS_LOC = {
     "ironing_type":                   ("Quality",  "Ironing",            "Ironing Type"),
     "wall_generator":                 ("Quality",  "Wall generator",     "Wall generator"),
     "wall_sequence":                  ("Quality",  "Advanced",           "Order of walls"),
+    "reduce_crossing_wall":           ("Quality",  "Advanced",           "Reduce crossing wall"),
     "bridge_flow":                    ("Quality",  "Advanced",           "Bridge flow"),
     "bridge_speed":                   ("Speed",    "Other layers speed", "Bridge"),
     "wall_loops":                     ("Strength", "Walls",              "Wall loops"),
