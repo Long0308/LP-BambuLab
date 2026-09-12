@@ -2227,14 +2227,30 @@ FIL_EXPORT = {
                   "why": "Bambu PETG Basic (13 / 0.94 / ban 70) + RETRACTION 1.2mm@30mm/s chong keo "
                          "soi (cong dong A1 + video). Den/xam: giu KHO (PETG hut am -> soi), ban 70 "
                          "textured PEI DINH RAT CHAT -> boi keo lam CHONG DINH (de go), dung len 80."},
-    "PETG":      {"inherits": "Bambu PETG HF @BBL A1", "verified": True,     # ✓ audit 2 tang
+    # HF = cuon HIGH FLOW THAT (Bambu PETG HF). mvs 18 doi hotend dun ~17-18 mm3/s
+    # -> CHI chon khi cuon dung la HF. PHAI dat TRUOC key "PETG" vi _fil_export khop
+    # key DAU TIEN nam trong ten ("PETG" in "PETG HF" se cuop mat neu de sau).
+    "PETG HF":   {"inherits": "Bambu PETG HF @BBL A1", "verified": True,     # ✓ audit 2 tang
                   "safe": {"nozzle_temperature": "240", "filament_max_volumetric_speed": "18",
                            "filament_flow_ratio": "0.94", "hot_plate_temp": "70",
                            "filament_retraction_length": "1.2", "filament_retraction_speed": "30",
                            "close_fan_the_first_x_layers": "1"},   # PETG: quat OFF lop dau -> bam chac
-                  "why": "Bambu PETG HF (240 / mvs 18 / 0.94 / ban 70, audit 2 tang) + RETRACTION "
-                         "1.2mm@30mm/s chong keo soi. Cuon HOT ngoai (vd omega PETG 265-279°C, min260/"
-                         "max285) chay nong hon -> chi nang nhiet neu ĐUNG cuon do, mac dinh giu Bambu."},
+                  "why": "Bambu PETG HF (240 / mvs 18 / 0.94 / ban 70, audit 2 tang) — CHI cho cuon "
+                         "HIGH FLOW THAT. mvs 18 => make_preset suy toc tuong/ruot ~207 mm/s @layer "
+                         "0.2 (=17.4 mm3/s); cuon PETG THUONG dun khong kip -> may bao 'nhiet do "
+                         "khong du' + thieu dun/keo soi. Cuon thuong phai chon key 'PETG'."},
+    # GENERIC PETG = THAN TRONG (= so PETG Basic), TUYET DOI khong lay so HF.
+    # LY DO (2026-09-12): user chon "PETG" cho cuon PETG thuong -> key nay tro HF mvs 18
+    # -> preset ra toc tuong 207 mm/s => may BAO NHIET DO KHONG DU, ban in thieu dun +
+    # keo soi (anh Voronoi). Cung nguyen tac da ap cho "PLA" generic (ha 21->16 than trong).
+    "PETG":      {"inherits": "Bambu PETG Basic @BBL A1", "verified": True,
+                  "safe": {"nozzle_temperature": "245", "filament_max_volumetric_speed": "13",
+                           "filament_flow_ratio": "0.94", "hot_plate_temp": "70",
+                           "filament_retraction_length": "1.2", "filament_retraction_speed": "30",
+                           "close_fan_the_first_x_layers": "1"},   # PETG: quat OFF lop dau -> bam chac
+                  "why": "PETG khong ro dong -> lay so AN TOAN cua PETG Basic (245 / mvs 13 / 0.94 / "
+                         "ban 70): toc tuong ~150, mat tren ~93 mm/s — hotend A1 dun KIP. Cuon HIGH "
+                         "FLOW that moi chon 'PETG HF' (mvs 18). Retraction 1.2mm@30mm/s chong keo soi."},
     "ABS":       {"inherits": "Bambu ABS @BBL A1", "verified": True,         # ✓ audit 2 tang
                   "safe": {"nozzle_temperature": "270", "filament_max_volumetric_speed": "16",
                            "filament_flow_ratio": "0.95", "hot_plate_temp": "100"},
