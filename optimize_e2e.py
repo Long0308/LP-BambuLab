@@ -31,6 +31,9 @@ VLH = "metadata/layer_heights_profile.txt"
 # Cac key preset an toan de ghi vao project_settings (da kiem chung tren A1 2.7.1)
 SAFE_KEYS = (
     "layer_height", "wall_loops", "wall_generator", "wall_sequence",
+    # 16/09/2026: luoi Voronoi + PETG BAT BUOC bat (do: rut 81 780 -> 52 038 lan).
+    # Da slice that khay 3 voi key nay -> return_code 0, khong loi CLI.
+    "reduce_crossing_wall",
     "sparse_infill_density", "sparse_infill_pattern",
     "top_shell_layers", "bottom_shell_layers",
     "enable_support", "support_type", "support_style", "bridge_no_support",

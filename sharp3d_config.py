@@ -109,7 +109,9 @@ def main() -> int:
     for m, (p, lh, iw, mvs, lw) in procs.items():
         with open(os.path.join(DEST, p["name"] + ".json"), "w", encoding="utf-8") as f:
             json.dump(p, f, ensure_ascii=False, indent=4)
-        fl = iw * lh * lw
+        # Be rong THAT cua tuong trong la 0.45 (Bambu mac dinh), khong phai 0.42 —
+        # xem analyzer.make_preset. In theo 0.42 la bao thap hon thuc te.
+        fl = iw * lh * lw * (0.45 / 0.42)
         print(f"  [ok] {p['name']:38} trong={iw:.0f} ngoai={p['outer_wall_speed'][0]} "
               f"top={p['top_surface_speed'][0]}  -> {fl:.2f} mm3/s = {fl/mvs*100:.0f}% tran")
 

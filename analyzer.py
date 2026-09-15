@@ -1636,25 +1636,33 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced",
     mvs = fl.get("mvs")
     if mvs:
         lw = fl.get("line_width") or 0.42    # suy tu nozzle THAT trong flow_ceiling
-        vmax = int(mvs / (lh * lw))
+        # 🩸 BE RONG THAT CUA TUNG LOAI DUONG (sua 16/09/2026 — loi da lam hong ban in).
+        # Bambu mac dinh: outer_wall_line_width 0.42, inner_wall_line_width 0.45.
+        # Truoc day ca tran mvs LAN cong thuc an toan deu tinh theo 0.42 -> luu luong
+        # THAT do tu gcode: P50 = 95% tran, P90 = 101%, P99 = 110% (do 141 931 doan
+        # lop 1-14 cua tabletipad-pink_plate_3). Tinh dung be rong la BAT BUOC.
+        lw_in = round(lw * (0.45 / 0.42), 4)    # tuong trong / ruot rong hon tuong ngoai
+        vmax = int(mvs / (lh * lw))              # tran theo be rong tuong NGOAI (0.42)
+        vmax_in = int(mvs / (lh * lw_in))        # tran THAT cho tuong trong / ruot (0.45)
         # AUDIT 2026-07-19: tran mvs chi chan DUOI (chong under-extrude); phai chan TREN 300
         # mm/s (tran chuyen dong A1 bed-slinger) — file khai mvs cao (vd ABS 30) o layer mong
         # cho ra 400+ -> ringing/VFA + LECH LOP (nhat la vat cao da ha accel). Cap 300.
         # BIEN AN TOAN 15% (khong phai 3% nhu truoc): xem SAFE_MARGIN o dau file.
-        safe = min(int(vmax * SAFE_MARGIN), HARD_SPEED_CAP)
+        safe_out = min(int(vmax * SAFE_MARGIN), HARD_SPEED_CAP)      # tuong ngoai / mat tren
+        safe = min(int(vmax_in * SAFE_MARGIN), HARD_SPEED_CAP)       # tuong trong / ruot
         p["inner_wall_speed"] = [str(safe)]
         p["sparse_infill_speed"] = [str(safe)]
         p["internal_solid_infill_speed"] = [str(safe)]
         # Thanh ngoai + mat tren CUNG phai <= tran (safe) — neu khong la so ao het,
         # dung mat NHIN THAY nhieu nhat. Truoc day set cung 150/110 co the vuot vmax.
-        outer = min(M["outer"] or min(safe, 180), safe)
+        outer = min(M["outer"] or min(safe_out, 180), safe_out)
         p["outer_wall_speed"] = [str(outer)]
         # MAT TREN: line phai LIEN thanh DA MIN. Chay sat tran chay (>~60%) thi nhua ra
         # KHONG KIP -> line ho -> SOC tren mat top (bug user PETG 2026-08-03: top 150 =
         # 90% tran PETG 167). Cap rieng mat tren o 60% tran chay -> PLA (vmax 250) van
         # =150 KHONG doi; PETG (vmax 167) tu ha ve 100; Matte (143) ve 86.
         top_cap = round(vmax * 0.6)
-        top = min(outer, 150, safe, top_cap)
+        top = min(outer, 150, safe_out, top_cap)
         p["top_surface_speed"] = [str(top)]
         _pct = int(SAFE_MARGIN * 100)
         why.append(f"Tốc độ ≤{safe} mm/s = {_pct}% trần chảy (biên an toàn {100 - _pct}%): "
@@ -1689,6 +1697,16 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced",
     # or at least mouse ears"; chinh chu topic chot lai "I solved adhesion problem with
     # brim". => PETG KHONG BAO GIO de no-brim, du day rong va ti le lat an toan.
     is_petg = fam == "PETG"
+
+    # LUOI / MO HINH NHIEU LO RONG (PETG) — BAT BUOC bat 'Reduce crossing wall'.
+    # 🩸 Do that 16/09/2026 tren tabletipad-pink_plate_3 (luoi Voronoi 473.9 cm2):
+    # file dang in de reduce_crossing_wall = 0 -> lop 1-14 MOI LOP co ~5 000-5 700
+    # lan rut soi va ~12 met travel; tong ca ban in 81 780 lan rut / 257.8 m travel.
+    # Bat len: rut 81 780 -> 52 038 (-36%), gia +8 phut. Rut soi qua day lam banh
+    # rang extruder nghien soi -> mat do bam -> ban in 16/09 chet im lang o ~lop 18.
+    # (Cung la luat da ghi o ai_chat.py va TROUBLESHOOT cua hub.)
+    if is_petg:
+        p["reduce_crossing_wall"] = "1"
 
     # 3) SUPPORT — tu nhan dinh theo dien tich hang THAT, khong theo cam tinh
     ov = m.get("overhang_pct", 0)
