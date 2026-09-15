@@ -614,6 +614,77 @@ def _nozzle_lw(cfg: dict) -> tuple[float, float]:
     return nz, round(nz * 1.05, 3)
 
 
+# ===========================================================================
+# NGUONG AN TOAN TOAN CUC (2026-09-15) - "CHAM MA CHAC, KHONG MAT 8H IN"
+#
+# BAI HOC THAT (13/09/2026): PETG-Eco khai mvs 14, preset dat tuong/ruot
+# 161 mm/s = 13.5 mm3/s = 96% tran -> banh rang extruder day nhua NHANH HON
+# toc do nong chay -> NGHIEN SOI -> KET NHUA (mat ban in).
+# Ha ve mvs 12 (toc do con ~121 mm/s = 10.2 mm3/s = 85% tran) thi het ket.
+#
+# 2 LO HONG PHAI BIT CUNG LUC:
+#  (1) CHAY O 97% TRAN LA KHONG CON BIEN. "Tran" cua hang la so LY TUONG
+#      (hotend chuan, soi kho hoan hao). Hotend A1 la ban STOCK, soi thuc te
+#      luon AM hon -> thieu 1-2% la du de vuot toc do nong chay.
+#      => MOI toc do = SAFE_MARGIN x tran chay (bien 15%, khong phai 3%).
+#  (2) TRAN PHAI LAY TU NHOM NHUA, KHONG TU LOI KHAI TRONG FILE. File co the
+#      khai stock (Matte 22 / PETG HF 18 / ABS 29) - so do la cho hotend HF,
+#      khong phai A1 stock => kep mvs ve FAMILY_SAFE_MVS truoc khi tinh.
+#
+# Doi lai cham hon ~13% nhung KHONG BAO GIO mat 3-8h in vi ket o 90%.
+# ===========================================================================
+SAFE_MARGIN = 0.85        # 0.97 -> 0.85: bien an toan 15% thay vi 3%
+HARD_SPEED_CAP = 300      # tran chuyen dong A1 (bed-slinger)
+
+# TRAN NONG CHAY AN TOAN cua hotend A1 STOCK (nozzle 0.4) theo NHOM NHUA, mm3/s.
+# Ap khi KHONG co fil_sel (khong biet cuon that) hoac khi file khai CAO hon.
+#   PLA 21 : official A1 (Basic/Lite) - DA KIEM CHUNG chay tot; user da tung
+#            bat loi khi bi ha 'than trong' xuong 16 => GIU 21, khong ha lai.
+#   PETG 12: bai hoc ket 13/09 (14 KET / 12 an toan).
+#   ABS/ASA 14: official A1 la 16/18 nhung khung A1 HO, co ngot manh -> de bien.
+#   TPU 6  : mem, dun nhanh la BUCKLING (soi cong trong extruder) -> ket.
+FAMILY_SAFE_MVS = {
+    "PLA":  21.0,
+    "PETG": 12.0,
+    "ABS":  14.0,
+    "ASA":  14.0,
+    "TPU":   6.0,
+    "PC":   10.0,
+    "PA":   10.0,
+    "PVA":  12.0,
+}
+
+
+def safe_mvs_ceiling(cfg: dict) -> float | None:
+    """Tran mvs AN TOAN suy tu KHAI BAO trong file (dung khi khong co fil_sel).
+
+    Nhan dang CHI TIET (Matte/Silk/CF/GF/HF) truoc ho nhua chung: cung la
+    'PLA' nhung Matte/CF chi chiu ~12 con Basic chiu duoc 21.
+    """
+    parts: list[str] = []
+    for k in ("filament_settings_id", "filament_type", "filament_ids",
+              "filament_vendor", "filament_type_id"):
+        v = cfg.get(k)
+        if isinstance(v, list):
+            parts += [str(x) for x in v if x]
+        elif v:
+            parts.append(str(v))
+    text = " ".join(parts).upper()
+    if not text.strip():
+        return None
+    # Chat don / soi gia cuong / kim loai: DE KET + mai mon nozzle -> tran nhu Matte
+    if any(t in text for t in ("MATTE", "SILK", "CF", "GF", "METAL", "WOOD",
+                               "GLITTER", "SPARKLE", "MARBLE")):
+        return 12.0
+    # PETG: HF that moi hon 12 - nhung van de bien phong cuon gia HF
+    if "PETG" in text:
+        return 13.0 if "HF" in text else 12.0
+    for fam, lim in FAMILY_SAFE_MVS.items():
+        if fam in text:
+            return lim
+    return 12.0     # khong ro nhua -> so THAN TRONG nhat
+
+
 def flow_ceiling(cfg: dict) -> dict | None:
     """v_max = max_volumetric_speed / (layer_height x line_width). Vuot = so ao.
 
@@ -627,6 +698,14 @@ def flow_ceiling(cfg: dict) -> dict | None:
     nz, lw = _nozzle_lw(cfg)
     if lh <= 0 or lw <= 0 or mvs <= 0:      # config hong -> bo qua, dung chia 0
         return None
+    # KEP TRAN AN TOAN (2026-09-15). mvs o day den TU FILE, khong phai tu cuon
+    # that -> file co the khai so LY TUONG cua hang (Matte stock 22, PETG HF 18,
+    # ABS 29...). Tin theo la toc do ra SAT TRAN -> extruder nghien soi -> KET.
+    # Day chinh la lo hong da lam ket ban PETG-Eco ngay 13/09 (file khai 14).
+    cap = safe_mvs_ceiling(cfg)
+    mvs_declared = mvs
+    if cap and mvs > cap:
+        mvs = cap
     vmax = mvs / (lh * lw)
 
     def spd(k):
@@ -641,7 +720,8 @@ def flow_ceiling(cfg: dict) -> dict | None:
         if v and v > vmax:
             over[label] = round(v)
     return {"mvs": mvs, "nozzle": nz, "line_width": lw, "layer_height": lh,
-            "v_max": round(vmax), "over_ceiling": over}
+            "v_max": round(vmax), "over_ceiling": over,
+            "mvs_declared": mvs_declared, "mvs_capped": mvs < mvs_declared}
 
 
 def top_shell_layers(lh: float, infill_pct: float, target_mm: float = 1.0) -> tuple[int, str]:
@@ -1560,7 +1640,8 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced",
         # AUDIT 2026-07-19: tran mvs chi chan DUOI (chong under-extrude); phai chan TREN 300
         # mm/s (tran chuyen dong A1 bed-slinger) — file khai mvs cao (vd ABS 30) o layer mong
         # cho ra 400+ -> ringing/VFA + LECH LOP (nhat la vat cao da ha accel). Cap 300.
-        safe = min(int(vmax * 0.97), 300)
+        # BIEN AN TOAN 15% (khong phai 3% nhu truoc): xem SAFE_MARGIN o dau file.
+        safe = min(int(vmax * SAFE_MARGIN), HARD_SPEED_CAP)
         p["inner_wall_speed"] = [str(safe)]
         p["sparse_infill_speed"] = [str(safe)]
         p["internal_solid_infill_speed"] = [str(safe)]
@@ -1575,8 +1656,12 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced",
         top_cap = round(vmax * 0.6)
         top = min(outer, 150, safe, top_cap)
         p["top_surface_speed"] = [str(top)]
-        why.append(f"Tốc độ ≤{safe} mm/s: ở layer {lh}mm, nhựa {mvs} mm³/s chỉ cho tối đa "
-                   f"{vmax} mm/s. Đặt cao hơn là số ảo — máy tự hãm."
+        _pct = int(SAFE_MARGIN * 100)
+        why.append(f"Tốc độ ≤{safe} mm/s = {_pct}% trần chảy (biên an toàn {100 - _pct}%): "
+                   f"ở layer {lh}mm, nhựa {mvs} mm³/s chỉ cho tối đa {vmax} mm/s — và "
+                   f"KHÔNG chạy sát trần, vì 13/09 chạy 96% trần đã KẸT NHỰA (bánh răng "
+                   f"extruder nghiền sợi). Chậm hơn ~13% nhưng không mất 3-8h in. "
+                   f"Đặt cao hơn là số ảo — máy tự hãm."
                    + (f" Thành ngoài {outer} để mặt mịn." if M["outer"] else
                       " Thành ngoài cũng chạy hết tốc (ưu tiên nhanh).")
                    + (f" Mặt trên {top} mm/s (≤60% trần chảy {vmax}) — line phải LIỀN thành da mịn, "
@@ -2147,8 +2232,12 @@ FILAMENT_REF = {
                   "note": "Bambu PETG HF chính hãng (High Flow) — lưu lượng 18 mm³/s, tốc độ cao. Chỉ dùng cho cuộn HF thật. Hút ẩm mạnh → sấy 65°C/6-8h, bàn 70°C."},
     "PETG":      {"temp": "245°C", "flow": 13, "level": "warn",
                   "note": "PETG thường/Generic: lưu lượng an toàn 13 mm³/s (kế thừa PETG Basic). Hotend A1 không đùn kịp tốc độ HF (mvs 18) sẽ gây thiếu đùn/kéo sợi/báo thiếu nhiệt. Dính nozzle → Prime tower. Hút ẩm mạnh → sấy 65°C. Bàn 70-80°C."},
-    "PETG ECO":  {"temp": "240°C (hãng 230-260)", "flow": 14, "level": "warn",
-                  "note": "TINMORRY PETG-Eco: bàn 75-90°C (nóng hơn PETG Bambu). Cuộn eco KHÔNG chạy nhanh được — người dùng PETG-Eco trên forum Bambu phải hạ tốc <100mm/s + mvs 14. Hút ẩm mạnh → SẤY, không sấy là TƠ SỢI."},
+    # 2026-09-15: HA 14 -> 12. User in THAT ngay 13/09 bi KET NHUA o mvs 14: tuong/ruot
+    # 161 mm/s = 13.5 mm3/s, chi cach tran 14 dung 3% -> banh rang extruder day nhanh hon
+    # toc do nong chay -> nghien soi. Ha ve 12 (tuong/ruot tu tut con ~137 mm/s = 11.5 mm3/s)
+    # la het ket. Xem PETG-ECO-BAI-HOC.md bai hoc #5.
+    "PETG ECO":  {"temp": "240°C (hãng 230-260)", "flow": 12, "level": "warn",
+                  "note": "TINMORRY PETG-Eco: bàn 75-90°C (nóng hơn PETG Bambu). Cuộn eco KHÔNG chạy nhanh được — người dùng PETG-Eco thật trên forum Bambu phải hạ tốc <100mm/s. Đã kiểm chứng 13/09: mvs 14 GÂY KẸT NHỰA, mvs 12 mới an toàn. Hút ẩm mạnh → SẤY, không sấy là TƠ SỢI."},
     "PETG BASIC":{"temp": "245°C", "flow": 13, "level": "warn",
                   "note": "Bambu PETG Basic chính thức: lưu lượng 13 mm³/s. Bàn 70°C, retraction 1.2mm@30mm/s chống kéo sợi. Dính nozzle → Prime tower chống lệch."},
     "ABS":       {"temp": "270°C", "flow": 29, "level": "warn",
@@ -2217,18 +2306,23 @@ FIL_EXPORT = {
                   "why": "Bien the PLA la — CHU DICH ha mvs 21→16 than trong (official Basic 21); "
                          "ban 65 theo official A1."},
     "PETG ECO":  {"inherits": "Bambu PETG Basic @BBL A1", "verified": True,   # TINMORRY eco
-                  "safe": {"nozzle_temperature": "240", "filament_max_volumetric_speed": "14",
+                  "safe": {"nozzle_temperature": "240", "filament_max_volumetric_speed": "12",
                            "filament_flow_ratio": "0.94", "hot_plate_temp": "80",
                            "filament_retraction_length": "1.2", "filament_retraction_speed": "30",
                            "close_fan_the_first_x_layers": "1"},   # PETG: quat OFF lop dau -> bam chac
-                  "why": "TINMORRY PETG-Eco. Hang cong bo voi 230-260°C, ban 75-90°C; cong dong "
-                         "Bambu chot 230/ban 80 -> lay 240 (giua khoang, an toan cho A1) + ban 80. "
-                         "mvs 14 lay DUNG tu nguoi dung PETG-Eco that tren forum Bambu ('slow down "
-                         "the speed <100mm/s and the maximum volumetric speed to 14'). Ke thua PETG "
-                         "Basic (KHONG phai HF — cuon eco gia re khong dun nhanh duoc). Retraction "
-                         "1.2mm@30mm/s chong keo soi."},
+                  "why": "TINMORRY PETG-Eco. Hang cong bo 230-260°C, ban 75-90°C -> lay 240 (giua "
+                         "khoang, an toan cho A1) + ban 80. mvs 12 (KHONG phai 14): user in THAT "
+                         "ngay 13/09 bi KET NHUA o mvs 14 — tuong/ruot 161 mm/s = 13.5 mm3/s, sat "
+                         "tran 14 nen banh rang extruder nghien soi; ha ve 12 thi moi toc do tu tut "
+                         "theo (tuong/ruot ~137 mm/s = 11.5 mm3/s) va het ket. Cuon eco gia re khong "
+                         "dun nhanh duoc (KHONG phai HF). Retraction 1.2mm@30mm/s chong keo soi. "
+                         "Voi ban in DAI: cat dau soi vuong phang truoc khi nap — loi 1200-8015 "
+                         "(khong rut ra duoc o cuoi ban in) hay do dau soi phiinh/xu."},
     "PETG BASIC":{"inherits": "Bambu PETG Basic @BBL A1", "verified": True,  # ✓ template
-                  "safe": {"nozzle_temperature": "245", "filament_max_volumetric_speed": "13",
+                  # mvs 12 (KHONG phai 13): dong bo voi FAMILY_SAFE_MVS["PETG"] = 12.
+                  # Truoc day bang nay ghi 13 con safe_mvs_ceiling() kep ve 12 -> 2 duong
+                  # cho 2 so khac nhau. Nay MOT nguong PETG duy nhat = 12 (bai hoc 13/09).
+                  "safe": {"nozzle_temperature": "245", "filament_max_volumetric_speed": "12",
                            "filament_flow_ratio": "0.94", "hot_plate_temp": "70",
                            # RETRACTION (video PETG SETTINGS nhan manh + cong dong A1): PETG
                            # KEO SOI manh -> tang len 1.2mm + HA toc rut 30mm/s (cham hon PLA
@@ -2255,7 +2349,8 @@ FIL_EXPORT = {
     # -> preset ra toc tuong 207 mm/s => may BAO NHIET DO KHONG DU, ban in thieu dun +
     # keo soi (anh Voronoi). Cung nguyen tac da ap cho "PLA" generic (ha 21->16 than trong).
     "PETG":      {"inherits": "Bambu PETG Basic @BBL A1", "verified": True,
-                  "safe": {"nozzle_temperature": "245", "filament_max_volumetric_speed": "13",
+                  # mvs 12: cung mot nguong PETG voi PETG BASIC/PETG ECO (xem FAMILY_SAFE_MVS).
+                  "safe": {"nozzle_temperature": "245", "filament_max_volumetric_speed": "12",
                            "filament_flow_ratio": "0.94", "hot_plate_temp": "70",
                            "filament_retraction_length": "1.2", "filament_retraction_speed": "30",
                            "close_fan_the_first_x_layers": "1"},   # PETG: quat OFF lop dau -> bam chac

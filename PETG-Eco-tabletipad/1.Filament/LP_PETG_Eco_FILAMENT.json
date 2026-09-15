@@ -1,0 +1,66 @@
+{
+  "from": "User",
+  "inherits": "Bambu PETG Basic @BBL A1",
+  "name": "LP-PETG-Eco-safe",
+  "filament_settings_id": [
+    "LP-PETG-Eco-safe"
+  ],
+  "filament_extruder_variant": [
+    "Direct Drive Standard"
+  ],
+  "version": "2.7.0.8",
+  "nozzle_temperature": [
+    "240"
+  ],
+  "filament_max_volumetric_speed": [
+    "12"
+  ],
+  "filament_flow_ratio": [
+    "0.94"
+  ],
+  "hot_plate_temp": [
+    "80"
+  ],
+  "filament_retraction_length": [
+    "1.2"
+  ],
+  "filament_retraction_speed": [
+    "30"
+  ],
+  "close_fan_the_first_x_layers": [
+    "1"
+  ],
+  "nozzle_temperature_initial_layer": [
+    "240"
+  ],
+  "hot_plate_temp_initial_layer": [
+    "80"
+  ],
+  "textured_plate_temp": [
+    "80"
+  ],
+  "textured_plate_temp_initial_layer": [
+    "80"
+  ],
+  "filament_wipe": [
+    "1"
+  ],
+  "filament_wipe_distance": [
+    "2"
+  ],
+  "filament_z_hop": [
+    "0.4"
+  ],
+  "fan_min_speed": [
+    "30"
+  ],
+  "fan_max_speed": [
+    "50"
+  ],
+  "overhang_fan_speed": [
+    "100"
+  ],
+  "filament_density": [
+    "1.27"
+  ]
+}

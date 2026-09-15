@@ -8,6 +8,7 @@ printer.local.json
 # Dữ liệu cục bộ theo người dùng — KHÔNG commit (comment phải ở dòng riêng)
 # gam nhựa từng cuộn (theo tag_uid RFID)
 filament.local.json
+print_opts.local.json
 # cache ảnh model + gam + thông số từng file in tải qua FTP
 job_cache/
 
@@ -35,6 +36,10 @@ node_modules/
 
 # File tam cua pipeline slice tren server (upload -> CLI slice -> day xuong may)
 slice_jobs/
+
+# Thu muc SLICE THU de kiem chung cau hinh (gcode ~310 MB da bi *.gcode chan,
+# nhung cli.log + result.json van lot vao). Chi la bang chung tam, khong phai cau hinh.
+PETG-Eco-tabletipad/_verify*/
 
 # Log server
 dashboard.log

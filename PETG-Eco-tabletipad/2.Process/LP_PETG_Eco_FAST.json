@@ -1,0 +1,79 @@
+{
+  "from": "User",
+  "inherits": "0.28mm Extra Draft @BBL A1",
+  "name": "LP-PETG-Eco-Fast-0.28mm",
+  "print_settings_id": "LP-PETG-Eco-Fast-0.28mm",
+  "print_extruder_id": [
+    "1"
+  ],
+  "print_extruder_variant": [
+    "Direct Drive Standard"
+  ],
+  "version": "2.7.0.8",
+  "layer_height": "0.28",
+  "wall_loops": "2",
+  "sparse_infill_density": "15%",
+  "wall_generator": "arachne",
+  "inner_wall_speed": [
+    "86"
+  ],
+  "sparse_infill_speed": [
+    "86"
+  ],
+  "internal_solid_infill_speed": [
+    "86"
+  ],
+  "outer_wall_speed": [
+    "86"
+  ],
+  "top_surface_speed": [
+    "61"
+  ],
+  "enable_support": "0",
+  "support_interface_filament": "1",
+  "support_top_z_distance": "0.2",
+  "support_bottom_z_distance": "0.2",
+  "support_interface_spacing": "0.5",
+  "support_interface_pattern": "rectilinear_interlaced",
+  "brim_type": "outer_only",
+  "brim_width": "8",
+  "skirt_loops": "0",
+  "top_shell_layers": "4",
+  "bottom_shell_layers": "3",
+  "top_shell_thickness": "1",
+  "top_surface_pattern": "monotonicline",
+  "top_surface_line_width": "0.42",
+  "bridge_flow": "1.05",
+  "bridge_speed": [
+    "25"
+  ],
+  "enable_overhang_speed": [
+    "1"
+  ],
+  "overhang_1_4_speed": [
+    "0"
+  ],
+  "overhang_2_4_speed": [
+    "50"
+  ],
+  "overhang_3_4_speed": [
+    "30"
+  ],
+  "overhang_4_4_speed": [
+    "10"
+  ],
+  "overhang_totally_speed": [
+    "10"
+  ],
+  "seam_position": "back",
+  "seam_slope_type": "none",
+  "wall_sequence": "inner wall/outer wall",
+  "sparse_infill_pattern": "adaptivecubic",
+  "ironing_type": "no ironing",
+  "infill_wall_overlap": "15%",
+  "seam_gap": "10%",
+  "initial_layer_speed": [
+    "30"
+  ],
+  "initial_layer_print_height": "0.28"
+}

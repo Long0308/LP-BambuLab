@@ -262,20 +262,53 @@ def _light_is_on() -> bool:
     return False
 
 
-def cmd_project_file(name, path):
-    """Ra lenh in 1 file .gcode.3mf da co san tren may (NGUOI DUNG bam)."""
+def cmd_project_file(name, path, plate: int = 1, ams_slot: int | None = None,
+                     ams_mode: str = "1to1"):
+    """Ra lenh in 1 file .gcode.3mf da co san tren may (NGUOI DUNG bam).
+
+    plate   : khay thu may trong file (1-based) -> "Metadata/plate_N.gcode".
+              TRUOC 2026-09-13 hard-code plate_1 -> file nhieu khay LUON in ra khay 1.
+    ams_slot: khe AMS Lite 1..4 de lay nhua; None = tu chon (_default_ams_slot);
+              0 = KHONG dung AMS (lay cuon ngoai).
+              TRUOC day "use_ams" hard-code False -> may LUON doi cuon ngoai du AMS
+              da nap nhua (user bao PETG gray o khe 4 -> truoc day khong dung toi).
+    ams_mode: "1to1" = nhu #N -> khe #N (mac dinh, dung y nguyen Studio);
+              "same" = moi filament ve cung khe ams_slot;
+              "ext"  = cuon ngoai.
+
+    Payload bam spec project_file (OpenBambuAPI). Gui CA 2 dang mapping:
+    ams_mapping (firmware cu, index = tray 0-based) + ams_mapping2 (firmware moi,
+    co ams_id/slot_id) de tuong thich nguoc-xuoi. Mang DAI hon so filament la vo
+    hai (firmware chi index toi filament co that).
+    """
     p = (path or ("/" + name)).lstrip("/")
+    pl = max(1, int(plate or 1))
+    slot = _default_ams_slot() if ams_slot is None else max(0, min(4, int(ams_slot)))
+    mode = (ams_mode or "1to1").lower()
+    if mode not in AMS_MODES:
+        mode = "1to1"
     payload = {"print": {
         "sequence_id": str(MQTT["seq"]),
         "command": "project_file",
-        "param": "Metadata/plate_1.gcode",
+        "param": f"Metadata/plate_{pl}.gcode",
         "subtask_name": name.replace(".gcode.3mf", "").replace(".3mf", ""),
         "url": "file:///sdcard/" + p,
         "bed_type": "auto",
         "timelapse": False, "bed_leveling": True, "flow_cali": False,
-        "vibration_cali": True, "layer_inspect": False, "use_ams": False,
+        "vibration_cali": True, "layer_inspect": False,
         "profile_id": "0", "project_id": "0", "subtask_id": "0", "task_id": "0",
     }}
+    if mode == "ext" or (mode == "same" and slot <= 0):
+        payload["print"]["use_ams"] = False
+        return _send(payload)
+    if mode == "same":
+        trays = [slot - 1] * AMS_MAP_LEN                  # 1 cuon cho ca file
+    else:                                                 # "1to1"
+        # AMS Lite = 1 unit (ams_id 0) x 4 khe -> mang 4 phan tu la du & dung nhat.
+        trays = list(range(min(4, AMS_MAP_LEN)))
+    payload["print"]["use_ams"] = True
+    payload["print"]["ams_mapping"] = list(trays)
+    payload["print"]["ams_mapping2"] = [{"ams_id": 0, "slot_id": t} for t in trays]
     return _send(payload)
 
 
@@ -381,6 +414,91 @@ def _ams_tray_colors():
                 c = (t.get("tray_color") or "")[:6]
                 out.append(f"#{c}" if c else "")
     return out
+
+
+# ===== Chon KHAY + KHE AMS khi ra lenh in (user 2026-09-13) =====
+# Truoc day /api/print luon gui "Metadata/plate_1.gcode" + "use_ams": False
+# -> file nhieu khay LUON in ra khay 1, va may LUON doi cuon ngoai du AMS da nap
+# nhua. Nay chon duoc ca 2; lua chon duoc nho lai giua cac lan.
+PRINT_OPTS = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                          "print_opts.local.json")
+# So phan tu cua mang ams_mapping. Firmware index theo FILAMENT ID (0-based) nen
+# mang DAI HON so filament la vo hai; mang NGAN hon moi thieu mapping. File trong
+# pipeline nay khai toi da 6 filament -> lay 6.
+AMS_MAP_LEN = 6
+
+
+def _ams_slots() -> list[dict]:
+    """4 khe AMS Lite THAT tu MQTT: [{slot, type, color, empty}] (slot 1-based).
+
+    Doc tu cung nguon cache voi panel AMS — khong doan, khong hard-code.
+    """
+    with LOCK:
+        ams = (STATE["data"].get("ams") or {})
+    out = []
+    for u in ams.get("ams", []):
+        for t in (u.get("tray") or []):
+            typ = (t.get("tray_sub_brands") or t.get("tray_type") or "").strip()
+            col = (t.get("tray_color") or "")[:6]
+            out.append({"slot": int(t.get("id", 0)) + 1, "type": typ.upper(),
+                        "color": ("#" + col) if col else "",
+                        "empty": not typ})
+    if not out:                       # chua ket noi may -> van ve du 4 khe trong
+        out = [{"slot": i, "type": "", "color": "", "empty": True} for i in (1, 2, 3, 4)]
+    return sorted(out, key=lambda s: s["slot"])
+
+
+# Kieu lay nhua:
+#   "1to1" = nhu #N -> khe #N (dung y nguyen Studio: file khai filament 4 thi lay khe 4)
+#   "same" = TAT CA filament ve cung 1 khe (in 1 cuon cho ca file)
+#   "ext"  = khong dung AMS, lay cuon ngoai
+AMS_MODES = ("1to1", "same", "ext")
+
+
+def _load_print_opts() -> tuple[int, int | None, str]:
+    """(khay, khe_ams, kieu_lay_nhua); khe_ams None = chua chon -> _default_ams_slot lo."""
+    try:
+        with open(PRINT_OPTS, encoding="utf-8") as f:
+            d = json.load(f)
+        plate = max(1, min(16, int(d.get("plate", 1))))
+        slot = d.get("ams_slot")
+        slot = None if slot is None else max(0, min(4, int(slot)))
+        mode = str(d.get("ams_mode") or "1to1").lower()
+        return plate, slot, (mode if mode in AMS_MODES else "1to1")
+    except (OSError, ValueError, TypeError):
+        return 1, None, "1to1"
+
+
+def _save_print_opts(plate: int, ams_slot: int, ams_mode: str = "1to1") -> None:
+    try:
+        with open(PRINT_OPTS, "w", encoding="utf-8") as f:
+            json.dump({"plate": int(plate), "ams_slot": int(ams_slot),
+                       "ams_mode": str(ams_mode)}, f)
+    except OSError:
+        pass
+
+
+def _default_ams_slot(slots: list[dict] | None = None) -> int:
+    """Khe AMS mac dinh: uu tien khe dang co PETG (nua pipeline nay in PETG Eco),
+    roi khe co nhua dau tien; khong doc duoc AMS -> 4 (khe user khai co PETG gray).
+    Tra 0 = dung cuon ngoai (khong co AMS that)."""
+    slots = _ams_slots() if slots is None else slots
+    live = [s for s in slots if not s["empty"]]
+    if not live:
+        return 4
+    for s in live:
+        if s["type"].startswith("PETG"):
+            return s["slot"]
+    return live[0]["slot"]
+
+
+def _ams_state() -> dict:
+    plate, slot, mode = _load_print_opts()
+    slots = _ams_slots()
+    if slot is None:
+        slot = _default_ams_slot(slots)
+    return {"ok": True, "slots": slots, "default_slot": slot, "default_plate": plate,
+            "default_mode": mode, "map_len": AMS_MAP_LEN}
 
 
 def _peek_file_fil(src_path):
@@ -1988,6 +2106,20 @@ FILES_PAGE = r"""<!doctype html><html lang="vi"><head>
 </div>
 
 <input class="search" id="q" placeholder="Tìm file…" oninput="render()">
+<div id="popt" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:10px 0 2px;
+  padding:10px 12px;border:1px solid var(--line);border-radius:12px">
+  <label style="display:flex;gap:6px;align-items:center;font-size:13px;color:var(--mut)">Khay
+    <input type="number" id="plate" min="1" max="16" value="1"
+      style="width:62px;background:#0b1220;color:#e6edf3;border:1px solid var(--line);
+      border-radius:8px;padding:6px 8px;font-size:13px"></label>
+  <label style="display:flex;gap:6px;align-items:center;font-size:13px;color:var(--mut)">Nhựa lấy từ
+    <select id="amsmode"
+      style="background:#0b1220;color:#e6edf3;border:1px solid var(--line);
+      border-radius:8px;padding:6px 8px;font-size:13px">
+      <option value="1to1">AMS — đúng khe như file (1:1)</option>
+    </select></label>
+  <span id="amshint" style="font-size:11.5px;color:var(--mut)"></span>
+</div>
 <div id="root"><div class="loading">Đang tải danh sách từ máy…</div></div>
 <div class="foot">Nút "In" chỉ hoạt động khi máy RẢNH. Đây là lệnh điều khiển do BẠN bấm.</div>
 <div id="toast"></div>
@@ -1996,13 +2128,38 @@ let FILES=[], BUSY=true, META={}, OBS=null;   // META: path -> true(da slice) / 
 function toast(m){const t=document.getElementById("toast");t.textContent=m;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),3000);}
 function fsize(b){ if(!b) return "?"; const m=b/1048576; return m>=1?(m.toFixed(1)+" MB"):((b/1024).toFixed(0)+" KB"); }
 function folder(p){ if(p.startsWith("/cache")) return "cache"; if(p.startsWith("/model")) return "model"; return "máy"; }
+let AMS=[];
+// Khay + kieu lay nhua duoc chon tu /api/ams (doc AMS THAT qua MQTT, khong doan)
+async function loadAms(){
+  try{
+    const j=await (await fetch("/api/ams",{cache:"no-store"})).json();
+    AMS=j.slots||[];
+    const sel=document.getElementById("amsmode");
+    sel.innerHTML='<option value="1to1">AMS — đúng khe như file (1:1)</option>'
+      +AMS.map(function(s){return '<option value="same:'+s.slot+'">'
+        +'AMS — tất cả về khe '+s.slot+(s.empty?' (trống)':' — '+esc(s.type||'?')+(s.color?(' '+s.color):''))+'</option>';}).join("")
+      +'<option value="ext">Cuộn ngoài (không AMS)</option>';
+    sel.value = (j.default_mode==="same") ? ("same:"+(j.default_slot||4)) : (j.default_mode||"1to1");
+    document.getElementById("plate").value=j.default_plate||1;
+    document.getElementById("amshint").textContent = j.default_slot
+      ? ("PETG ở AMS khe "+j.default_slot) : "Chưa đọc được AMS";
+  }catch(e){}
+}
 async function printFile(name,path){
   if(BUSY){ toast("Máy đang bận — chờ in xong mới in file mới"); return; }
-  if(!confirm('IN file này?\n\n'+name+'\n\nMáy sẽ bắt đầu in ngay.')) return;
+  const plate=parseInt((document.getElementById("plate")||{}).value||"1",10)||1;
+  const mv=(document.getElementById("amsmode")||{}).value||"1to1";
+  let amsMode="1to1", amsSlot=0, amsLbl="AMS đúng khe như file (1:1)";
+  if(mv==="ext"){ amsMode="ext"; amsLbl="cuộn ngoài (KHÔNG dùng AMS)"; }
+  else if(mv.indexOf("same:")===0){ amsMode="same"; amsSlot=parseInt(mv.slice(5),10)||4;
+    amsLbl="AMS khe "+amsSlot+" (tất cả về 1 khe)"; }
+  if(!confirm('IN file này?\n\n'+name+'\n\n• Khay (plate): '+plate+'\n• Nhựa: '+amsLbl
+             +'\n\nMáy sẽ bắt đầu in ngay.')) return;
   try{
-    const r=await fetch("/api/print",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:name,path:path})});
+    const r=await fetch("/api/print",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({name:name,path:path,plate:plate,ams_slot:amsSlot,ams_mode:amsMode})});
     const j=await r.json();
-    toast(j.ok?("Đã gửi lệnh in: "+name):("Lỗi: "+(j.msg||"")));
+    toast(j.ok?("Đã gửi lệnh in: "+name+" · khay "+plate+" · "+amsLbl):("Lỗi: "+(j.msg||"")));
     setTimeout(()=>location.href="/",1500);
   }catch(e){ toast("Lỗi gửi lệnh: "+e); }
 }
@@ -2137,6 +2294,7 @@ async function load(){
     render();
   }catch(e){ document.getElementById("root").innerHTML='<div class="loading">Lỗi tải danh sách: '+e+'</div>'; }
 }
+loadAms();
 load();
 </script></body></html>"""
 
@@ -3578,6 +3736,11 @@ class H(BaseHTTPRequestHandler):
             ok, msg = cmd_print("resume")
         elif self.path == "/api/cmd/stop":
             ok, msg = cmd_print("stop")
+        elif self.path.startswith("/api/ams"):
+            # UI hoi: may dang co nhung khe AMS nao + mac dinh chon khe may
+            self._send(200, json.dumps(_ams_state(), ensure_ascii=False),
+                       "application/json; charset=utf-8")
+            return
         elif self.path == "/api/print":
             body = self._read_json()
             name = (body.get("name") or "").strip()
@@ -3588,8 +3751,28 @@ class H(BaseHTTPRequestHandler):
             if is_busy():
                 self._send(409, json.dumps({"ok": False, "msg": "Máy đang bận (đang in) — không thể in file mới"}), "application/json; charset=utf-8")
                 return
-            ok, msg = cmd_project_file(name, fpath)
-            self._send(200, json.dumps({"ok": ok, "msg": msg}), "application/json; charset=utf-8")
+            try:                                   # khay thu may trong file (1-based)
+                plate = max(1, min(16, int(body.get("plate") or 1)))
+            except (TypeError, ValueError):
+                plate = 1
+            raw_slot = body.get("ams_slot")
+            if raw_slot is None or str(raw_slot).strip() == "":
+                ams_slot = _default_ams_slot()
+            else:
+                try:
+                    ams_slot = max(0, min(4, int(raw_slot)))
+                except (TypeError, ValueError):
+                    ams_slot = _default_ams_slot()
+            ams_mode = str(body.get("ams_mode") or "1to1").strip().lower()
+            if ams_mode not in AMS_MODES:
+                ams_mode = "1to1"
+            _save_print_opts(plate, ams_slot, ams_mode)    # nho lua chon cho lan sau
+            ok, msg = cmd_project_file(name, fpath, plate=plate, ams_slot=ams_slot,
+                                       ams_mode=ams_mode)
+            self._send(200, json.dumps({"ok": ok, "msg": msg, "plate": plate,
+                                        "ams_slot": ams_slot, "ams_mode": ams_mode},
+                                       ensure_ascii=False),
+                       "application/json; charset=utf-8")
             return
         elif self.path.startswith("/api/upload"):
             self._do_upload()
