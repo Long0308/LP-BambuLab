@@ -258,9 +258,14 @@ giờ mất 3-8 giờ in vì kẹt ở 90 %**. File cấu hình:
 lớp **10/110**, **55 %**, còn **92 phút**, nozzle 240 °C · bàn 80 °C,
 `print_error = 0`, `hms = []` — **không kẹt, không lỗi**.
 
-### Bài học #7 (16/09/2026) — BẢN IN ĐÃ XONG 100 %, VÀ BIÊN AN TOÀN CHỈ MỎNG 2,5 %
+### Bài học #7 (16/09/2026) — HỎNG IM LẶNG: MÁY BÁO `FINISH` NHƯNG CHI TIẾT CHỈ CAO ~31 LỚP
 
-**Kết quả thật** (mốc lấy từ `notify.log` của hub, không phải suy đoán):
+> 🩸 **ĐÍNH CHÍNH.** Bản đầu của mục này tôi viết *"bản in đã xong 100 %, không kẹt"* —
+> **SAI**. Tôi tin vào chữ `FINISH` của firmware. Người dùng lấy chi tiết ra thì nó
+> **mỏng, chỉ cao khoảng 31 lớp**; ảnh camera lúc đó cho thấy bàn đã trống. Đây là
+> kiểu hỏng tệ nhất: **máy báo thành công trong khi chi tiết bỏ đi.**
+
+**Mốc thời gian thật** (từ `notify.log` của hub):
 
 | Mốc | Thời điểm |
 |---|---|
@@ -270,36 +275,62 @@ lớp **10/110**, **55 %**, còn **92 phút**, nozzle 240 °C · bàn 80 °C,
 | vision 70 % | 2026-09-16 00:31:50 → **KQ: ON** |
 | MỐC 75 % | 00:42:45 |
 | vision 90 % | 01:16:19 → **KQ: ON** |
-| **IN XONG 100 %** | 2026-09-16 **01:33:51** |
+| máy báo FINISH | 2026-09-16 **01:33:51** |
 
-- **Thời gian thực: 3h 41m 00s.** File dự đoán *model printing time* 3h20m26s và
-  *total estimated time* 3h26m46s ⇒ thực tế **vượt 14m14s (+6,9 %)** so với tổng dự kiến.
-- **110/110 lớp, `print_error = 0`, `hms = []`** — không kẹt, không lỗi, không tạm dừng
-  (bản 13/09 kẹt và phải dừng ở lớp 110 với lỗi 1200-8015).
-- Camera AI của hub soi ở 70 % và 90 % đều trả **ON** (không thấy spaghetti/rủ/lệch).
+Thời gian máy chạy: **3h 41m 00s**. Nhưng **không phải 3h41m in ra chi tiết** — từ
+khoảng lớp 31 trở đi máy **chạy đường đi mà không ra nhựa**. Ước lượng: chi tiết chỉ
+nhận ~1/3 khối lượng nhựa mà file dự kiến (47.20 g).
 
-**So sánh trực tiếp hai lần in cùng model — đây là chỗ đáng sợ:**
+**BẰNG CHỨNG CƠ CHẾ — đếm từ gcode (đã sửa cách đếm cho đúng chuẩn M83):**
 
-| | 13/09 (KẸT) | 16/09 (XONG) |
+| Số đo | Giá trị |
+|---|---|
+| Tổng số lần rút sợi (retraction) cả bản in | **81 780** |
+| Tổng chiều dài travel | **257.8 m** |
+| Lớp 1 | 18 526 đoạn in · **3 066 lần rút** · 10.2 m travel |
+| Lớp 2 | 21 754 đoạn in · **5 563 lần rút** · 11.6 m travel |
+| Lớp 11 | 21 222 đoạn in · **5 749 lần rút** · 12.0 m travel |
+| Lớp 17–40 (vùng trụ) | ~85 đoạn in · **15–26 lần rút** · 0.8 m travel |
+
+🩸 **Lớp 1–14 (vùng lưới Voronoi) mỗi lớp có ~5 000–5 700 lần rút sợi và ~12 mét
+travel.** Đó là mật độ phi lý — hệ quả trực tiếp của việc một lớp có hàng nghìn đảo
+nhỏ, mỗi đảo cần một travel + rút sợi. Cộng dồn ~80 000 lần rút chỉ trong 2.8 mm đầu.
+
+**Hai giả thuyết, cùng trỏ vào một vùng thủ phạm:**
+
+1. **Bánh răng extruder nghiền sợi do rút quá nhiều.** Mỗi chu kỳ rút–nhả bào mòn một
+   chút; ~80 000 chu kỳ ở lớp 1–14 tạo vết dẹt trên sợi → mất độ bám → lớp ~31 hết
+   đẩy được nhựa. **Hỏng tích luỹ, biểu hiện muộn** — khớp với việc nó chết ở vùng
+   trụ (nơi mật độ rút chỉ 15–26/lớp) chứ không chết ngay giữa lưới.
+2. **Lưu lượng đỉnh vượt trần.** Lớp 2–14 đo được **13.16 mm³/s = 110 % trần 12**
+   (Arachne in đường rộng tới 0.60 mm trong khi trần tính theo 0.42). Vùng này **trùng
+   đúng vùng đã kẹt ngày 13/09**. Nay có thêm bằng chứng thứ hai: 13.16 cũng hỏng.
+
+**So sánh hai lần in cùng model — biên an toàn thật rất mỏng:**
+
+| | 13/09 | 16/09 |
 |---|---|---|
-| mvs | 14 mm³/s | 12 mm³/s |
-| Tường/ruột | 161 mm/s | 135 mm/s |
-| Lưu lượng (trung bình) | 13.5 mm³/s | 11.34 mm³/s |
-| **Lưu lượng ĐỈNH đo từ gcode** | ~13.5 mm³/s | **13.16 mm³/s** |
+| Lưu lượng đỉnh (đo từ gcode) | ~13.5 mm³/s | **13.16 mm³/s** |
 | %trần | 96 % | 94 % |
-| Kết quả | **KẸT ở 90 %** | **XONG 100 %** |
+| Kết quả | kẹt ở 90 %, lỗi 1200-8015 | **hỏng im lặng ở ~lớp 31** |
 
-🩸 **Hai lần in chỉ cách nhau 2,5 % lưu lượng đỉnh — một cái kẹt, một cái xong.**
-Đó là toàn bộ biên an toàn thực tế của cuộn nhựa này. Nó giải thích vì sao "chạy sát
-trần" là đánh bạc: bạn không ở cách vực 10 %, bạn ở cách **2,5 %**.
+⇒ Hai lần hỏng chỉ cách nhau **2.5 % lưu lượng đỉnh**. Chạy sát trần ở cuộn nhựa này
+**luôn hỏng** — khác nhau chỉ ở chỗ hỏng *ồn ào* hay *im lặng*.
 
-**Vì sao đích 84 % (10,1 mm³/s) là con số đúng:** nó chừa **25 %** dưới mốc kẹt, tức
-gấp 10 lần biên mà lần in 16/09 đã sống sót nhờ may. Bản 16/09 xong nhưng **không
-phải vì an toàn — mà vì chưa chạm ngưỡng**.
+**Bài học lớn nhất — `FINISH` KHÔNG PHẢI LÀ BẰNG CHỨNG:**
 
-**Bài học phụ về thời gian:** dự đoán của slicer thấp hơn thực tế ~7 %. Khi lập kế
-hoạch (đặc biệt in qua đêm), cộng thêm 7-10 % vào *total estimated time*, đừng lấy
-*model printing time* làm mốc.
+- Firmware chỉ biết nó đã chạy hết file. Nó **không biết nhựa có ra hay không**.
+  `print_error = 0` + `hms = []` + 110/110 lớp là **cổng luôn xanh**: đo *máy có chạy*,
+  không đo *chi tiết có hình thành*.
+- Cả hai mốc vision 70 % và 90 % của hub đều trả **ON** — vì AI soi camera tìm
+  spaghetti/rủ/lệch, **không đo chiều cao khối in**. Chi tiết đứng yên ở 6 mm nên ảnh
+  trông "bình thường".
+- ⇒ Máy nào báo xong, **vẫn phải cân/gõ chi tiết**. Trước khi có bước kiểm đó, mọi
+  kết luận "in thành công" từ telemetry đều là phỏng đoán.
+
+**Việc cần làm để chốt thủ phạm (1 phút):** rút sợi ra soi chỗ bánh răng ăn vào —
+thấy **vết dẹt/mài bóng** là giả thuyết 1; sợi còn nguyên mà đầu nozzle tắc cứng là
+giả thuyết 2. Kết quả này quyết định sửa `retraction` hay sửa `trần lưu lượng`.
 
 ---
 
