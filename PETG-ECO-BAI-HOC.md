@@ -258,6 +258,49 @@ giờ mất 3-8 giờ in vì kẹt ở 90 %**. File cấu hình:
 lớp **10/110**, **55 %**, còn **92 phút**, nozzle 240 °C · bàn 80 °C,
 `print_error = 0`, `hms = []` — **không kẹt, không lỗi**.
 
+### Bài học #7 (16/09/2026) — BẢN IN ĐÃ XONG 100 %, VÀ BIÊN AN TOÀN CHỈ MỎNG 2,5 %
+
+**Kết quả thật** (mốc lấy từ `notify.log` của hub, không phải suy đoán):
+
+| Mốc | Thời điểm |
+|---|---|
+| BẮT ĐẦU IN | 2026-09-15 **21:52:52** |
+| MỐC 30 % | 23:01:27 |
+| MỐC 50 % | 23:46:47 |
+| vision 70 % | 2026-09-16 00:31:50 → **KQ: ON** |
+| MỐC 75 % | 00:42:45 |
+| vision 90 % | 01:16:19 → **KQ: ON** |
+| **IN XONG 100 %** | 2026-09-16 **01:33:51** |
+
+- **Thời gian thực: 3h 41m 00s.** File dự đoán *model printing time* 3h20m26s và
+  *total estimated time* 3h26m46s ⇒ thực tế **vượt 14m14s (+6,9 %)** so với tổng dự kiến.
+- **110/110 lớp, `print_error = 0`, `hms = []`** — không kẹt, không lỗi, không tạm dừng
+  (bản 13/09 kẹt và phải dừng ở lớp 110 với lỗi 1200-8015).
+- Camera AI của hub soi ở 70 % và 90 % đều trả **ON** (không thấy spaghetti/rủ/lệch).
+
+**So sánh trực tiếp hai lần in cùng model — đây là chỗ đáng sợ:**
+
+| | 13/09 (KẸT) | 16/09 (XONG) |
+|---|---|---|
+| mvs | 14 mm³/s | 12 mm³/s |
+| Tường/ruột | 161 mm/s | 135 mm/s |
+| Lưu lượng (trung bình) | 13.5 mm³/s | 11.34 mm³/s |
+| **Lưu lượng ĐỈNH đo từ gcode** | ~13.5 mm³/s | **13.16 mm³/s** |
+| %trần | 96 % | 94 % |
+| Kết quả | **KẸT ở 90 %** | **XONG 100 %** |
+
+🩸 **Hai lần in chỉ cách nhau 2,5 % lưu lượng đỉnh — một cái kẹt, một cái xong.**
+Đó là toàn bộ biên an toàn thực tế của cuộn nhựa này. Nó giải thích vì sao "chạy sát
+trần" là đánh bạc: bạn không ở cách vực 10 %, bạn ở cách **2,5 %**.
+
+**Vì sao đích 84 % (10,1 mm³/s) là con số đúng:** nó chừa **25 %** dưới mốc kẹt, tức
+gấp 10 lần biên mà lần in 16/09 đã sống sót nhờ may. Bản 16/09 xong nhưng **không
+phải vì an toàn — mà vì chưa chạm ngưỡng**.
+
+**Bài học phụ về thời gian:** dự đoán của slicer thấp hơn thực tế ~7 %. Khi lập kế
+hoạch (đặc biệt in qua đêm), cộng thêm 7-10 % vào *total estimated time*, đừng lấy
+*model printing time* làm mốc.
+
 ---
 
 ## Nhật ký sự kiện (tự động — đã gộp mục trùng)
