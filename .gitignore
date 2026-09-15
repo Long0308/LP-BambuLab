@@ -40,6 +40,8 @@ slice_jobs/
 # Thu muc SLICE THU de kiem chung cau hinh (gcode ~310 MB da bi *.gcode chan,
 # nhung cli.log + result.json van lot vao). Chi la bang chung tam, khong phai cau hinh.
 PETG-Eco-tabletipad/_verify*/
+# Do hiệu năng 3 cấp (slice thật) — cũng chỉ là bản tạm để đo, không phải cấu hình.
+PETG-Eco-tabletipad/_perf/
 
 # Log server
 dashboard.log

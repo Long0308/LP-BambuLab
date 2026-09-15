@@ -1,5 +1,19 @@
 # PETG Eco — giá đỡ iPad "tabletipad-pink" (Bambu A1 · nozzle 0.4)
 
+> 🩸 **TÀI LIỆU NÀY ĐÃ CŨ — ĐỌC KÈM CẢNH BÁO (cập nhật 16/09/2026).**
+>
+> Toàn bộ số trong file này thuộc **thế hệ trần mvs 14 mm³/s** (tường/ruột 161 mm/s).
+> Con số đó **đã gây KẸT NHỰA thật ngày 13/09** ở 90 % bản in.
+>
+> Số ĐÚNG hiện hành:
+> - Trần lưu lượng PETG Eco = **12 mm³/s** (không phải 14)
+> - Tốc độ = **85 % trần chảy** (`analyzer.SAFE_MARGIN`) ⇒ tường/ruột **120 mm/s** @0.20mm,
+>   mặt trên **85 mm/s** (không phải 161/92)
+> - Mọi chỗ trong file này ghi `14 mm³/s`, `161 mm/s`, `149 mm/s`, `13.5 mm³/s` đều **SAI**.
+>
+> Đọc bài học đo được đầy đủ ở **`PETG-PHAN-TICH-DO-LUONG.md`** và
+> **`PETG-ECO-BAI-HOC.md`** (Bài học #5 và #6).
+
 Sinh bằng `petg_eco_build.py` — số liệu đo từ mesh thật + bảng nhựa đã kiểm chứng
 trong `analyzer.py` (`FIL_EXPORT["PETG ECO"]`), **không bịa số**.
 Kiểm chứng cuối: **slice thật cả 4 khay** bằng Bambu Studio CLI (`return_code = 0`).

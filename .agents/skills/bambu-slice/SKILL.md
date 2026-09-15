@@ -36,8 +36,18 @@ Chỉnh config nhúng + tắt Variable Layer Height (thủ phạm cộng 48% s�
 # doc zip -> sua Metadata/project_settings.config (json) -> ghi zip moi
 # BO entry Metadata/layer_heights_profile.txt  => tat Variable Layer Height
 ```
-Trần tốc độ vật lý: `v_max = max_volumetric_speed / (layer_height × line_width)`
-(PLA Lite 16 mm³/s @ 0.2×0.42 → 190 mm/s; đặt cao hơn chỉ là số ảo, máy tự hãm).
+Trần tốc độ vật lý: `v_max = max_volumetric_speed / (layer_height × line_width)`.
+
+🩸 **Đặt tốc độ = 85% v_max (`analyzer.SAFE_MARGIN`), KHÔNG phải sát trần.** Ngày 13/09 chạy
+ở 96% trần (PETG Eco mvs 14 → 161 mm/s = 13.5 mm³/s) đã **KẸT NHỰA ở 90% bản in**: bánh răng
+extruder đẩy nhựa nhanh hơn tốc độ nóng chảy nên nghiền sợi. Ví dụ đã kiểm chứng:
+PLA Lite 16 mm³/s @0.2×0.42 → v_max 190 → đặt **161 mm/s**; PETG Eco 12 mm³/s → v_max 143 →
+đặt **120 mm/s**. Vượt trần là **số ảo** (máy tự hãm) và cắt đi **KHÔNG mất thời gian**
+(đo thật: 135→120 mm/s thì nhanh hơn 3 phút).
+
+🩸 **Trần mvs tính theo bề rộng DANH NGHĨA, còn Arachne in đường rộng biến thiên** (đo được
+`; LINE_WIDTH` từ 0.42 lên 0.60 mm) ⇒ đỉnh lưu lượng có thể VƯỢT trần dù đã đặt đúng trần.
+Đó là lý do thứ hai phải có biên 15%, không chỉ "đặt bằng trần".
 
 ## 3. Nguyên tắc an toàn (BẤT BIẾN của dự án này)
 
