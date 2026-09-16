@@ -15,13 +15,13 @@
   "sparse_infill_density": "15%",
   "wall_generator": "arachne",
   "inner_wall_speed": [
-    "141"
+    "169"
   ],
   "sparse_infill_speed": [
-    "141"
+    "169"
   ],
   "internal_solid_infill_speed": [
-    "141"
+    "169"
   ],
   "outer_wall_speed": [
     "110"
@@ -29,7 +29,6 @@
   "top_surface_speed": [
     "107"
   ],
-  "reduce_crossing_wall": "1",
   "enable_support": "0",
   "support_interface_filament": "1",
   "support_top_z_distance": "0.2",

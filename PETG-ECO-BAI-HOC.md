@@ -332,6 +332,76 @@ nhỏ, mỗi đảo cần một travel + rút sợi. Cộng dồn ~80 000 lần 
 thấy **vết dẹt/mài bóng** là giả thuyết 1; sợi còn nguyên mà đầu nozzle tắc cứng là
 giả thuyết 2. Kết quả này quyết định sửa `retraction` hay sửa `trần lưu lượng`.
 
+### Bài học #8 (16/09/2026) — GIẢ ĐỊNH "CHẬM MÀ CHẮC" SAI. CHẬM HƠN THÌ HỎNG SỚM HƠN
+
+> 🩸 **ĐÍNH CHÍNH LẦN 2.** Bài học #6 tôi chốt *"chậm mà chắc — mất 13 % tốc độ đổi
+> lấy không mất 3-8 h in"*. Bản in tối 16/09 **bác bỏ điều đó**.
+
+**Bản in tối 16/09 (cấu hình tôi vừa sửa) — HUỶ ở lớp 9:**
+
+| | |
+|---|---|
+| HMS | **`0300-400C`** (module 0300 = **cảm biến lực đùn**) |
+| Nghĩa wiki Bambu | *"Printing was cancelled"* — máy phát hiện **quá tải lực đùn** rồi tự huỷ |
+| Chết ở | **lớp 9 / 110** (≈ Z 1.8 mm) |
+
+Điểm tích cực: lần này máy **có phát hiện** (khác 16/09 sáng, nó chạy câm rồi báo FINISH).
+
+**Bằng chứng không thể chối — xếp theo tốc độ tường trong:**
+
+| Tốc độ | mvs | Kết quả | Đi được |
+|---|---|---|---|
+| **161 mm/s** | 14 | kẹt | **90 %** |
+| **135 mm/s** | 12 | hỏng câm ở lớp ~18 | ~82 % |
+| **113 mm/s** | 12 | **HUỶ ở lớp 9** | **~50 %** |
+
+🩸 **Đơn điệu: chậm hơn ⇒ hỏng sớm hơn.** Giả định "chậm mà chắc" bị dữ liệu bác bỏ.
+
+**Vì sao mô hình của tôi sai (2 lỗi lập luận, không phải lỗi số):**
+
+1. **Hạ tốc độ làm ĐỈNH lưu lượng TĂNG, không giảm.** Đo trên chính gcode: 135 → 113 mm/s
+   mà đỉnh 13.16 → **13.87** mm³/s. Vì Arachne bù bằng cách in đường **rộng hơn**.
+   Tôi *đã thấy* con số này rồi **đổi thước đo** (sang chiều-dài-vượt-trần) để tự thuyết
+   phục — đó là lỗi lập luận.
+2. **Bỏ qua cơ chế nhiệt.** Nhựa đi **chậm** ⇒ lưu lâu trong hotend ⇒ **heat creep**
+   (nhiệt leo ngược lên trên buồng nóng) ⇒ sợi mềm/phình ⇒ tắc ⇒ cảm biến lực đùn ngắt.
+   ⇒ **Chậm hơn = heat creep nặng hơn.** Đúng chiều với dữ liệu.
+
+**Đã sửa (commit sau bài học này):**
+
+| Thay đổi | Trước | Sau | Lý do |
+|---|---|---|---|
+| `SAFE_MARGIN` | 0.85 (suy diễn) | **0.95 → ~134 mm/s** | lấy mốc **đã đo** (135 đi xa nhất), không suy diễn |
+| `reduce_crossing_wall` | 1 (tôi bật) | **bỏ** | bật lên cắt retraction 36 % nhưng **tăng travel** → dễ kéo sợi; chưa chứng minh được lợi |
+| `filament_max_volumetric_speed` | 12 | **12** giữ | hồ sơ **chính hãng TINMORRY cho A1** cũng ghi 12 |
+
+**Nguồn chính hãng đã tìm được** — `TINMORRY-filament-profile-for-Bambu-printers`,
+`PETG-ECO (A1-Bambu-TINMORRY).json`:
+
+```json
+{ "filament_max_volumetric_speed": ["12"],  "filament_flow_ratio": ["0.96"],
+  "nozzle_temperature": ["245"],  "nozzle_temperature_initial_layer": ["240"],
+  "inherits": "Generic PETG @BBL A1" }
+```
+
+⇒ **mvs 12 được hãng xác nhận** (không phải 14). Nhưng ta đang lệch hãng ở
+`flow_ratio` (0.94 vs **0.96**) và `nozzle` (240 vs **245**). Và đáng chú ý:
+preset nền `Generic PETG @base` của Bambu để bàn **70 °C**, còn ta (và `@BBL A1`)
+để **80 °C** — bàn nóng hơn ⇒ buồng nóng hơn ⇒ heat creep mạnh hơn.
+
+**LUẬT MỚI, từ đây áp dụng:**
+
+1. **Một lần chỉ đổi MỘT biến.** Tối 16/09 tôi đổi 2 thứ cùng lúc (tốc độ + reduce_cross)
+   nên không tách được nguyên nhân. Đó là lỗi phương pháp.
+2. **Đừng đốt 2-3 giờ cho một phép thử.** Ba lần liên tiếp hỏng ở 2-3 h/bản. Phải in
+   **mẫu test nhỏ** (tháp nhiệt / panel thu nhỏ) — 15-20 phút/vòng.
+3. **Ưu tiên nghi vấn VẬT LÝ trước khi chỉnh slicer.** Ba cấu hình khác nhau, ba điểm
+   chết khác nhau, càng "thận trọng" càng chết sớm ⇒ nguyên nhân không nằm ở slicer.
+   Nghi vấn hàng đầu: **hotend tích cặn / heat creep / nhựa ẩm / ống PTFE**.
+
+**Phép thử kế tiếp (một biến duy nhất):** vệ sinh hotend (cold pull 260 → 90 °C) rồi
+in lại với **bàn 70 °C** thay vì 80 °C. Giữ mọi thứ khác nguyên.
+
 ---
 
 ## Nhật ký sự kiện (tự động — đã gộp mục trùng)
