@@ -42,6 +42,9 @@ slice_jobs/
 PETG-Eco-tabletipad/_verify*/
 # Do hiệu năng 3 cấp (slice thật) — cũng chỉ là bản tạm để đo, không phải cấu hình.
 PETG-Eco-tabletipad/_perf/
+# Thu muc slice thu de do truoc/sau khi sua thong so (~170 MB). Chi la bang chung tam.
+PETG-Eco-tabletipad/_fix*/
+PETG-Eco-tabletipad/_final/
 
 # Log server
 dashboard.log
