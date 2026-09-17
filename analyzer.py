@@ -2134,9 +2134,15 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced",
                    "thành ngoài in sau, tựa vào thành trong → bề mặt mịn + seam gọn.")
 
     # 8) INFILL pattern — theo muc tieu
-    if mode == "quality":
+    # 🩸 PETG (17/09/2026): BAT BUOC Gyroid o MOI che do. Ly do do tren may that +
+    # cong dong: Grid/AdaptiveCubic co DIEM GIAO NHAU giua 2 huong ruot -> moi phun
+    # CA vao diem giao, nhua dinh nguoc len mo bi nung chay thanh CAN DEN roi vao phoi.
+    # (Handover 17/09 muc 1.5 "Nozzle Buildup"; Reddit r/BambuLab cung chot Gyroid.)
+    if mode == "quality" or is_petg:
         p["sparse_infill_pattern"] = "gyroid"    # deu huong, chac, dep khi lo ra
-        why.append("Ruột Gyroid (chế độ Đẹp): đều mọi hướng, chắc, nhìn đẹp nếu lộ.")
+        why.append("Ruột Gyroid: đều mọi hướng, chắc, nhìn đẹp nếu lộ."
+                   + (" BẮT BUỘC với PETG — Grid/AdaptiveCubic có điểm giao nhau, "
+                      "mỏ phun cạ vào tạo cặn cháy đen rơi vào phôi." if is_petg else ""))
     else:
         p["sparse_infill_pattern"] = "adaptivecubic"
         why.append(f"Ruột Adaptive Cubic {M['infill']}: dày ở gần vỏ, thưa ở giữa → nhanh + ít nhựa.")
@@ -2326,9 +2332,10 @@ FIL_EXPORT = {
                          "ban 65 theo official A1."},
     "PETG ECO":  {"inherits": "Bambu PETG Basic @BBL A1", "verified": True,   # TINMORRY eco
                   "safe": {"nozzle_temperature": "240", "filament_max_volumetric_speed": "12",
-                           "filament_flow_ratio": "0.94", "hot_plate_temp": "80",
+                           "filament_flow_ratio": "0.95", "hot_plate_temp": "75",
                            "filament_retraction_length": "1.2", "filament_retraction_speed": "30",
-                           "close_fan_the_first_x_layers": "1"},   # PETG: quat OFF lop dau -> bam chac
+                           "filament_wipe": "2",
+                           "close_fan_the_first_x_layers": "3"},   # PETG: quat OFF 3 lop dau -> bam chac
                   "why": "TINMORRY PETG-Eco. Hang cong bo 230-260°C, ban 75-90°C -> lay 240 (giua "
                          "khoang, an toan cho A1) + ban 80. mvs 12 (KHONG phai 14): user in THAT "
                          "ngay 13/09 bi KET NHUA o mvs 14 — tuong/ruot 161 mm/s = 13.5 mm3/s, sat "
@@ -2342,12 +2349,13 @@ FIL_EXPORT = {
                   # Truoc day bang nay ghi 13 con safe_mvs_ceiling() kep ve 12 -> 2 duong
                   # cho 2 so khac nhau. Nay MOT nguong PETG duy nhat = 12 (bai hoc 13/09).
                   "safe": {"nozzle_temperature": "245", "filament_max_volumetric_speed": "12",
-                           "filament_flow_ratio": "0.94", "hot_plate_temp": "70",
+                            "filament_flow_ratio": "0.95", "hot_plate_temp": "75",
                            # RETRACTION (video PETG SETTINGS nhan manh + cong dong A1): PETG
                            # KEO SOI manh -> tang len 1.2mm + HA toc rut 30mm/s (cham hon PLA
                            # de soi dut gon, khong vuot); den/xam lo soi ro nhat.
                            "filament_retraction_length": "1.2", "filament_retraction_speed": "30",
-                           "close_fan_the_first_x_layers": "1"},   # PETG: quat OFF lop dau -> bam chac
+                            "filament_wipe": "2",
+                            "close_fan_the_first_x_layers": "3"},   # PETG: quat OFF 3 lop dau -> bam chac
                   "why": "Bambu PETG Basic (13 / 0.94 / ban 70) + RETRACTION 1.2mm@30mm/s chong keo "
                          "soi (cong dong A1 + video). Den/xam: giu KHO (PETG hut am -> soi), ban 70 "
                          "textured PEI DINH RAT CHAT -> boi keo lam CHONG DINH (de go), dung len 80."},
@@ -2356,9 +2364,10 @@ FIL_EXPORT = {
     # key DAU TIEN nam trong ten ("PETG" in "PETG HF" se cuop mat neu de sau).
     "PETG HF":   {"inherits": "Bambu PETG HF @BBL A1", "verified": True,     # ✓ audit 2 tang
                   "safe": {"nozzle_temperature": "240", "filament_max_volumetric_speed": "18",
-                           "filament_flow_ratio": "0.94", "hot_plate_temp": "70",
-                           "filament_retraction_length": "1.2", "filament_retraction_speed": "30",
-                           "close_fan_the_first_x_layers": "1"},   # PETG: quat OFF lop dau -> bam chac
+                            "filament_flow_ratio": "0.95", "hot_plate_temp": "75",
+                            "filament_retraction_length": "1.2", "filament_retraction_speed": "30",
+                            "filament_wipe": "2",
+                            "close_fan_the_first_x_layers": "3"},   # PETG: quat OFF 3 lop dau -> bam chac
                   "why": "Bambu PETG HF (240 / mvs 18 / 0.94 / ban 70, audit 2 tang) — CHI cho cuon "
                          "HIGH FLOW THAT. mvs 18 => make_preset suy toc tuong/ruot ~207 mm/s @layer "
                          "0.2 (=17.4 mm3/s); cuon PETG THUONG dun khong kip -> may bao 'nhiet do "
@@ -2370,9 +2379,10 @@ FIL_EXPORT = {
     "PETG":      {"inherits": "Bambu PETG Basic @BBL A1", "verified": True,
                   # mvs 12: cung mot nguong PETG voi PETG BASIC/PETG ECO (xem FAMILY_SAFE_MVS).
                   "safe": {"nozzle_temperature": "245", "filament_max_volumetric_speed": "12",
-                           "filament_flow_ratio": "0.94", "hot_plate_temp": "70",
-                           "filament_retraction_length": "1.2", "filament_retraction_speed": "30",
-                           "close_fan_the_first_x_layers": "1"},   # PETG: quat OFF lop dau -> bam chac
+                            "filament_flow_ratio": "0.95", "hot_plate_temp": "75",
+                            "filament_retraction_length": "1.2", "filament_retraction_speed": "30",
+                            "filament_wipe": "2",
+                            "close_fan_the_first_x_layers": "3"},   # PETG: quat OFF 3 lop dau -> bam chac
                   "why": "PETG khong ro dong -> lay so AN TOAN cua PETG Basic (245 / mvs 13 / 0.94 / "
                          "ban 70): toc tuong ~150, mat tren ~93 mm/s — hotend A1 dun KIP. Cuon HIGH "
                          "FLOW that moi chon 'PETG HF' (mvs 18). Retraction 1.2mm@30mm/s chong keo soi."},

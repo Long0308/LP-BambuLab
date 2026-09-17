@@ -28,9 +28,12 @@ import petg_eco_build as B                                   # noqa: E402
 
 DEST = r"D:\16.Sharp3D\Congfig\02.Filament_PETG_Matte_Black&Grey"
 
-# Chung keo soi / ket dau in cho PETG (giong petg_eco_build.ECO_PER_FIL).
+# Chung keo soi / ket dau in cho PETG.
+# 🩸 17/09/2026: wipe 1 -> 2 mm (handover 17/09 + Reddit r/BambuLab: giau to thua
+# vao trong ruot). SUA O DAY va o petg_eco_build.ECO_PER_FIL — hai cho phai khop,
+# lech mot cho la file xuat ra mang so cu (da bi mot lan voi mvs 14).
 ANTI_STRING = {
-    "filament_wipe": ["1"],
+    "filament_wipe": ["2"],
     "filament_wipe_distance": ["2"],
     "filament_z_hop": ["0.4"],
     "fan_min_speed": ["30"],
@@ -85,6 +88,71 @@ def build_process() -> dict:
     return out
 
 
+QD = r"D:\16.Sharp3D\Congfig\LP_QuocDan"
+
+# Key TOC DO / KIỂU RUỘT lấy từ chế độ BALANCED khi ghi đè các file cũ.
+SPEED_KEYS = ("layer_height", "inner_wall_speed", "outer_wall_speed", "sparse_infill_speed",
+              "internal_solid_infill_speed", "top_surface_speed",
+              "sparse_infill_pattern", "wall_sequence")
+
+
+def update_quocdan(procs: dict) -> list:
+    """Cap nhat bo LP_QuocDan (03/08/2026) — dang o THE HE CU, rat nguy hiem.
+
+    🩸 Bo nay ghi filament mvs 14 VA process tuong/ruot 161 mm/s
+    (= 13.5 mm3/s voi be rong that 0.45) — DUNG cau hinh da lam KET NHUA ngay 13/09.
+    """
+    done = []
+    # 1) Filament PETG (dung so cua PETG BASIC trong analyzer)
+    fp = os.path.join(QD, "1.Filament", "PETG", "LP_PETG_FILAMENT.json")
+    if os.path.isfile(fp):
+        with open(fp, encoding="utf-8") as f:
+            p = json.load(f)
+        safe = analyzer.FIL_EXPORT["PETG BASIC"]["safe"]
+        for k in CORE:
+            if k in safe:
+                p[k] = [safe[k]]
+        p["nozzle_temperature_initial_layer"] = [safe["nozzle_temperature"]]
+        p["hot_plate_temp_initial_layer"] = [safe["hot_plate_temp"]]
+        p["textured_plate_temp"] = [safe["hot_plate_temp"]]
+        p["textured_plate_temp_initial_layer"] = [safe["hot_plate_temp"]]
+        p.update(ANTI_STRING)
+        with open(fp, "w", encoding="utf-8") as f:
+            json.dump(p, f, ensure_ascii=False, indent=2)
+        done.append((r"1.Filament\PETG\LP_PETG_FILAMENT.json",
+                     f"mvs={safe['filament_max_volumetric_speed']} "
+                     f"ban={safe['hot_plate_temp']} flow={safe['filament_flow_ratio']}"))
+
+    pd = os.path.join(QD, "2.Process_Base", "PETG")
+    os.makedirs(pd, exist_ok=True)
+    # 2) Ba che do moi
+    for m, (p, lh, iw, mvs, lw) in procs.items():
+        q = dict(p)
+        nm = f"LP_PETG_{m.upper()}"
+        q["name"] = nm
+        q["print_settings_id"] = nm
+        with open(os.path.join(pd, nm + ".json"), "w", encoding="utf-8") as f:
+            json.dump(q, f, ensure_ascii=False, indent=2)
+        fl = iw * lh * lw * (0.45 / 0.42)
+        done.append((rf"2.Process_Base\PETG\{nm}.json",
+                     f"trong={iw:.0f} -> {fl:.2f} mm3/s"))
+    # 3) Hai file DEFAUT cu -> ghi de toc do/ruot bang so cua BALANCED
+    b = procs["balanced"][0]
+    for old in ("LP_PETG_DEFAUT.json", "LP_PETG_DEFAUT_IRONING.json"):
+        op = os.path.join(pd, old)
+        if not os.path.isfile(op):
+            continue
+        with open(op, encoding="utf-8") as f:
+            oc = json.load(f)
+        for k in SPEED_KEYS:
+            if k in b:
+                oc[k] = b[k]
+        with open(op, "w", encoding="utf-8") as f:
+            json.dump(oc, f, ensure_ascii=False, indent=2)
+        done.append((rf"2.Process_Base\PETG\{old}", "cap nhat tu BALANCED"))
+    return done
+
+
 def main() -> int:
     os.makedirs(DEST, exist_ok=True)
     print("=" * 78)
@@ -126,7 +194,16 @@ def main() -> int:
         print(f"  [ok] {'LP-Process-PETG-tabletipad-Balanced-0.2mm-SAFE.json':38} "
               f"(cap nhat: 149 -> {p['inner_wall_speed'][0]} mm/s)")
 
-    print(f"\nXong: {n} filament + {len(procs)} process.")
+    print(f"\n  Xong: {n} filament + {len(procs)} process.")
+
+    print("\n" + "=" * 78)
+    print("THU VIEN LP_QuocDan :", QD)
+    print("=" * 78)
+    if os.path.isdir(QD):
+        for rel, note in update_quocdan(procs):
+            print(f"  [ok] {rel:44} {note}")
+    else:
+        print("  (khong co thu muc — bo qua)")
     return 0
 
 

@@ -341,11 +341,19 @@ giả thuyết 2. Kết quả này quyết định sửa `retraction` hay sửa 
 
 | | |
 |---|---|
-| HMS | **`0300-400C`** (module 0300 = **cảm biến lực đùn**) |
-| Nghĩa wiki Bambu | *"Printing was cancelled"* — máy phát hiện **quá tải lực đùn** rồi tự huỷ |
+| HMS | **`0300-400C`** |
+| Nghĩa wiki Bambu | *"Printing was cancelled"* — **mã CHUNG, KHÔNG chẩn đoán được nguyên nhân** |
 | Chết ở | **lớp 9 / 110** (≈ Z 1.8 mm) |
 
-Điểm tích cực: lần này máy **có phát hiện** (khác 16/09 sáng, nó chạy câm rồi báo FINISH).
+> 🩸 **ĐÍNH CHÍNH (17/09/2026).** Bản đầu của mục này tôi viết *"module 0300 = cảm biến
+> lực đùn ⇒ máy phát hiện quá tải lực đùn rồi tự huỷ"*. **SAI.** Tra wiki Bambu:
+> `0300-400C` chỉ nghĩa **"Printing was cancelled"** — nó ghi *việc bị huỷ*, không ghi
+> *vì sao*. Cảm biến lực đùn/eddy-current của A1 là nhóm **`0300-1800-xxxx`**.
+> Muốn biết nguyên nhân phải tìm các mã cụ thể: **`0300-4006` = "The nozzle is clogged"**,
+> `0300-4005` = quạt nozzle, `0300-0900-0002-0001` = lực đùn.
+
+Điểm tích cực vẫn giữ: lần này máy **có dừng và báo** (khác 16/09 sáng, nó chạy câm
+79 lớp rồi báo FINISH).
 
 **Bằng chứng không thể chối — xếp theo tốc độ tường trong:**
 
@@ -401,6 +409,83 @@ preset nền `Generic PETG @base` của Bambu để bàn **70 °C**, còn ta (v�
 
 **Phép thử kế tiếp (một biến duy nhất):** vệ sinh hotend (cold pull 260 → 90 °C) rồi
 in lại với **bàn 70 °C** thay vì 80 °C. Giữ mọi thứ khác nguyên.
+
+### Bài học #9 (17/09/2026) — ĐỐI CHIẾU CỘNG ĐỒNG + WIKI HÃNG (có nguồn)
+
+Điều tra qua wiki Bambu / forum Bambu / r/BambuLab / Prusa KB. Chỉ ghi thứ **có URL**;
+chỗ nào không có nguồn thì ghi rõ là phỏng đoán.
+
+**a) Mã lỗi — đọc đúng mới chẩn đúng**
+
+| Mã | Nghĩa thật (nguồn: wiki.bambulab.com/en/hms/error-code) |
+|---|---|
+| `0300-400C` | "Printing was cancelled" — **mã chung**, không nói nguyên nhân |
+| **`0300-4006`** | **"The nozzle is clogged"** ← đây mới là mã cần tìm khi nghi kẹt |
+| `0300-1800-xxxx` | "The extruder **eddy current sensor** signal is abnormal" — cảm biến lực đùn A1 |
+| **`1000-C001`** | **"High bed temperature may lead to filament clogging in the nozzle"** |
+| `1200-8015` | "Failed to pull out the filament from the toolhead. Please check if the filament is stuck, or the filament is broken inside the extruder or **PTFE tube**" |
+
+⇒ Lỗi 13/09 (`1200-8015`) trỏ về **kẹt/đứt sợi trong extruder hoặc ống PTFE** — không
+phải cảm biến lực. Và lỗi 16/09 tối (`0300-400C`) **không dùng để chẩn đoán** được.
+
+**b) Heat creep — hãng THỪA NHẬN A1 có**
+
+> *"A common clog that occurs on **A1 series** is the filament getting stuck inside the
+> hotend due to **heat creep** issues."* — wiki Bambu, trang unclog A1/A1 mini
+
+Và cơ chế "chậm ⇒ tệ hơn" có nguồn:
+
+> *"**A slow print can cause heat creep**…"* — Prusa Knowledge Base, bài heat creep
+
+> *"Going too slow means that this same heat energy no longer has enough filament
+> volumetrically to transfer it to, and instead transfers it to the [filament]"* — r/BambuLab
+
+🩸 **Khớp đúng thứ tự hỏng của ta: 161 mm/s → 90 %, 135 mm/s → lớp 18, 113 mm/s → lớp 9.**
+Chậm hơn ⇒ nhựa lưu lâu trong hotend ⇒ nhận nhiều nhiệt hơn ⇒ mềm/phình ⇒ tắc.
+
+**c) Bàn 80 °C là nghi vấn có mã lỗi riêng của hãng**
+
+`1000-C001` nói thẳng *"High bed temperature may lead to filament clogging in the nozzle"*,
+và wiki khuyên với PETG *"reduce the bed temperature when possible"*. Preset nền
+`Generic PETG @base` của Bambu để **70 °C**. ⇒ Đã hạ bàn **80 → 75 °C** (giao của
+hãng 75-90 · handover 75-80 · Bambu base 70).
+
+**d) Nhiệt nozzle — KHÔNG có bằng chứng 250-260 °C gây kẹt trên A1**
+
+Có tiền lệ A1 dùng **260-265 °C + hạ mvs xuống 10** cho PETG (forum Bambu A1 combo).
+Đây là **cân bằng giữa under-melting và heat creep**, không phải "càng cao càng tốt".
+⇒ Giữ **240 °C**, chỉ tăng nếu chứng minh được là thiếu nhiệt.
+
+**e) Lịch bảo trì hãng (wiki Bambu — basic maintenance A1)** — phần ta CHƯA làm lần nào:
+
+| Việc | Chu kỳ |
+|---|---|
+| **Cold pull** | **≥ 1 lần / tháng** |
+| Vệ sinh **quạt làm mát hotend** | **mỗi tuần** ← heat creep là hệ quả trực tiếp của mất làm mát |
+| Vệ sinh bánh răng đùn + nozzle | mỗi **5 cuộn** |
+| Thay **ống PTFE** | mỗi **6 cuộn** |
+| Kiểm tra lưỡi cắt | mỗi **3 cuộn** |
+
+**f) Sấy nhựa**: lò đối lưu **60-65 °C / 8 h**. Lưu ý **A1 không dùng bàn nhiệt để sấy được**.
+
+**g) Cảnh báo quan trọng — có thể là HAI lỗi khác nhau, đừng gộp**
+
+Bản 16/09 sáng (chạy câm 92 lớp rồi báo FINISH) **không khớp heat creep kinh điển**.
+Nó khớp hơn với ca đã có nguồn ở `bambulab/BambuStudio#4624`:
+> *"the printer stops feeding filament through the nozzle. **No error is reported** and
+> the printer continues regardless, not printing."*
+
+⇒ Giả thuyết: **(a)** tắc/đùn kém mà firmware không phát hiện, và **(b)** lần bị ngắt có
+báo. Đừng coi cả ba lần hỏng là một nguyên nhân.
+
+**h) KHÔNG tìm được nguồn (vẫn là phỏng đoán)**
+
+- Không có nguồn nói **PETG ẩm gây kẹt cứng ngắt cảm biến lực** — chỉ có nguồn cho
+  "chảy kém, bọt, tắc một phần, bề mặt nhám".
+- Không có nguồn nói **250-260 °C gây heat creep/kẹt trên A1**.
+- Không có ca cộng đồng nào khớp số **"hạ tốc ⇒ kẹt sớm hơn 90 %→18→9"** — chỉ có
+  nguyên lý chung.
+- Không có nguồn nào nói **`reduce_crossing_wall`** liên quan kẹt nhựa.
 
 ---
 

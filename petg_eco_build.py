@@ -59,22 +59,29 @@ ECO_PER_FIL = {
     # (tuong/ruot 161mm/s = 13.5mm3/s sat tran -> banh rang extruder nghien soi).
     # Ha ve 12 thi moi toc do tu tut theo (Xem analyzer.FIL_EXPORT["PETG ECO"]["why"]).
     "filament_max_volumetric_speed": "12",
-    "filament_flow_ratio": "0.94",
+    # 0.95 (17/09/2026): hop voi handover 17/09 VA hồ sơ hãng TINMORRY (0.96).
+    # Truoc do 0.94 -> thieu dun nhe, de thay line ho o thanh mong.
+    "filament_flow_ratio": "0.95",
     "filament_density": "1.27",
-    "hot_plate_temp": "80",
-    "hot_plate_temp_initial_layer": "80",
-    "textured_plate_temp": "80",
-    "textured_plate_temp_initial_layer": "80",
-    "eng_plate_temp": "80",
-    "eng_plate_temp_initial_layer": "80",
-    "supertack_plate_temp": "80",
-    "supertack_plate_temp_initial_layer": "80",
+    # 75 (17/09/2026) — giao cua 3 nguon: hang 75-90 · handover 75-80 · Bambu base 70.
+    # Ha tu 80: Bambu co ma HMS 1000-C001 "High bed temperature may lead to filament
+    # clogging in the nozzle" + khuyen PETG "reduce the bed temperature when possible".
+    "hot_plate_temp": "75",
+    "hot_plate_temp_initial_layer": "75",
+    "textured_plate_temp": "75",
+    "textured_plate_temp_initial_layer": "75",
+    "eng_plate_temp": "75",
+    "eng_plate_temp_initial_layer": "75",
+    "supertack_plate_temp": "75",
+    "supertack_plate_temp_initial_layer": "75",
     "filament_retraction_length": "1.2",
     "filament_retraction_speed": "30",
-    "filament_wipe": "1",
+    # wipe 1 -> 2 mm (handover 17/09 + Reddit r/BambuLab): giau to thua vao trong ruot.
+    "filament_wipe": "2",
     "filament_wipe_distance": "2",
     "filament_z_hop": "0.4",
-    "close_fan_the_first_x_layers": "1",
+    # 1 -> 3 lop (handover 17/09): lop dau bam ban chac hon, tranh tach goc.
+    "close_fan_the_first_x_layers": "3",
     "fan_min_speed": "30",
     "fan_max_speed": "50",
     "overhang_fan_speed": "100",

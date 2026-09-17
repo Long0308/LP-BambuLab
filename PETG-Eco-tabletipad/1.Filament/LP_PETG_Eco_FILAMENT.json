@@ -16,10 +16,10 @@
     "12"
   ],
   "filament_flow_ratio": [
-    "0.94"
+    "0.95"
   ],
   "hot_plate_temp": [
-    "80"
+    "75"
   ],
   "filament_retraction_length": [
     "1.2"
@@ -27,23 +27,23 @@
   "filament_retraction_speed": [
     "30"
   ],
-  "close_fan_the_first_x_layers": [
+  "filament_wipe": [
     "1"
+  ],
+  "close_fan_the_first_x_layers": [
+    "3"
   ],
   "nozzle_temperature_initial_layer": [
     "240"
   ],
   "hot_plate_temp_initial_layer": [
-    "80"
+    "75"
   ],
   "textured_plate_temp": [
-    "80"
+    "75"
   ],
   "textured_plate_temp_initial_layer": [
-    "80"
-  ],
-  "filament_wipe": [
-    "1"
+    "75"
   ],
   "filament_wipe_distance": [
     "2"
