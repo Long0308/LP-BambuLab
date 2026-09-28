@@ -261,12 +261,14 @@ def send_sync(title: str, body: str, urgent: bool = False) -> list[str]:
     return _send_all(title, body, urgent)
 
 
-def alarm(title: str, body: str, times: int = 10, gap_s: float = 3.0) -> None:
-    """BAO DONG DON DAP — gui lien tiep `times` tin cach nhau vai giay de danh thuc
-    (user chot 2026-07-16: loi la spam 10 tin nhu bao dong). Chay thread nen."""
+def alarm(title: str, body: str, times: int = 2, gap_s: float = 3.0) -> None:
+    """BAO DONG — gui 1-3 tin cach nhau vai giay (toi da 3 lan de tranh spam, mac dinh 2).
+    Chay thread nen."""
+    times = min(max(int(times), 1), 3)
     def _run():
         for i in range(times):
-            _send_all(f"{title} ({i + 1}/{times})", body, urgent=True)
+            t = f"{title} ({i + 1}/{times})" if times > 1 else title
+            _send_all(t, body, urgent=True)
             time.sleep(gap_s)
     threading.Thread(target=_run, daemon=True).start()
 

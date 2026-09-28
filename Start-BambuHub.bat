@@ -1,8 +1,15 @@
 @echo off
 rem Khoi dong Bambu Hub server (bambu_web.py, cong 8787).
-rem Duoc goi boi Task Scheduler luc logon (qua Start-BambuHub-Hidden.vbs de an cua so),
-rem hoac chay tay khi can. Da chay roi thi thoat ngay — khong mo 2 instance.
+rem Tu dong khoi dong lai neu process bi thoat (Sleep day / dut mang / crash).
+rem Da chay roi thi thoat ngay — khong mo 2 instance trung lap.
 cd /d %~dp0
-powershell -NoProfile -Command "if (Get-CimInstance Win32_Process -Filter \"Name like 'python%%'\" | Where-Object {$_.CommandLine -match 'bambu_web'}) {exit 1} else {exit 0}"
+
+powershell -NoProfile -Command "if (Get-NetTCPConnection -LocalPort 8787 -State Listen -ErrorAction SilentlyContinue) {exit 1} else {exit 0}"
 if errorlevel 1 exit /b 0
-python bambu_web.py >> server.log 2>&1
+
+:run_loop
+echo [%date% %time%] Khoi dong Bambu Hub server... >> server.log
+python -u bambu_web.py >> server.log 2>&1
+echo [%date% %time%] Bambu Hub dung (exitcode %errorlevel%), tu dong khoi dong lai sau 3s... >> server.log
+timeout /t 3 /nobreak >nul
+goto run_loop

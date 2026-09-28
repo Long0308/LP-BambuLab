@@ -18,8 +18,10 @@ Dung:
   python bambu_web.py 8080
 Yeu cau: pip install --user paho-mqtt ; may bat LAN Only. Access Code lay qua /bambu-check.
 """
-import sys, os, re, ssl, json, time, threading, shutil
+import sys, os, re, ssl, json, time, threading, shutil, warnings
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")
@@ -857,7 +859,10 @@ def ensure_file_meta(fpath):
     if sliced is not None:
         return thumb, sliced
 
-    with THUMB_LOCK:                       # Bambu FTP chi chiu 1 ket noi -> tuan tu
+    # Tranh block HTTP thread lau: thu khoa 2s, neu dang co luong khac tai thi tra ngay cache
+    if not THUMB_LOCK.acquire(timeout=2.0):
+        return thumb, sliced
+    try:
         thumb, sliced = _read_cache()      # luong khac vua tai xong?
         if sliced is not None:
             return thumb, sliced
@@ -879,6 +884,8 @@ def ensure_file_meta(fpath):
         except OSError:
             pass
         return thumb, sliced
+    finally:
+        THUMB_LOCK.release()
 
 
 def is_busy():
@@ -1116,7 +1123,7 @@ def on_message(c, u, msg):
                          f"Xử lý xong → bấm ▶️ Tiếp tục ngay trong bot này (bàn phím "
                          f"dưới) hoặc trên web — y hệt nút Resume trên màn hình máy.\n"
                          f"MỞ CAMERA: {notify.hub_url()}\n"
-                         f"Tra mã: wiki.bambulab.com", times=10)
+                         f"Tra mã: wiki.bambulab.com", times=2)
             if not meaning:
                 # ma la -> AI giai thich (tin RIENG, khong chan bao dong; AI phai
                 # noi 'chua chac' neu khong biet, tranh bia)
@@ -1157,7 +1164,7 @@ def on_message(c, u, msg):
             elif gc == "FAILED":
                 notify.call_alert(f"Cảnh báo. Máy in Bambu A1 in thất bại. "
                                   f"{fn}. Kiểm tra ngay.")   # GOI DIEN THAT (Twilio)
-                # ma loi da bao dong 10 tin o tren roi thi khoi lap lai 10 tin nua
+                # ma loi da bao dong o tren roi thi khoi lap lai
                 if MILE["err"]:
                     notify.send("Bambu A1: In THẤT BẠI (đã báo động ở trên)",
                                 f"{fn} — mã lỗi {MILE['err']} (hex {MILE['err']:X}).\n"
@@ -1165,11 +1172,11 @@ def on_message(c, u, msg):
                 else:
                     notify.alarm("Bambu A1: In THẤT BẠI 🚨",
                                  f"{fn} — kiểm tra máy ngay.\n"
-                                 f"MỞ CAMERA: {notify.hub_url()}", times=10)
+                                 f"MỞ CAMERA: {notify.hub_url()}", times=2)
             elif prev == "RUNNING" and gc == "PAUSE":
                 notify.alarm("Bambu A1: TẠM DỪNG giữa chừng ⚠️",
                              f"{fn} — có thể hết nhựa / lỗi.\n"
-                             f"MỞ CAMERA: {notify.hub_url()}", times=3)
+                             f"MỞ CAMERA: {notify.hub_url()}", times=2)
 
 
 def mqtt_loop():
@@ -3287,13 +3294,13 @@ class H(BaseHTTPRequestHandler):
                 {"ok": bool(a), "answer": a or "AI vision không phản hồi — thử lại."},
                 ensure_ascii=False), "application/json; charset=utf-8")
         elif path.startswith("/api/camera.jpg"):
-            # 1 frame moi nhat tu camera tich hop A1 (cong 6000) — fallback/thumbnail
-            f = camera_stream.get_frame(IP, CODE, wait_s=8)
+            # 1 frame moi nhat tu camera tich hop A1 (cong 6000) — nhanh, khong block
+            f = camera_stream.get_frame(IP, CODE, wait_s=2)
             if f:
                 self._send(200, f, "image/jpeg")
             else:
-                self._send(503, "Camera chưa có hình: " + (camera_stream.last_error() or
-                           "đang kết nối — thử lại sau vài giây"), "text/plain; charset=utf-8")
+                self._send(503, "Camera đang bận hoặc đang kết nối — thử lại sau vài giây",
+                           "text/plain; charset=utf-8")
         elif path.startswith("/api/camera"):
             # MJPEG stream lien tuc (multipart/x-mixed-replace) — nhung <img> la chay.
             # n tab cung xem van chi 1 ket noi toi may in (camera_stream cache frame).
@@ -3631,13 +3638,21 @@ class H(BaseHTTPRequestHandler):
 
     def _same_origin(self) -> bool:
         """Chan CSRF: trinh duyet LUON gui Origin voi cross-site POST fetch —
-        khac Host la request tu trang web la, tu choi. curl/script noi bo khong
-        gui Origin -> cho qua (khong phai vector CSRF)."""
+        khac Host la request tu trang web la, tu choi. Cho phep Tailscale va proxy."""
         raw = self.headers.get("Origin") or self.headers.get("Referer") or ""
         if not raw:
             return True
         from urllib.parse import urlparse
-        return urlparse(raw).netloc == (self.headers.get("Host") or "")
+        netloc = urlparse(raw).netloc
+        host = self.headers.get("Host") or ""
+        if netloc == host:
+            return True
+        xfh = self.headers.get("X-Forwarded-Host") or ""
+        if xfh and netloc == xfh:
+            return True
+        if ".ts.net" in netloc or "127.0.0.1" in netloc or "localhost" in netloc:
+            return True
+        return False
 
     def do_POST(self):
         # /api/agent = BACKEND API CONG KHAI (webhook / Cloudflare Tunnel / domain rieng

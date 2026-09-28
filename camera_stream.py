@@ -59,9 +59,9 @@ def _pump(host: str, code: str) -> None:
                 if time.time() - _LAST_WANT > _IDLE_STOP_S:
                     break                      # khong ai xem -> nghi
             try:
-                raw = socket.create_connection((host, 6000), timeout=8)
+                raw = socket.create_connection((host, 6000), timeout=3)
                 s = ctx.wrap_socket(raw, server_hostname=host)
-                s.settimeout(12)
+                s.settimeout(6)
                 s.sendall(_auth_packet(code))
                 _ERR = ""
                 while True:
@@ -81,7 +81,7 @@ def _pump(host: str, code: str) -> None:
                 break
             except Exception as e:              # noqa: BLE001 — mat mang/timeout: thu lai
                 _ERR = str(e)
-                time.sleep(3)
+                time.sleep(2)
             finally:
                 try:
                     s.close()
@@ -102,16 +102,20 @@ def _want(host: str, code: str) -> None:
             threading.Thread(target=_pump, args=(host, code), daemon=True).start()
 
 
-def get_frame(host: str, code: str, wait_s: float = 6.0) -> bytes | None:
+def get_frame(host: str, code: str, wait_s: float = 2.0) -> bytes | None:
     """Frame JPEG moi nhat (cho toi wait_s giay cho frame dau). None = chua co."""
+    with _LOCK:
+        if _FRAME and time.time() - _FRAME_TS < 10:
+            return _FRAME                     # tra ngay frame moi trong 10s — khong block
     _want(host, code)
     t0 = time.time()
     while time.time() - t0 < wait_s:
         with _LOCK:
             if _FRAME and time.time() - _FRAME_TS < 30:
                 return _FRAME
-        time.sleep(0.2)
-    return None
+        time.sleep(0.15)
+    with _LOCK:
+        return _FRAME if _FRAME else None
 
 
 def last_error() -> str:
