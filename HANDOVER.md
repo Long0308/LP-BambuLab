@@ -1,6 +1,8 @@
-# HANDOVER — Bambu A1 LAN Dashboard
-
-**Cập nhật:** 2026-07-11 · **Nhánh:** main · **Commit mới nhất:** `9cf49d2`
+# HANDOVER — Bambu A1 LAN Dashboard & In 3D Chuẩn
+**Cập nhật mới nhất:** 2026-09-30 22:00 (Xem chi tiết tại [session-2026-09-30-antigravity-LP-BambuLab.md](file:///d:/15.BambuStudio/Agent-Memory/session-2026-09-30-antigravity-LP-BambuLab.md) và [HANDOVER-2026-09-29-petg-support.md](file:///d:/15.BambuStudio/HANDOVER-2026-09-29-petg-support.md))
+* **Trọng tâm 30/09/2026:** Xử lý lỗi G-code beyond boundaries cho mẫu lớn 250mm (`书架书立2.3mf`), vá bẫy đổi sợi 354 lần kéo thời gian từ 18h35m xuống 10h26m. Bản in đang chạy thực tế trên máy A1 (Khay 4 PETG 255°C/Bàn 80°C). Tích hợp luật tự động vào `analyzer.py`.
+* **Trọng tâm 29/09/2026:** Chuẩn hoá in PETG Tinmorry/Eco, Support Khác loại (Thân PETG - Sup PLA, Top Z 0.36mm bóc sạch) vs Support Cùng loại (Top Z 0.36mm, Spacing 0.30mm, Tree Slim, XY 0.70mm). Bàn nhiệt Textured PEI 80°C + Brim gap 0.18mm.
+* **Cập nhật cũ:** 2026-07-11 · **Nhánh:** main · **Commit mới nhất:** `9cf49d2`
 
 ## Mục tiêu dự án
 Dashboard xem/điều khiển máy in **Bambu Lab A1 + AMS Lite** qua **LAN**, mở bằng điện thoại.

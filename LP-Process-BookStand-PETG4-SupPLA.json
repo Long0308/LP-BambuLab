@@ -1,0 +1,97 @@
+{
+    "type": "process",
+    "name": "LP-Process-BookStand-PETG4-SupPLA",
+    "from": "User",
+    "inherits": "0.20mm Standard @BBL A1",
+    "print_settings_id": "LP-Process-BookStand-PETG4-SupPLA",
+    "print_extruder_id": [
+        "4"
+    ],
+    "print_extruder_variant": [
+        "Direct Drive Standard"
+    ],
+    "version": "2.7.0.8",
+    "layer_height": "0.20",
+    "initial_layer_print_height": "0.20",
+    "initial_layer_line_width": "0.42",
+    "line_width": "0.42",
+    "wall_loops": "4",
+    "wall_sequence": "inner-outer-inner wall",
+    "wall_generator": "arachne",
+    "top_shell_layers": "5",
+    "bottom_shell_layers": "4",
+    "top_shell_thickness": "1",
+    "sparse_infill_density": "20%",
+    "sparse_infill_pattern": "gyroid",
+    "initial_layer_speed": [
+        "30"
+    ],
+    "initial_layer_infill_speed": [
+        "50"
+    ],
+    "outer_wall_speed": [
+        "100"
+    ],
+    "inner_wall_speed": [
+        "120"
+    ],
+    "sparse_infill_speed": [
+        "120"
+    ],
+    "internal_solid_infill_speed": [
+        "120"
+    ],
+    "top_surface_speed": [
+        "80"
+    ],
+    "gap_infill_speed": [
+        "100"
+    ],
+    "bridge_speed": [
+        "25"
+    ],
+    "bridge_flow": "0.95",
+    "travel_speed": [
+        "380"
+    ],
+    "brim_type": "no_brim",
+    "brim_width": "0",
+    "brim_object_gap": "0.18",
+    "seam_position": "back",
+    "seam_gap": "10%",
+    "enable_prime_tower": "0",
+    "enable_support": "1",
+    "support_type": "tree(auto)",
+    "support_style": "tree_slim",
+    "support_filament": "4",
+    "support_top_z_distance": "0.36",
+    "support_bottom_z_distance": "0.20",
+    "support_object_xy_distance": "0.70",
+    "support_interface_top_layers": "2",
+    "support_interface_bottom_layers": "1",
+    "support_interface_spacing": "0.30",
+    "support_interface_pattern": "rectilinear_interlaced",
+    "support_interface_speed": [
+        "35"
+    ],
+    "support_threshold_angle": "30",
+    "support_on_build_plate_only": "1",
+    "enable_overhang_speed": [
+        "1"
+    ],
+    "overhang_1_4_speed": [
+        "0"
+    ],
+    "overhang_2_4_speed": [
+        "50"
+    ],
+    "overhang_3_4_speed": [
+        "30"
+    ],
+    "overhang_4_4_speed": [
+        "10"
+    ],
+    "overhang_totally_speed": [
+        "10"
+    ]
+}

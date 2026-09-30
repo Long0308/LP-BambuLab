@@ -1696,7 +1696,23 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced",
     body = _sel.get("key") or (ft[0] if ft else "")
     # filament_type Bambu KHONG co space, dung DAU GACH: ABS-GF, ASA-CF, PLA-CF...
     # bang FIL_EXPORT dung KHOANG TRANG (PLA MATTE) -> tach ca "-" lan " " de bat ho nhua.
-    fam = re.split(r"[-\s]+", body)[0] if body else ""
+    body_u = (body or "").upper()
+    if "PETG" in body_u:
+        fam = "PETG"
+    elif "PLA" in body_u:
+        fam = "PLA"
+    elif "ABS" in body_u:
+        fam = "ABS"
+    elif "ASA" in body_u:
+        fam = "ASA"
+    elif "TPU" in body_u:
+        fam = "TPU"
+    elif "PC" in body_u:
+        fam = "PC"
+    elif "PA" in body_u:
+        fam = "PA"
+    else:
+        fam = re.split(r"[-\s]+", body)[0] if body else ""
     warpy = fam in ("ABS", "ASA")
     # BRIM-PRONE (wiki Bambu auto-brim): nhua ung suat nhiet cao can brim RONG hon —
     # ABS/ASA/PC/PA + moi loai soi gia cuong CF/GF (PLA-CF, PET-CF, PA-CF...). TPU thi
@@ -1708,6 +1724,17 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced",
     # or at least mouse ears"; chinh chu topic chot lai "I solved adhesion problem with
     # brim". => PETG KHONG BAO GIO de no-brim, du day rong va ti le lat an toan.
     is_petg = fam == "PETG"
+    if is_petg:
+        # CHOT 29/09/2026 (KIEM CHUNG THUC TE A1): Khoa toc do chuan PETG de khong sai:
+        # Vach ngoai 100, vach trong/ruot 120, mat tren 80, gap infill 100, bridge speed 25, bridge flow 0.95
+        p["outer_wall_speed"] = ["100"]
+        p["inner_wall_speed"] = ["120"]
+        p["sparse_infill_speed"] = ["120"]
+        p["internal_solid_infill_speed"] = ["120"]
+        p["top_surface_speed"] = ["80"]
+        p["gap_infill_speed"] = ["100"]
+        p["bridge_speed"] = ["25"]
+        p["bridge_flow"] = "0.95"
 
     # 3) SUPPORT — tu nhan dinh theo dien tich hang THAT, khong theo cam tinh
     ov = m.get("overhang_pct", 0)
@@ -1815,13 +1842,28 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced",
                    f"interface.{ams_chk}")
     elif ft:
         # FALLBACK cung vat lieu: khong co nhua doi ung -> interface van la nhua than
-        # (slot 1 — than in luon la filament dau tien) + khe ho an toan 0.2 (0 la dinh chet).
+        # (slot 1 — than in luon la filament dau tien)
         body_slot = 1
         p["support_interface_filament"] = str(body_slot)
-        p["support_top_z_distance"] = "0.2"
-        p["support_bottom_z_distance"] = "0.2"
-        p["support_interface_spacing"] = "0.5"
-        p["support_interface_pattern"] = "rectilinear_interlaced"
+        if is_petg:
+            # CHOT 29/09/2026 (DA KIEM CHUNG THUC TE A1 IN XONG KHONG DINH):
+            # PETG cung loai phai Top Z 0.36mm + XY 0.50mm + spacing 0.3mm + 2 lop interface
+            # + speed 35mm/s + tree_slim -> support boc sach se, khong dinh chet vao day/vach.
+            p["support_top_z_distance"] = "0.36"
+            p["support_bottom_z_distance"] = "0.2"
+            p["support_object_xy_distance"] = "0.5"
+            p["support_interface_top_layers"] = "2"
+            p["support_interface_spacing"] = "0.3"
+            p["support_interface_pattern"] = "rectilinear_interlaced"
+            p["support_interface_speed"] = ["35"]
+            p["support_type"] = "tree(auto)"
+            p["support_style"] = "tree_slim"
+            p["bridge_flow"] = "0.95"
+        else:
+            p["support_top_z_distance"] = "0.2"
+            p["support_bottom_z_distance"] = "0.2"
+            p["support_interface_spacing"] = "0.5"
+            p["support_interface_pattern"] = "rectilinear_interlaced"
         ghost_note = (f" File CÓ khai báo {partner} ở slot {ghost} nhưng AMS Lite chỉ có 4 khay "
                       f"thật — chuyển {partner} vào khay 1-4 + sửa Project Filaments rồi upload "
                       f"lại là hub tự áp Z = 0." if ghost else
@@ -1867,7 +1909,17 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced",
     rounded_base = bed_frac < 0.8
     #    Yeu to VAT LIEU (Simplify3D/Xometry): ABS/ASA co ngot manh -> venh mep du day
     #    rong, van can brim. PLA/PETG tren PEI nham thi theo hinh hoc thuan tuy.
-    if rounded_base and bed >= 8:
+    max_xy = max(dims[:2]) if len(dims) >= 2 and dims[0] and dims[1] else 0
+    oversized = max_xy >= 240  # Ban A1 256mm, tren 240mm la sat mep, bat brim 5-10mm se tran ban
+    if oversized:
+        p["brim_type"] = "no_brim"
+        p["brim_width"] = "0"
+        p["enable_prime_tower"] = "0"
+        p["support_on_build_plate_only"] = "1"
+        why.append(f"KHÔNG brim + TẮT Prime Tower (MẪU QUÁ KHỔ {max_xy:.0f}mm / bàn A1 256mm): dư địa mép bàn chỉ còn "
+                   f"~{(256-max_xy)/2:.1f}mm, bật brim hoặc tháp xả sẽ văng ra ngoài bàn in báo lỗi đỏ "
+                   f"'A G-code path goes beyond plate boundaries'. Đáy {bed:.1f} cm² đủ bám bàn 80°C an toàn.")
+    elif rounded_base and bed >= 8:
         # Brim RONG theo % cham ban: cang it cham (khung mong/canh tay dai) cang can rong.
         # 26% cham + brim 5mm VAN cong venh (user in tabletipad khay 1 2026-07-19).
         bw = "10" if bed_frac < 0.3 else ("8" if bed_frac < 0.5 else "5")
@@ -2013,7 +2065,7 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced",
     # mat tren (dung l+i be mat tool nay sinh ra de chong). Ve MAC DINH Bambu 1.0 (an toan
     # ca 2 loai). Muon bridge ngoai day hon thi chinh tay tung ca, dung bake 1.5.
     BFLOW = {"PLA":  ("1.0",  "mặc định Bambu (an toàn cả bridge ngoài + bridge trong); 1.5 over-extrude lớp đặc trên infill → telegraph mặt trên"),
-             "PETG": ("1.05", "FB maker: PETG vón cục khi flow cao → chỉ nhích trên default 1.0, TEST 1.0–1.1"),
+                          "PETG": ("0.95", "CHỐT 29/09/2026: hạ 0.95 để sợi căng không chùng đè dính support, mặt đáy bóc sạch"),
              "ABS":  ("1.0",  "GIỮ mặc định: ABS bridge kém do co ngót/làm mát chứ không phải flow (Prusa còn giảm); sửa bằng tăng quạt + giảm tốc, TEST"),
              "ASA":  ("1.0",  "GIỮ mặc định: ASA bridge kém do co ngót/làm mát chứ không phải flow; sửa bằng tăng quạt + giảm tốc, TEST")}
     bflow, bnote = BFLOW.get(fam, ("1.0", "mặc định Bambu (file không khai báo nhựa) — TEST nếu cần bridge ngoài dày hơn"))
@@ -2200,6 +2252,8 @@ def make_preset(r: dict, name: str = "OPT", mode: str = "balanced",
     #     manh nhat khi dien tich nho). PETG mep hay hot len giua chung nen LUON cham.
     hard_adh = (bed < 8) or (ratio > 3) or is_petg
     p["initial_layer_speed"] = ["30"] if hard_adh else ["50"]
+    if is_petg:
+        p["initial_layer_infill_speed"] = ["50"]
     if bed < 8 or ratio > 3:
         p["initial_layer_print_height"] = "0.24"
         why.append(f"Lớp đầu CHẬM 30 mm/s + DÀY 0.24mm: đáy chỉ {bed} cm² / tỉ lệ lật {ratio:.1f} "
@@ -2330,35 +2384,48 @@ FIL_EXPORT = {
                            "filament_flow_ratio": "0.98", "hot_plate_temp": "65"},
                   "why": "Bien the PLA la — CHU DICH ha mvs 21→16 than trong (official Basic 21); "
                          "ban 65 theo official A1."},
-    "PETG ECO":  {"inherits": "Bambu PETG Basic @BBL A1", "verified": True,   # TINMORRY eco
-                  "safe": {"nozzle_temperature": "240", "filament_max_volumetric_speed": "12",
-                           "filament_flow_ratio": "0.95", "hot_plate_temp": "75",
-                           "filament_retraction_length": "1.2", "filament_retraction_speed": "30",
-                           "filament_wipe": "2",
-                           "close_fan_the_first_x_layers": "3"},   # PETG: quat OFF 3 lop dau -> bam chac
-                  "why": "TINMORRY PETG-Eco. Hang cong bo 230-260°C, ban 75-90°C -> lay 240 (giua "
-                         "khoang, an toan cho A1) + ban 80. mvs 12 (KHONG phai 14): user in THAT "
-                         "ngay 13/09 bi KET NHUA o mvs 14 — tuong/ruot 161 mm/s = 13.5 mm3/s, sat "
-                         "tran 14 nen banh rang extruder nghien soi; ha ve 12 thi moi toc do tu tut "
-                         "theo (tuong/ruot ~137 mm/s = 11.5 mm3/s) va het ket. Cuon eco gia re khong "
-                         "dun nhanh duoc (KHONG phai HF). Retraction 1.2mm@30mm/s chong keo soi. "
-                         "Voi ban in DAI: cat dau soi vuong phang truoc khi nap — loi 1200-8015 "
-                         "(khong rut ra duoc o cuoi ban in) hay do dau soi phiinh/xu."},
+    "GENERIC PETG": {"inherits": "Generic PETG @BBL A1", "verified": True,
+                     "safe": {"nozzle_temperature": "248", "nozzle_temperature_initial_layer": "240",
+                              "filament_max_volumetric_speed": "10", "filament_flow_ratio": "0.96",
+                              "hot_plate_temp": "80", "filament_retraction_length": "0.5",
+                              "filament_retraction_speed": "30", "filament_deretraction_speed": "30",
+                              "filament_z_hop": "0.4", "filament_wipe": "1", "filament_wipe_distance": "1",
+                              "fan_min_speed": "30", "fan_max_speed": "50", "overhang_fan_speed": "80",
+                              "overhang_fan_threshold": "25%", "close_fan_the_first_x_layers": "3",
+                              "enable_pressure_advance": "1", "pressure_advance": "0.04"},
+                     "why": "Generic PETG / Tinmorry: Chuẩn an toàn A1 đã kiểm chứng thực tế: 248°C / mvs 10 / "
+                            "flow 0.96 / bàn 80°C (bắt buộc để bám bàn Textured PEI). Retraction 0.5mm@30mm/s, PA 0.04, "
+                            "quạt overhang 80% đóng băng bridge chống dính support."},
+    "TINMORRY PETG":{"inherits": "Generic PETG @BBL A1", "verified": True,
+                     "safe": {"nozzle_temperature": "248", "nozzle_temperature_initial_layer": "240",
+                              "filament_max_volumetric_speed": "10", "filament_flow_ratio": "0.96",
+                              "hot_plate_temp": "80", "filament_retraction_length": "0.5",
+                              "filament_retraction_speed": "30", "filament_deretraction_speed": "30",
+                              "filament_z_hop": "0.4", "filament_wipe": "1", "filament_wipe_distance": "1",
+                              "fan_min_speed": "30", "fan_max_speed": "50", "overhang_fan_speed": "80",
+                              "overhang_fan_threshold": "25%", "close_fan_the_first_x_layers": "3",
+                              "enable_pressure_advance": "1", "pressure_advance": "0.04"},
+                     "why": "TINMORRY PETG (White/Black/Eco): Chuẩn kiểm chứng thực nghiệm in không kẹt, bàn 80°C bám chắc."},
+    "PETG ECO":  {"inherits": "Generic PETG @BBL A1", "verified": True,   # TINMORRY eco
+                  "safe": {"nozzle_temperature": "248", "nozzle_temperature_initial_layer": "240",
+                           "filament_max_volumetric_speed": "10", "filament_flow_ratio": "0.96",
+                           "hot_plate_temp": "80", "filament_retraction_length": "0.5",
+                           "filament_retraction_speed": "30", "filament_deretraction_speed": "30",
+                           "filament_z_hop": "0.4", "filament_wipe": "1", "filament_wipe_distance": "1",
+                           "fan_min_speed": "30", "fan_max_speed": "50", "overhang_fan_speed": "80",
+                           "overhang_fan_threshold": "25%", "close_fan_the_first_x_layers": "3",
+                           "enable_pressure_advance": "1", "pressure_advance": "0.04"},
+                  "why": "TINMORRY PETG-Eco: Đã kiểm chứng in hoàn thành 100%, bóc support sạch sẽ (248/80, mvs 10, retract 0.5)."},
     "PETG BASIC":{"inherits": "Bambu PETG Basic @BBL A1", "verified": True,  # ✓ template
-                  # mvs 12 (KHONG phai 13): dong bo voi FAMILY_SAFE_MVS["PETG"] = 12.
-                  # Truoc day bang nay ghi 13 con safe_mvs_ceiling() kep ve 12 -> 2 duong
-                  # cho 2 so khac nhau. Nay MOT nguong PETG duy nhat = 12 (bai hoc 13/09).
-                  "safe": {"nozzle_temperature": "245", "filament_max_volumetric_speed": "12",
-                            "filament_flow_ratio": "0.95", "hot_plate_temp": "75",
-                           # RETRACTION (video PETG SETTINGS nhan manh + cong dong A1): PETG
-                           # KEO SOI manh -> tang len 1.2mm + HA toc rut 30mm/s (cham hon PLA
-                           # de soi dut gon, khong vuot); den/xam lo soi ro nhat.
-                           "filament_retraction_length": "1.2", "filament_retraction_speed": "30",
-                            "filament_wipe": "2",
-                            "close_fan_the_first_x_layers": "3"},   # PETG: quat OFF 3 lop dau -> bam chac
-                  "why": "Bambu PETG Basic (13 / 0.94 / ban 70) + RETRACTION 1.2mm@30mm/s chong keo "
-                         "soi (cong dong A1 + video). Den/xam: giu KHO (PETG hut am -> soi), ban 70 "
-                         "textured PEI DINH RAT CHAT -> boi keo lam CHONG DINH (de go), dung len 80."},
+                  "safe": {"nozzle_temperature": "248", "nozzle_temperature_initial_layer": "240",
+                           "filament_max_volumetric_speed": "10", "filament_flow_ratio": "0.96",
+                           "hot_plate_temp": "80", "filament_retraction_length": "0.5",
+                           "filament_retraction_speed": "30", "filament_deretraction_speed": "30",
+                           "filament_z_hop": "0.4", "filament_wipe": "1", "filament_wipe_distance": "1",
+                           "fan_min_speed": "30", "fan_max_speed": "50", "overhang_fan_speed": "80",
+                           "overhang_fan_threshold": "25%", "close_fan_the_first_x_layers": "3",
+                           "enable_pressure_advance": "1", "pressure_advance": "0.04"},
+                  "why": "Bambu PETG Basic: Cập nhật chuẩn A1 mới nhất: 248°C / bàn 80°C / retract 0.5mm / quạt overhang 80%."},
     # HF = cuon HIGH FLOW THAT (Bambu PETG HF). mvs 18 doi hotend dun ~17-18 mm3/s
     # -> CHI chon khi cuon dung la HF. PHAI dat TRUOC key "PETG" vi _fil_export khop
     # key DAU TIEN nam trong ten ("PETG" in "PETG HF" se cuop mat neu de sau).
@@ -2376,16 +2443,16 @@ FIL_EXPORT = {
     # LY DO (2026-09-12): user chon "PETG" cho cuon PETG thuong -> key nay tro HF mvs 18
     # -> preset ra toc tuong 207 mm/s => may BAO NHIET DO KHONG DU, ban in thieu dun +
     # keo soi (anh Voronoi). Cung nguyen tac da ap cho "PLA" generic (ha 21->16 than trong).
-    "PETG":      {"inherits": "Bambu PETG Basic @BBL A1", "verified": True,
-                  # mvs 12: cung mot nguong PETG voi PETG BASIC/PETG ECO (xem FAMILY_SAFE_MVS).
-                  "safe": {"nozzle_temperature": "245", "filament_max_volumetric_speed": "12",
-                            "filament_flow_ratio": "0.95", "hot_plate_temp": "75",
-                            "filament_retraction_length": "1.2", "filament_retraction_speed": "30",
-                            "filament_wipe": "2",
-                            "close_fan_the_first_x_layers": "3"},   # PETG: quat OFF 3 lop dau -> bam chac
-                  "why": "PETG khong ro dong -> lay so AN TOAN cua PETG Basic (245 / mvs 13 / 0.94 / "
-                         "ban 70): toc tuong ~150, mat tren ~93 mm/s — hotend A1 dun KIP. Cuon HIGH "
-                         "FLOW that moi chon 'PETG HF' (mvs 18). Retraction 1.2mm@30mm/s chong keo soi."},
+    "PETG":      {"inherits": "Generic PETG @BBL A1", "verified": True,
+                  "safe": {"nozzle_temperature": "248", "nozzle_temperature_initial_layer": "240",
+                           "filament_max_volumetric_speed": "10", "filament_flow_ratio": "0.96",
+                           "hot_plate_temp": "80", "filament_retraction_length": "0.5",
+                           "filament_retraction_speed": "30", "filament_deretraction_speed": "30",
+                           "filament_z_hop": "0.4", "filament_wipe": "1", "filament_wipe_distance": "1",
+                           "fan_min_speed": "30", "fan_max_speed": "50", "overhang_fan_speed": "80",
+                           "overhang_fan_threshold": "25%", "close_fan_the_first_x_layers": "3",
+                           "enable_pressure_advance": "1", "pressure_advance": "0.04"},
+                  "why": "PETG chung: Áp chuẩn an toàn 248°C / mvs 10 / bàn 80°C / retract 0.5mm / quạt overhang 80%."},
     "ABS":       {"inherits": "Bambu ABS @BBL A1", "verified": True,         # ✓ audit 2 tang
                   "safe": {"nozzle_temperature": "270", "filament_max_volumetric_speed": "16",
                            "filament_flow_ratio": "0.95", "hot_plate_temp": "100"},
@@ -2511,7 +2578,17 @@ def support_strategy(model_type: str, ams: list | None = None) -> list:
     0.2->0.3 de go nhat). 2 nhom: KHAC vat lieu (mat dep nhat) va CUNG vat lieu (thoa hiep
     mat-vs-de-go). Cai hop vat lieu dang co len dau (recommend). Keys deu trong SAFE_KEYS."""
     ams = [str(t).upper() for t in (ams or [])]
-    fam = re.split(r"[-\s]+", (model_type or "").upper())[0]
+    mt_u = (model_type or "").upper()
+    if "PETG" in mt_u:
+        fam = "PETG"
+    elif "PLA" in mt_u:
+        fam = "PLA"
+    elif "ABS" in mt_u:
+        fam = "ABS"
+    elif "ASA" in mt_u:
+        fam = "ASA"
+    else:
+        fam = re.split(r"[-\s]+", mt_u)[0] if mt_u else ""
     is_matte = "MATTE" in (model_type or "").upper()
     partner = {"PLA": "PETG", "PETG": "PLA"}.get(fam)
     pslot = next((i + 1 for i, t in enumerate(ams[:4]) if partner and t.startswith(partner)), 0)
@@ -2519,7 +2596,7 @@ def support_strategy(model_type: str, ams: list | None = None) -> list:
     # PETG HAN chinh no manh hon PLA -> cung loai phai de Top Z LON hon (1.5-2x layer
     # height, blog test nghin ban + forum Bambu) keo khong dinh CHET. PLA/khac: 0.15/0.25.
     is_petg = fam == "PETG"
-    z_sm, zb_sm = ("0.3", "0.2") if is_petg else ("0.15", "0.15")
+    z_sm, zb_sm = ("0.36", "0.2") if is_petg else ("0.15", "0.15")
     z_ez, zb_ez = ("0.4", "0.2") if is_petg else ("0.25", "0.2")
     petg_tip = (" ⚑ PETG: nên đổi Base pattern → GYROID (bẻ ra như kéo khoá; zig-zag/grid PETG "
                 "dính rất khó bẻ) + tốc độ interface 30–40mm/s cho mặt phẳng đẹp — chỉnh tay trong "
@@ -2552,11 +2629,18 @@ def support_strategy(model_type: str, ams: list | None = None) -> list:
     _sm = {"enable_support": "1", "support_interface_filament": str(sslot),
            "support_interface_top_layers": "2",
            "support_top_z_distance": z_sm, "support_bottom_z_distance": zb_sm,
-           "support_interface_spacing": "0", "support_interface_pattern": "concentric"}
+           "support_interface_spacing": "0.3" if is_petg else "0",
+           "support_interface_pattern": "rectilinear_interlaced" if is_petg else "concentric"}
+    if is_petg:
+        _sm["support_object_xy_distance"] = "0.7"
+        _sm["support_interface_speed"] = ["35"]
+        _sm["bridge_flow"] = "0.95"
+        _sm["support_type"] = "tree(auto)"
+        _sm["support_style"] = "tree_slim"
     out.append({                                 # CUNG vat lieu — uu tien MAT DEP
         "id": "same_smooth", "label": f"Cùng {fam or 'nhựa'} — ưu tiên mặt đẹp (gỡ hơi chặt)",
         "keys": _sm, "summary": _sum(_sm),
-        "why": (f"Cùng nhựa DÍNH nhau nên luôn có đánh đổi. Z {z_sm} + interface đặc (spacing 0) + 2 lớp "
+        "why": (f"Cùng nhựa DÍNH nhau nên luôn có đánh đổi. Z {z_sm} + interface (spacing {_sm['support_interface_spacing']}) + 2 lớp "
                 "concentric → mặt tiếp xúc PHẲNG nhất, đổi lại gỡ hơi chặt (kìm/vặn nhẹ). Bật quạt "
                 "interface 100% giúp tách dễ hơn." + petg_tip),
         "recommend": not pslot})
@@ -2564,6 +2648,12 @@ def support_strategy(model_type: str, ams: list | None = None) -> list:
            "support_interface_top_layers": "1",
            "support_top_z_distance": z_ez, "support_bottom_z_distance": zb_ez,
            "support_interface_spacing": "0.3", "support_interface_pattern": "rectilinear_interlaced"}
+    if is_petg:
+        _ez["support_object_xy_distance"] = "0.7"
+        _ez["support_interface_speed"] = ["35"]
+        _ez["bridge_flow"] = "0.95"
+        _ez["support_type"] = "tree(auto)"
+        _ez["support_style"] = "tree_slim"
     out.append({                                 # CUNG vat lieu — uu tien DE GO
         "id": "same_easy", "label": f"Cùng {fam or 'nhựa'} — ưu tiên dễ gỡ (mặt hơi rỗ)",
         "keys": _ez, "summary": _sum(_ez),

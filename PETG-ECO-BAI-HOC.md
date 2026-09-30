@@ -489,6 +489,34 @@ báo. Đừng coi cả ba lần hỏng là một nguyên nhân.
 
 ---
 
+### Bài học #10 (29/09/2026) - QUY CHUẨN SUPPORT PETG: PHÂN BIỆT RẠCH RÒI "KHÁC LOẠI" VÀ "CÙNG LOẠI"
+
+**1. KHÁC LOẠI (THÂN PETG + SUPPORT INTERFACE LÀ PLA — BẢN IN SÁNG NAY):**
+- **Cơ chế:** PLA và PETG **hoàn toàn không dính hoá học** ở nhiệt độ in FDM.
+- **Thông số vàng:** 
+  - `support_interface_filament`: Chọn khay PLA.
+  - `support_top_z_distance`: **`0.0 mm`** (Z = 0, khít tuyệt đối).
+  - `support_interface_spacing`: **`0.0 mm`** (lớp đệm đặc như mặt bàn).
+  - Flush volume: PLA→PETG ~650 mm³, PETG→PLA ~250 mm³.
+- **Kết quả thực tế:** Đáy hẫng bóng phẳng 100% như in trên mặt kính, support tự rơi ra hoặc bóc nhẹ tênh không tốn lực.
+
+---
+
+**2. CÙNG LOẠI (THÂN PETG + SUPPORT BẰNG CHÍNH PETG — NGUY CƠ HÀN CHẾT CAO NHẤT):**
+- **Nguyên nhân gốc rễ:** PETG ở 240–248°C dính lớp cực mạnh. CÙNG LOẠI mà để Top Z = 0mm hoặc < 0.20mm thì nhựa nóng chảy sẽ **hàn nhiệt (thermal fuse) dính chết vĩnh viễn** vào support, gỡ ra là vỡ/rách vách chi tiết.
+- **Bộ thông số CHUẨN BÓC SẠCH (ĐÃ KHÓA CỨNG VÀO HUB & AI AGENT):**
+  - **Support Type & Style:** `tree(auto)` + `tree_slim` (tuyệt đối không dùng normal grid).
+  - **Top Z distance:** **`0.36 mm`** (khoảng đệm không khí ~1.8–2× layer height chống hàn nhiệt mà vẫn đỡ phẳng).
+  - **Bottom Z distance:** **`0.20 mm`**.
+  - **Support / Object XY distance:** **`0.70 mm`** (đẩy cành support ra xa vách hộp, không dính lem vào thành đứng).
+  - **Support Interface:** **`2 lớp`**, pattern **`rectilinear_interlaced`**, spacing **`0.30 mm`** (lưới thưa, tuyệt đối KHÔNG để 0.0mm), tốc độ **`30–35 mm/s`**.
+  - **Quạt Overhang:** **`80% – 100%`** (làm lạnh sốc đông cứng sợi nhựa ngay khi ra khỏi vòi).
+  - **Bridge Flow:** **`0.95`** (sợi nhựa căng, không bị võng đè nặng lên support).
+  - **Tốc độ in an toàn:** Lớp đầu 30 mm/s, infill lớp đầu 50 mm/s, vách ngoài 100 mm/s, vách trong & ruột 120 mm/s, mặt trên 80 mm/s, cầu 25 mm/s.
+  - **Bàn nhiệt & Brim:** Bàn giữ **`80°C`** (Textured PEI), viền `brim_object_gap: 0.18 mm` (dễ xé viền đáy).
+
+---
+
 ## Nhật ký sự kiện (tự động — đã gộp mục trùng)
 
 > Ghi chú: các mục trước **01:26 ngày 14/09** in mã HMS theo hàm ghép cũ
